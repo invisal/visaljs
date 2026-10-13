@@ -1,0 +1,2 @@
+(node:258735) [DEP0182] DeprecationWarning: Using AES-GCM authentication tags of less than 128 bits without specifying the authTagLength option when initializing decryption is deprecated.
+(Use `node --trace-deprecation ...` to show where the warning was created)

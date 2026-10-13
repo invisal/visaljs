@@ -59,7 +59,7 @@ NaN 0 100% %% %x
   g: [Getter],
   s: [Setter],
   gs: [Getter/Setter],
-  [Symbol(k)]: 1
+  Symbol(k): 1
 }
 it's [ "it's", 'say "hi"', `it's "x"`, 'a\nb\x01\x7F\ud800', 'tab\there' ]
 Point { x: 1, y: 2 } [ Point { x: 3, y: 4 } ] Point {}
@@ -79,14 +79,14 @@ x=5 more 'str' [
   num: [Getter: 1],
   nil: [Getter: null],
   obj: [Getter] { k: [ 1 ] },
-  bad: [Getter: <Inspection threw (nope)>],
+  bad: [Getter: <Inspection threw ([Error: nope])>],
   both: [Getter/Setter: 'b'],
   only: [Setter]
 } {
   num: [Getter: 1],
   nil: [Getter: null],
   obj: [Getter] { k: [ 1 ] },
-  bad: [Getter: <Inspection threw (nope)>],
+  bad: [Getter: <Inspection threw ([Error: nope])>],
   both: [Getter/Setter],
   only: [Setter]
 } {

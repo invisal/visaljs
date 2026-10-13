@@ -28,7 +28,7 @@ TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type secret, 
 TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
 Error [ERR_OSSL_EVP_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE]: error:03000096:digital envelope routines::operation not supported for this keytype
 false
-TypeError [ERR_INVALID_ARG_TYPE]: The "signature" argument must be an instance of Buffer, TypedArray, or DataView. Received type string ('x')
+false
 TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.dsaEncoding' is invalid. Received 'foo'
 TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.padding' is invalid. Received 'x'
 [ 'constructor', '_write', 'update', 'sign' ]
@@ -98,7 +98,7 @@ true
 Error [ERR_CRYPTO_INCOMPATIBLE_KEY]: Incompatible key types for Diffie-Hellman: x25519 and ec
 Error [ERR_CRYPTO_INCOMPATIBLE_KEY]: Incompatible key types for Diffie-Hellman: rsa and rsa
 TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
-TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.privateKey' is invalid. Received 'x'
+Error [ERR_OSSL_UNSUPPORTED]: error:1E08010C:DECODER routines::unsupported
 TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received undefined
 true
 true

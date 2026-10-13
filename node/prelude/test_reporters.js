@@ -1,5 +1,5 @@
 // node:test/reporters (Node's lib/test/reporters.js and lib/internal/test_runner/reporter/; MIT;
-// Node v22.22.2): the reporters a program composes with a stream of test events. tap, dot and junit
+// Node v24.21.0): the reporters a program composes with a stream of test events. tap, dot and junit
 // are async generators over the events; spec and lcov are Transforms from events to text. tap and
 // spec are the runner's own (internal/test_runner/reporters.js); lcov writes the coverage events,
 // which a compiled program doesn't produce.
@@ -253,9 +253,10 @@ class LcovReporter extends Transform {
   }
 }
 
-/** Node's getter makes a new LcovReporter on each read; an import binding is read once. */
-export const lcov = new LcovReporter();
+/** A new reporter on each call, with new or without, as spec. */
+export function lcov(options) {
+  return new LcovReporter(options);
+}
 
-const reporters = { dot, junit, spec, tap };
-Object.defineProperty(reporters, "lcov", { configurable: true, enumerable: true, get: () => new LcovReporter() });
+const reporters = { dot, junit, spec, tap, lcov };
 export default reporters;

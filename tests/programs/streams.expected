@@ -5,7 +5,7 @@ ReadableStream { locked: true, state: 'readable', supportsBYOB: false } Readable
   close: Promise { <pending> }
 }
 TypeError [ERR_INVALID_STATE]: Invalid state: ReadableStream is locked
-{ value: 'a', done: false } { value: 'b', done: false } { value: undefined, done: true } undefined { value: undefined, done: true }
+{ done: false, value: 'a' } { done: false, value: 'b' } { value: undefined, done: true } undefined { value: undefined, done: true }
 TypeError [ERR_INVALID_STATE]: Invalid state: Controller is already closed | TypeError [ERR_INVALID_STATE]: Invalid state: Controller is already closed
 Error: x ReadableStream { locked: true, state: 'errored', supportsBYOB: false }
 pull 1
@@ -17,7 +17,7 @@ iter 3
 pull 4
 ReadableStreamDefaultController {} 10
 6
-{ value: 'abcd', done: false } 10
+{ done: false, value: 'abcd' } 10
 false TypeError [ERR_INVALID_STATE]: Invalid state: The reader is not attached to a stream TypeError [ERR_INVALID_STATE]: Invalid state: Reader released
 cancel bye
 undefined ReadableStream { locked: false, state: 'closed', supportsBYOB: false }

@@ -58,9 +58,9 @@ NotSupportedError [9]: Unable to export RSASSA-PKCS1-v1_5 public key using raw f
 NotSupportedError [9]: Unable to export RSASSA-PKCS1-v1_5 private key using spki format
 NotSupportedError [9]: Unable to export RSASSA-PKCS1-v1_5 public key using pkcs8 format
 NotSupportedError [9]: Unable to export RSASSA-PKCS1-v1_5 private key using raw format
-SyntaxError [12]: Unsupported key usage for an RSASSA-PKCS1-v1_5 key
-SyntaxError [12]: Unsupported key usage for an RSASSA-PKCS1-v1_5 key
-TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'RsaHashedImportParams' because 'hash' is required in 'RsaHashedImportParams'.
+SyntaxError [12]: Unsupported key usage for RSASSA-PKCS1-v1_5 key
+SyntaxError [12]: Unsupported key usage for RSASSA-PKCS1-v1_5 key
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm cannot be converted to 'RsaHashedImportParams' because 'hash' is required in 'RsaHashedImportParams'.
 DataError [0]: Invalid key type
 DataError [0]: Invalid key type
 DataError [0]: Invalid keyData
@@ -80,7 +80,7 @@ DataError [0]: Invalid JWK "use" Parameter
 pss 0 128 true false
 pss 20 128 true false
 pss 32 128 true false
-TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'RsaPssParams' because 'saltLength' is required in 'RsaPssParams'.
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm cannot be converted to 'RsaPssParams' because 'saltLength' is required in 'RsaPssParams'.
 OperationError [0]: The operation failed for an operation-specific reason
 PS256
 hi
@@ -88,10 +88,10 @@ hi
 OperationError [0]: The operation failed for an operation-specific reason
 OperationError [0]: The operation failed for an operation-specific reason
 OperationError [0]: The operation failed for an operation-specific reason
-InvalidAccessError [15]: The requested operation is not valid for the provided key
+InvalidAccessError [15]: Unable to use this key to encrypt
 RSA-OAEP-256
-SyntaxError [12]: Unsupported key usage for an RSA-OAEP key
-InvalidAccessError [15]: The requested operation is not valid for the provided key
+SyntaxError [12]: Unsupported key usage for RSA-OAEP key
+InvalidAccessError [15]: Unable to use this key to wrapKey
 P-256 { name: 'ECDSA', namedCurve: 'P-256' } 64 true false
 {
   key_ops: [ 'sign' ],
@@ -125,10 +125,10 @@ P-521 { name: 'ECDSA', namedCurve: 'P-521' } 132 true false
   d: 'ACM6cGSPX-yZGExnk9Gfh9bBQrrscZSDMYxdNkjgKd5jIpz4MKMTllMwMCZM6oUOVAQxRvvm3DEeM2aGhi5Vatxn'
 } 04000aa8928b2121f55be88f05898b353fcf107da8ecd4d48d1d9d6ae1b8078c5308e63e17f457291265fc24ef5f1b80e43ba9d56f9d2f9da96487a926c420be3643cb01c30722f71d875aea6d1d97a36edb8b5b2ff6bf9f39b53b40b7e0a0f260cee7d0d1bb9f990eb6b0ee93bcf02b37aa27b43809d81153dd0014573f78336e8823d2a3
 true
-TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'EcdsaParams' because 'hash' is required in 'EcdsaParams'.
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm cannot be converted to 'EcdsaParams' because 'hash' is required in 'EcdsaParams'.
 false
-InvalidAccessException [0]: key is not extractable
-InvalidAccessException [0]: key is not extractable
+InvalidAccessError [15]: key is not extractable
+InvalidAccessError [15]: key is not extractable
 DataError [0]: Named curve mismatch
 NotSupportedError [9]: Unrecognized namedCurve
 DataError [0]: Invalid keyData
@@ -140,7 +140,7 @@ CryptoKey {
   type: 'private',
   extractable: true,
   algorithm: { name: 'ECDH', namedCurve: 'P-256' },
-  usages: [ 'deriveBits', 'deriveKey' ]
+  usages: [ 'deriveKey', 'deriveBits' ]
 } CryptoKey {
   type: 'public',
   extractable: true,
@@ -153,10 +153,10 @@ ArrayBuffer 870a333e3241dcb635c443fd037525b3
 ArrayBuffer 8700
 OperationError [0]: derived bit length is too small
 InvalidAccessError [15]: algorithm.public must be a public key
-TypeError [ERR_INVALID_ARG_TYPE]: Failed to normalize algorithm: 'public' of 'EcdhKeyDeriveParams' (passed algorithm) is not of type CryptoKey.
-TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'EcdhKeyDeriveParams' because 'public' is required in 'EcdhKeyDeriveParams'.
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to normalize algorithm: public in passed algorithm is not of type CryptoKey.
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm cannot be converted to 'EcdhKeyDeriveParams' because 'public' is required in 'EcdhKeyDeriveParams'.
 ArrayBuffer 870a333e3241dcb635c443fd037525b3
-SyntaxError [12]: Unsupported key usage for a ECDH key
+SyntaxError [12]: Unsupported key usage for ECDH key
 {
   key_ops: [],
   ext: true,
@@ -189,12 +189,12 @@ ArrayBuffer e6c38d504f3063604d09df4c25d9c4b899fb6d6cb5da75b733b64951076fe875
   kty: 'OKP'
 }
 [ 'public', { name: 'X25519' } ]
-DataError [0]: X25519 raw keys must be exactly 32-bytes
-SyntaxError [12]: Unsupported key usage for a X25519 key
-SyntaxError [12]: Unsupported key usage for a X25519 key
+DataError [0]: Invalid keyData
+SyntaxError [12]: Unsupported key usage for X25519 key
+SyntaxError [12]: Unsupported key usage for X25519 key
 DataError [0]: Invalid key type
 DataError [0]: JWK "crv" Parameter and algorithm name mismatch
-InvalidAccessError [15]: algorithm.public must be an ECDH key
+InvalidAccessError [15]: key algorithm mismatch
 InvalidAccessError [15]: Key algorithm mismatch
 [
   {
@@ -220,16 +220,16 @@ InvalidAccessError [15]: Key algorithm mismatch
 ]
 [ [], [ 'deriveBits' ], true ]
 [ [], [ 'deriveKey', 'deriveBits' ], { name: 'X25519' }, true ]
-SyntaxError [12]: Unsupported key usage for a RSA key
+SyntaxError [12]: Unsupported key usage for RSA-OAEP key
 OperationError [0]: The publicExponent must be equivalent to an unsigned 32-bit value
-TypeError [ERR_INVALID_ARG_TYPE]: Failed to normalize algorithm: 'publicExponent' of 'RsaHashedKeyGenParams' (passed algorithm) is not an Uint8Array object.
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to normalize algorithm: publicExponent in passed algorithm is not an Uint8Array object.
 OperationError [0]: The operation failed for an operation-specific reason
-TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'RsaHashedKeyGenParams' because 'modulusLength' is required in 'RsaHashedKeyGenParams'.
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm cannot be converted to 'RsaHashedKeyGenParams' because 'modulusLength' is required in 'RsaHashedKeyGenParams'.
 SyntaxError [12]: Usages cannot be empty when creating a key.
 NotSupportedError [9]: Unrecognized namedCurve
 SyntaxError [12]: Usages cannot be empty when creating a key.
-SyntaxError [12]: Unsupported key usage for an ECDH key
-SyntaxError [12]: Unsupported key usage for an X25519 key
+SyntaxError [12]: Unsupported key usage for ECDH key
+SyntaxError [12]: Unsupported key usage for X25519 key
 rsa
 true
 CryptoKey {

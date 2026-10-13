@@ -27,5 +27,6 @@ stream true 21909 236
 stream bytes true
 stream error ERR__ERROR_FORMAT_PADDING_1 -14 Decompression failed
 truncated Z_BUF_ERROR -5 unexpected end of file
+reset while writing: Cannot reset zlib stream while a write is in progress
 reset kept
 params function true true

@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       # the apps (tests/apps) aren't workspaces: each has its own lockfile (the HTTP differential tests run them)
@@ -71,6 +71,24 @@ jobs:
       # tests/programs (compiled programs against Node's output) runs in the programs jobs; here,
       # the rest: unit, CLI and differential tests
       - run: npm run test:compiler -- --exclude "tests/programs/**"
+
+  node22:
+    # Programs behave like the Node in .nvmrc, but the compiler itself runs on Node 22 or later
+    # (README): it builds and runs a program on 22.
+    name: Compiler on Node 22
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # built on 22, the program still behaves like (and says it's) the Node in .nvmrc
+      - run: |
+          echo 'console.log("node", process.versions.node.split(".")[0]);' > hello.js
+          node cli/src/cli.ts build hello.js -o hello --quiet
+          test "$(./hello)" = "node $(cut -d. -f1 .nvmrc)"
 
   runtime:
     # gcc and clang; plain, ASan + UBSan, and GC stress (a collection at every allocation).
@@ -118,7 +136,7 @@ jobs:
           ref: ${{ github.head_ref || github.ref }}
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm run test262 -- --update --shard=${{ matrix.shard }}/${{ strategy.job-total }}
@@ -143,7 +161,7 @@ jobs:
           ref: ${{ github.head_ref || github.ref }}
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - uses: actions/download-artifact@v8
@@ -187,7 +205,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       # one build at a time, two C files at once: a test that runs away on memory stops at its heap
@@ -211,7 +229,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       # the runtime's and the host's libraries, compiled once before the tests build programs in

@@ -101,10 +101,19 @@ await new Promise((resolve) =>
   await closed(truncated);
 }
 
-/* reset, and params (a no-op for Brotli) */
+/* reset: not while a write is in progress; before one, it starts the stream over. And params (a
+   no-op for Brotli). */
 {
+  const busy = zlib.createBrotliCompress();
+  busy.write("dropped");
+  try {
+    busy.reset();
+    log("reset while writing: no error");
+  } catch (e) {
+    log("reset while writing:", e.message);
+  }
+  busy.destroy();
   const br = zlib.createBrotliCompress();
-  br.write("dropped");
   br.reset();
   const chunks = [];
   br.on("data", (c) => chunks.push(c));

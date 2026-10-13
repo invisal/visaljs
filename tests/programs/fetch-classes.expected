@@ -35,7 +35,7 @@ a/b application/x-www-form-urlencoded;charset=UTF-8
 a=1&b=2 ArrayBuffer { [Uint8Contents]: <00 00>, [byteLength]: 2 }
 Blob { size: 3, type: 'text/plain;charset=utf-8' } ArrayBuffer { [Uint8Contents]: <61 62>, [byteLength]: 2 } Uint8Array(2) [ 97, 98 ]
 null stream
-{ value: Uint8Array(6) [ 99, 104, 117, 110, 107, 115 ], done: false } { value: undefined, done: true }
+{ done: false, value: Uint8Array(6) [ 99, 104, 117, 110, 107, 115 ] } { value: undefined, done: true }
 TypeError: Body is unusable: Body has already been read false
 202 application/json 1 {"a":1}
 text/x

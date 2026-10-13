@@ -18,18 +18,18 @@ aborted: listening false
 TypeError ERR_INVALID_ARG_VALUE: The argument 'options' must have the property "port" or "path". Received { host: '127.0.0.1' }
 [
   'Address: IPv6 ::1',
+  'Address: IPv4 10.0.0.1',
   'Subnet: IPv6 2001:db8::/32',
   'Subnet: IPv4 8.8.0.0/16',
-  'Range: IPv4 192.168.1.10-192.168.1.20',
-  'Address: IPv4 10.0.0.1'
+  'Range: IPv4 192.168.1.10-192.168.1.20'
 ]
 BlockList {
   rules: [
     'Address: IPv6 ::1',
+    'Address: IPv4 10.0.0.1',
     'Subnet: IPv6 2001:db8::/32',
     'Subnet: IPv4 8.8.0.0/16',
-    'Range: IPv4 192.168.1.10-192.168.1.20',
-    'Address: IPv4 10.0.0.1'
+    'Range: IPv4 192.168.1.10-192.168.1.20'
   ]
 }
 check 10.0.0.1 true
@@ -46,7 +46,7 @@ check not an address false
 TypeError ERR_INVALID_ARG_VALUE: The argument 'start' must come before end. Received SocketAddress { address: '10.0.0.9', port: 0, family: 'ipv4', flowlabel: 0 }
 RangeError ERR_OUT_OF_RANGE: The value of "prefix" is out of range. It must be >= 0 && <= 32. Received 33
 TypeError ERR_INVALID_ARG_TYPE: The "address" argument must be of type string. Received type number (42)
-true false ["Address: IPv6 ::1","Subnet: IPv6 2001:db8::/32","Subnet: IPv4 8.8.0.0/16","Range: IPv4 192.168.1.10-192.168.1.20","Address: IPv4 10.0.0.1"]
+true false ["Address: IPv6 ::1","Address: IPv4 10.0.0.1","Subnet: IPv6 2001:db8::/32","Subnet: IPv4 8.8.0.0/16","Range: IPv4 192.168.1.10-192.168.1.20"]
 127.0.0.1 0 ipv4 0 SocketAddress { address: '127.0.0.1', port: 0, family: 'ipv4', flowlabel: 0 }
 {"address":"2001:db8::1","port":443,"family":"ipv6","flowlabel":7} ::
 ::ffff:1.2.3.4 -> ::ffff:1.2.3.4

@@ -14,13 +14,13 @@ window 28b52ffd4000f842b4040022c50f1690a7e94b217c69c1be…4c11cf2dcc23cb2559289f
 dictionary 28b52ffd60f8429d130066a12313b027cb01843b2be04a0c…018e45382c9142a0f0688c9685a7b41902005a1e9500e156 (637) true
 error Error ZSTD_error_corruption_detected 20 Data corruption detected
 error Error ZSTD_error_prefix_unknown 10 Unknown frame descriptor
-decompressed 0
-decompressed 0
+error Error Z_BUF_ERROR -5 unexpected end of file
+error Error Z_BUF_ERROR -5 unexpected end of file
 error RangeError ERR_ZSTD_INVALID_PARAM undefined 500 is not a valid zstd parameter
 error RangeError ERR_ZSTD_INVALID_PARAM undefined x is not a valid zstd parameter
 error TypeError ERR_INVALID_ARG_TYPE undefined The "options.params[key]" property must be of type number. Received type string ('3')
 error Error ERR_ZLIB_INITIALIZATION_FAILED undefined Setting parameter failed
-error TypeError ERR_INVALID_ARG_VALUE undefined pledgedSrcSize may not be negative
+error RangeError ERR_OUT_OF_RANGE undefined pledgedSrcSize must be non-negative
 error RangeError ERR_OUT_OF_RANGE undefined The value of "options.flush" is out of range. It must be >= 0 and <= 2. Received 3
 error Error ERR_ZLIB_INITIALIZATION_FAILED undefined Setting parameter failed
 callback null 28b52ffd0058fd1300f6e229189027c9704b41fe8565fead…606e10abc2c4a0514a35e303b42d6897d3890668c34cb456 (648)

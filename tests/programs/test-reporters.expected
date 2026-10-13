@@ -1,4 +1,4 @@
-names: dot,junitReporter,value,tapReporter dot,junit,spec,tap,lcov object
+names: dot,junitReporter,spec,tapReporter dot,junit,spec,tap,lcov function
 --- tap
 TAP version 13
 # Subtest: suite
@@ -46,7 +46,7 @@ Failed tests:
 --- junit
 <?xml version="1.0" encoding="utf-8"?>
 <testsuites>
-	<testsuite name="suite" time="0.005000" disabled="0" errors="0" tests="4" failures="1" skipped="2" hostname="HOST">
+	<testsuite name="suite" time="0.005000" disabled="0" errors="0" tests="4" failures="1" skipped="2" timestamp="TIME" hostname="HOST">
 		<testcase name="passes" time="0.001500" classname="test"/>
 		<testcase name="fails" time="0.002000" classname="test" failure="boom &amp; &lt;bang>">
 			<failure type="undefined" message="boom &amp; &lt;bang>">
@@ -96,4 +96,4 @@ LH:2
 LF:3
 end_of_record
 
-lcov getter: true
+lcov: true true

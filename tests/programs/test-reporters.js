@@ -38,7 +38,8 @@ const coverage = {
   },
 };
 
-const clean = (text) => text.replaceAll(hostname(), "HOST");
+/* the host and, in junit since Node 24, the time a suite ran */
+const clean = (text) => text.replaceAll(hostname(), "HOST").replace(/timestamp="[^"]*"/g, 'timestamp="TIME"');
 async function collect(generator) {
   let out = "";
   for await (const chunk of generator(Readable.from(events))) out += chunk;
@@ -56,5 +57,5 @@ print("--- dot\n" + (await collect(dot)));
 print("--- junit\n" + (await collect(junit)));
 print("--- spec\n" + (await piped(spec(), events)));
 print("--- spec with new: " + (new spec() !== spec()));
-print("--- lcov\n" + (await piped(reporters.lcov, [...events, coverage])));
-print("lcov getter: " + (reporters.lcov !== reporters.lcov));
+print("--- lcov\n" + (await piped(lcov(), [...events, coverage])));
+print("lcov: " + (reporters.lcov === lcov) + " " + (new lcov() !== lcov()));

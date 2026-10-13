@@ -7,7 +7,7 @@
 
 /* The Node API visaljs implements, as process.version reports it (node/compat.json's), and
  * visaljs's own version, process.versions.visaljs (cli/package.json's). cli/test checks both. */
-#define JS_NODE_VERSION "22.22.2"
+#define JS_NODE_VERSION "24.21.0"
 #define JS_VISALJS_VERSION "0.0.7"
 
 #include "js_function.h"

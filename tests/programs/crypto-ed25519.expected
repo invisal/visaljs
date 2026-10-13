@@ -43,7 +43,7 @@ true
 subtle RFC vector true
 ed25519 true
 { name: 'Ed25519' } true
-DataError: Ed25519 raw keys must be exactly 32-bytes
-SyntaxError: Unsupported key usage for an Ed25519 key
+DataError: Invalid keyData
+SyntaxError: Unsupported key usage for Ed25519 key
 DataError: JWK "crv" Parameter and algorithm name mismatch
 InvalidAccessError: Unable to use this key to sign

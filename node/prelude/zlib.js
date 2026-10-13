@@ -1,4 +1,4 @@
-// node:zlib: Node's lib/zlib.js (v22) on Node's binding, which is C here
+// node:zlib: Node's lib/zlib.js (v24) on Node's binding, which is C here
 // (node/src/host_zlib.c over Chromium's zlib, the copy Node vendors): the same streams, the same
 // convenience functions, and the same compressed bytes, Brotli's and zstd's too (node/src/host_brotli.c
 // and host_zstd.c, linked into programs that name them: internal/zlib_engines.js). A write's
@@ -159,6 +159,7 @@ class CompressionHandle {
   }
 
   reset() {
+    if (this._writing) throw new Error("Cannot reset zlib stream while a write is in progress");
     const failure = this._ops.reset(this._native);
     if (failure !== 0) this._emitError(failure);
   }

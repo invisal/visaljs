@@ -1,6 +1,6 @@
 1 1234943 148533.11111111112 385178.9874511285 9 0 250 1234943 1234943 1
 [[0,1],[50,250],[75,1001],[87.5,99968],[93.75,1233920],[100,1233920]]
-{"count":9,"min":1,"max":1234943,"mean":148533.11111111112,"exceeds":0,"stddev":385178.9874511285,"percentiles":{"0":1,"50":250,"75":1001,"100":1233920,"87.5":99968,"93.75":1233920}}
+{"count":9,"min":1,"max":1234943,"mean":148533.11111111112,"exceeds":0,"stddev":385178.9874511285,"skewness":2.445127823518128,"kurtosis":4.035901210033863,"ewmaMean":0,"ewmaStddev":0,"ewmaErrorRate":0,"percentiles":{"0":1,"50":250,"75":1001,"100":1233920,"87.5":99968,"93.75":1233920}}
 3 999 427.5 [[0,3],[50,7],[75,700],[87.5,996],[100,996]]
 record over highest undefined
 1 4
@@ -15,7 +15,7 @@ p0 ERR_OUT_OF_RANGE The value of "percentile" is out of range. It must be > 0 &&
 p101 ERR_OUT_OF_RANGE The value of "percentile" is out of range. It must be > 0 && <= 100. Received 101
 lowest 0 ERR_OUT_OF_RANGE The value of "options.lowest" is out of range. It must be >= 1 && <= 9007199254740991. Received 0
 function 9223372036854775807 function 0 0
-["dns","function","gc","http","http2","mark","measure","net","resource"] function function
+["dns","function","gc","http","http2","mark","measure","net","quic","resource"] function function
 sync after marks
 observe {} ERR_MISSING_ARGS The "options.entryTypes" and "options.type" arguments must be specified
 observer 5 ERR_INVALID_ARG_TYPE The "callback" argument must be of type function. Received type number (5)

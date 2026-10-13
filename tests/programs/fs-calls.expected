@@ -7,7 +7,7 @@ readlink b.txt
 readlink buffer 5
 readlink file Error EINVAL EINVAL: invalid argument, readlink 'b.txt' 
 symlink exists Error EEXIST EEXIST: file already exists, symlink 'b.txt' -> 'soft.txt' dest soft.txt
-symlink type Error ERR_FS_INVALID_SYMLINK_TYPE Symlink type must be one of "dir", "file", or "junction". Received "folder" 
+symlink type TypeError ERR_INVALID_ARG_VALUE The argument 'type' must be one of: 'dir', 'file', 'junction', null, undefined. Received 'folder' 
 lstat link true
 copyFile ok
 copy content hello world

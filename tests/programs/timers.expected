@@ -1,5 +1,5 @@
 globals are the module's: true true true
-exports: _unrefActive, active, clearImmediate, clearInterval, clearTimeout, enroll, promises, setImmediate, setInterval, setTimeout, unenroll
+exports: clearImmediate, clearInterval, clearTimeout, promises, setImmediate, setInterval, setTimeout
 Timeout: Timeout true true false true true
 fields: 1 null [ 'A', 'B' ] false function
 primitive: number true true
@@ -12,7 +12,7 @@ TypeError ERR_INVALID_ARG_TYPE The "callback" argument must be of type function.
 TypeError ERR_INVALID_ARG_TYPE The "callback" argument must be of type function. Received type string ('x')
 TypeError ERR_INVALID_ARG_TYPE The "callback" argument must be of type function. Received null
 timeout this: true Timeout A B destroyed while running: false
-cleared: true -1 null
+cleared: true -1 undefined
 close returns it: true
 kept fires
 interval 1 true 2
@@ -25,14 +25,9 @@ once fired 2 destroyed in callback: false
 refreshed pending fired once, late: true
 unref then ref fires
 Immediate: true true false true true [ 'X' ]
-cleared immediate: true null
+cleared immediate: true undefined
 immediate this: true Immediate X destroyed: true
 promisify.custom: true true
-enrolled: 3
-unenrolled: -1 true
-ERR_OUT_OF_RANGE The value of "msecs" is out of range. It must be a non-negative finite number. Received -1
-ERR_INVALID_ARG_TYPE The "msecs" argument must be of type number. Received type string ('x')
-enrolled item fired true
 sleep: slept tick: ticked
 scheduler: undefined undefined constructor,yield,wait
 signal: 1 -> TypeError ERR_INVALID_ARG_TYPE The "options.signal" property must be an instance of AbortSignal. Received type number (1)

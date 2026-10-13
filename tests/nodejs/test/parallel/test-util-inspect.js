@@ -107,7 +107,7 @@ assert.strictEqual(util.inspect({}), '{}');
 assert.strictEqual(util.inspect({ a: 1 }), '{ a: 1 }');
 assert.strictEqual(util.inspect({ a: function() {} }), '{ a: [Function: a] }');
 assert.strictEqual(util.inspect({ a: () => {} }), '{ a: [Function: a] }');
-// eslint-disable-next-line func-name-matching
+// eslint-disable-next-line node-core/func-name-matching
 assert.strictEqual(util.inspect({ a: async function abc() {} }),
                    '{ a: [AsyncFunction: abc] }');
 assert.strictEqual(util.inspect({ a: async () => {} }),
@@ -145,7 +145,7 @@ assert.strictEqual(
     Object.assign(new String('hello'), { [Symbol('foo')]: 123 }),
     { showHidden: true }
   ),
-  "[String: 'hello'] { [length]: 5, [Symbol(foo)]: 123 }"
+  "[String: 'hello'] { [length]: 5, Symbol(foo): 123 }"
 );
 
 assert.match(util.inspect((new JSStream())._externalStream),
@@ -737,7 +737,9 @@ assert.strictEqual(util.inspect(-5e-324), '-5e-324');
 
 {
   const tmp = Error.stackTraceLimit;
-  Error.stackTraceLimit = 0;
+  // Force stackTraceLimit = 0 for this test, but make it non-enumerable
+  // so it doesn't appear in inspect() output when inspecting Error in other tests.
+  Object.defineProperty(Error, 'stackTraceLimit', { value: 0, enumerable: false });
   const err = new Error('foo');
   const err2 = new Error('foo\nbar');
   assert.strictEqual(util.inspect(err, { compact: true }), '[Error: foo]');
@@ -883,7 +885,7 @@ assert.strictEqual(util.inspect({ __proto__: Date.prototype }), 'Date {}');
 {
   const x = { [util.inspect.custom]: util.inspect };
   assert(util.inspect(x).includes(
-    '[Symbol(nodejs.util.inspect.custom)]: [Function: inspect] {\n'));
+    'Symbol(nodejs.util.inspect.custom): [Function: inspect] {\n'));
 }
 
 // `util.inspect` should display the escaped value of a key.
@@ -1082,11 +1084,11 @@ util.inspect({ hasOwnProperty: null });
 
   assert.strictEqual(util.inspect(subject), '{ baz: \'quux\' }');
 
-  subject[inspect] = (depth, opts) => {
+  subject[inspect] = common.mustCall((depth, opts) => {
     assert.strictEqual(opts.customInspectOptions, true);
     assert.strictEqual(opts.seen, null);
     return {};
-  };
+  });
 
   util.inspect(subject, { customInspectOptions: true, seen: null });
 }
@@ -1105,7 +1107,7 @@ util.inspect({ hasOwnProperty: null });
   const UIC = 'nodejs.util.inspect.custom';
   assert.strictEqual(
     util.inspect(subject),
-    `{\n  a: 123,\n  [Symbol(${UIC})]: [Function: [${UIC}]]\n}`
+    `{\n  a: 123,\n  Symbol(${UIC}): [Function: [${UIC}]]\n}`
   );
 }
 
@@ -1205,27 +1207,29 @@ if (typeof Symbol !== 'undefined') {
 
   subject[Symbol('sym\nbol')] = 42;
 
-  assert.strictEqual(util.inspect(subject), '{ [Symbol(sym\\nbol)]: 42 }');
+  assert.strictEqual(util.inspect(subject), '{ Symbol(sym\\nbol): 42 }');
   assert.strictEqual(
     util.inspect(subject, options),
-    '{ [Symbol(sym\\nbol)]: 42 }'
+    '{ Symbol(sym\\nbol): 42 }'
   );
 
   Object.defineProperty(
     subject,
     Symbol(),
     { enumerable: false, value: 'non-enum' });
-  assert.strictEqual(util.inspect(subject), '{ [Symbol(sym\\nbol)]: 42 }');
+  assert.strictEqual(util.inspect(subject), '{ Symbol(sym\\nbol): 42 }');
   assert.strictEqual(
     util.inspect(subject, options),
-    "{ [Symbol(sym\\nbol)]: 42, [Symbol()]: 'non-enum' }"
+    "{ Symbol(sym\\nbol): 42, [Symbol()]: 'non-enum' }"
   );
 
   subject = [1, 2, 3];
   subject[Symbol('symbol')] = 42;
 
-  assert.strictEqual(util.inspect(subject),
-                     '[ 1, 2, 3, [Symbol(symbol)]: 42 ]');
+  assert.strictEqual(
+    util.inspect(subject),
+    '[ 1, 2, 3, Symbol(symbol): 42 ]'
+  );
 }
 
 // Test Set.
@@ -1672,7 +1676,7 @@ util.inspect(process);
   const obj = { [util.inspect.custom]: 'fhqwhgads' };
   assert.strictEqual(
     util.inspect(obj),
-    "{ [Symbol(nodejs.util.inspect.custom)]: 'fhqwhgads' }"
+    "{ Symbol(nodejs.util.inspect.custom): 'fhqwhgads' }"
   );
 }
 
@@ -1681,7 +1685,7 @@ util.inspect(process);
   const obj = { [Symbol.toStringTag]: 'a' };
   assert.strictEqual(
     util.inspect(obj),
-    "{ [Symbol(Symbol.toStringTag)]: 'a' }"
+    "{ Symbol(Symbol.toStringTag): 'a' }"
   );
   Object.defineProperty(obj, Symbol.toStringTag, {
     value: 'a',
@@ -1725,7 +1729,7 @@ util.inspect(process);
     }
   }
 
-  assert.throws(() => util.inspect(new ThrowingClass()), /toStringTag error/);
+  assert.strictEqual(util.inspect(new ThrowingClass()), 'ThrowingClass {}');
 
   const y = {
     get [Symbol.toStringTag]() {
@@ -1734,7 +1738,11 @@ util.inspect(process);
   };
   const x = { y };
   y.x = x;
-  assert.throws(() => util.inspect(x), /TypeError: Converting circular structure to JSON/);
+
+  assert.strictEqual(
+    util.inspect(x),
+    '<ref *1> {\n  y: { x: [Circular *1], Symbol(Symbol.toStringTag): [Getter] }\n}'
+  );
 
   class NotStringClass {
     get [Symbol.toStringTag]() {
@@ -2351,7 +2359,7 @@ assert.strictEqual(util.inspect('"\'${a}'), "'\"\\'${a}'");
   value[Symbol('foo')] = 'yeah';
   res = util.inspect(value);
   assert.notStrictEqual(res, expectedWithoutProto);
-  assert.match(res, /\[Symbol\(foo\)]: 'yeah'/);
+  assert.match(res, /Symbol\(foo\): 'yeah'/);
 });
 
 assert.strictEqual(inspect(1n), '1n');
@@ -2367,7 +2375,7 @@ assert.strictEqual(
   Object.defineProperty(obj, 'Non\nenumerable\tkey', { value: true });
   assert.strictEqual(
     util.inspect(obj, { showHidden: true }),
-    '{ [Non\\nenumerable\\tkey]: true }'
+    '{ [\'Non\\nenumerable\\tkey\']: true }'
   );
 }
 
@@ -2472,7 +2480,7 @@ assert.strictEqual(
   arr[Symbol('a')] = false;
   assert.strictEqual(
     inspect(arr, { sorted: true }),
-    '[ 3, 2, 1, [Symbol(a)]: false, [Symbol(b)]: true, a: 1, b: 2, c: 3 ]'
+    '[ 3, 2, 1, Symbol(a): false, Symbol(b): true, a: 1, b: 2, c: 3 ]'
   );
 }
 
@@ -2568,14 +2576,10 @@ assert.strictEqual(
     set foo(val) { foo = val; },
     get inc() { return ++foo; }
   };
-  const thrower = { get foo() { throw new Error('Oops'); } };
   assert.strictEqual(
     inspect(get, { getters: true, colors: true }),
     '{ foo: \u001b[36m[Getter:\u001b[39m ' +
       '\u001b[33m1\u001b[39m\u001b[36m]\u001b[39m }');
-  assert.strictEqual(
-    inspect(thrower, { getters: true }),
-    '{ foo: [Getter: <Inspection threw (Oops)>] }');
   assert.strictEqual(
     inspect(getset, { getters: true }),
     '{ foo: [Getter/Setter: 1], inc: [Getter: 2] }');
@@ -2591,6 +2595,248 @@ assert.strictEqual(
     '{\n  foo: [Getter/Setter] Set(3) { [ [Object], 2, {} ], ' +
       "'foobar', { x: 1 } },\n  inc: [Getter: NaN]\n}");
 }
+
+// Getter returning a function.
+// https://github.com/nodejs/node/issues/64838
+{
+  const obj = { get foo() { return function bar() {}; } };
+  assert.strictEqual(
+    inspect(obj, { getters: true }),
+    '{ foo: [Getter] [Function: bar] }');
+}
+
+// Property getter throwing an error.
+{
+  const error = new Error('Oops');
+  error.stack = [
+    'Error: Oops',
+    '    at get foo (/foo/node_modules/foo.js:2:7)',
+    '    at get bar (/foo/node_modules/bar.js:827:30)',
+  ].join('\n');
+
+  const thrower = {
+    get foo() { throw error; }
+  };
+
+  assert.strictEqual(
+    inspect(thrower, { getters: true }),
+    '{\n' +
+    '  foo: [Getter: <Inspection threw (Error: Oops\n' +
+    '      at get foo (/foo/node_modules/foo.js:2:7)\n' +
+    '      at get bar (/foo/node_modules/bar.js:827:30))>]\n' +
+    '}',
+  );
+};
+
+// Property getter throwing an error with getters that throws.
+// https://github.com/nodejs/node/issues/60683
+{
+  const badError = new Error();
+
+  const innerError = new Error('Oops');
+  innerError.stack = [
+    'Error: Oops',
+    '    at get foo (/foo/node_modules/foo.js:2:7)',
+    '    at get bar (/foo/node_modules/bar.js:827:30)',
+  ].join('\n');
+
+  const throwingGetter = {
+    __proto__: null,
+    get() {
+      throw innerError;
+    },
+    configurable: true,
+    enumerable: true,
+  };
+
+  Object.defineProperties(badError, {
+    name: throwingGetter,
+    message: throwingGetter,
+    stack: throwingGetter,
+    cause: throwingGetter,
+  });
+
+  const thrower = {
+    get foo() { throw badError; }
+  };
+
+  assert.strictEqual(
+    inspect(thrower, { getters: true }),
+    '{\n' +
+    '  foo: [Getter: <Inspection threw ([object Error] {\n' +
+    '    stack: [Getter/Setter: <Inspection threw (Error: Oops\n' +
+    '        at get foo (/foo/node_modules/foo.js:2:7)\n' +
+    '        at get bar (/foo/node_modules/bar.js:827:30))>],\n' +
+    '    name: [Getter: <Inspection threw (Error: Oops\n' +
+    '        at get foo (/foo/node_modules/foo.js:2:7)\n' +
+    '        at get bar (/foo/node_modules/bar.js:827:30))>],\n' +
+    '    message: [Getter: <Inspection threw (Error: Oops\n' +
+    '        at get foo (/foo/node_modules/foo.js:2:7)\n' +
+    '        at get bar (/foo/node_modules/bar.js:827:30))>],\n' +
+    '    cause: [Getter: <Inspection threw (Error: Oops\n' +
+    '        at get foo (/foo/node_modules/foo.js:2:7)\n' +
+    '        at get bar (/foo/node_modules/bar.js:827:30))>]\n' +
+    '  })>]\n' +
+    '}'
+  );
+}
+
+// Property getter throwing an error with getters that throws recursivly.
+{
+  const recursivelyThrowingErrorDesc = {
+    __proto__: null,
+    // eslint-disable-next-line no-restricted-syntax
+    get() { throw createRecursivelyThrowingError(); },
+    configurable: true,
+    enumerable: true,
+  };
+  const createRecursivelyThrowingError = () =>
+    Object.defineProperties(new Error(), {
+      cause: recursivelyThrowingErrorDesc,
+      name: recursivelyThrowingErrorDesc,
+      message: recursivelyThrowingErrorDesc,
+      stack: recursivelyThrowingErrorDesc,
+    });
+  const thrower = Object.defineProperty({}, 'foo', recursivelyThrowingErrorDesc);
+
+  assert.strictEqual(
+    inspect(thrower, { getters: true, depth: 1 }),
+    '{\n' +
+    '  foo: [Getter: <Inspection threw ([object Error] {\n' +
+    '    stack: [Getter/Setter: <Inspection threw ([Error])>],\n' +
+    '    cause: [Getter: <Inspection threw ([Error])>],\n' +
+    '    name: [Getter: <Inspection threw ([Error])>],\n' +
+    '    message: [Getter: <Inspection threw ([Error])>]\n' +
+    '  })>]\n' +
+    '}'
+  );
+
+  [{ getters: true, depth: 2 }, { getters: true }].forEach((options) => {
+    assert.strictEqual(
+      inspect(thrower, options),
+      '{\n' +
+      '  foo: [Getter: <Inspection threw ([object Error] {\n' +
+      '    stack: [Getter/Setter: <Inspection threw ([object Error] {\n' +
+      '      stack: [Getter/Setter: <Inspection threw ([Error])>],\n' +
+      '      cause: [Getter: <Inspection threw ([Error])>],\n' +
+      '      name: [Getter: <Inspection threw ([Error])>],\n' +
+      '      message: [Getter: <Inspection threw ([Error])>]\n' +
+      '    })>],\n' +
+      '    cause: [Getter: <Inspection threw ([object Error] {\n' +
+      '      stack: [Getter/Setter: <Inspection threw ([Error])>],\n' +
+      '      cause: [Getter: <Inspection threw ([Error])>],\n' +
+      '      name: [Getter: <Inspection threw ([Error])>],\n' +
+      '      message: [Getter: <Inspection threw ([Error])>]\n' +
+      '    })>],\n' +
+      '    name: [Getter: <Inspection threw ([object Error] {\n' +
+      '      stack: [Getter/Setter: <Inspection threw ([Error])>],\n' +
+      '      cause: [Getter: <Inspection threw ([Error])>],\n' +
+      '      name: [Getter: <Inspection threw ([Error])>],\n' +
+      '      message: [Getter: <Inspection threw ([Error])>]\n' +
+      '    })>],\n' +
+      '    message: [Getter: <Inspection threw ([object Error] {\n' +
+      '      stack: [Getter/Setter: <Inspection threw ([Error])>],\n' +
+      '      cause: [Getter: <Inspection threw ([Error])>],\n' +
+      '      name: [Getter: <Inspection threw ([Error])>],\n' +
+      '      message: [Getter: <Inspection threw ([Error])>]\n' +
+      '    })>]\n' +
+      '  })>]\n' +
+      '}'
+    );
+  });
+}
+
+// Property getter throwing an error whose own getters throw that same error (infinite recursion).
+{
+  const badError = new Error();
+
+  const throwingGetter = {
+    __proto__: null,
+    get() {
+      throw badError;
+    },
+    configurable: true,
+    enumerable: true,
+  };
+
+  Object.defineProperties(badError, {
+    name: throwingGetter,
+    message: throwingGetter,
+    stack: throwingGetter,
+    cause: throwingGetter,
+  });
+
+  const thrower = {
+    get foo() { throw badError; }
+  };
+
+  assert.strictEqual(
+    inspect(thrower, { getters: true, depth: Infinity }),
+    '{\n' +
+    '  foo: [Getter: <Inspection threw (<ref *1> [object Error] {\n' +
+    '    stack: [Getter/Setter: <Inspection threw ([Circular *1])>],\n' +
+    '    name: [Getter: <Inspection threw ([Circular *1])>],\n' +
+    '    message: [Getter: <Inspection threw ([Circular *1])>],\n' +
+    '    cause: [Getter: <Inspection threw ([Circular *1])>]\n' +
+    '  })>]\n' +
+    '}'
+  );
+}
+
+// Property getter throwing uncommon values.
+[
+  {
+    val: undefined,
+    expected: '{ foo: [Getter: <Inspection threw (undefined)>] }'
+  },
+  {
+    val: null,
+    expected: '{ foo: [Getter: <Inspection threw (null)>] }'
+  },
+  {
+    val: true,
+    expected: '{ foo: [Getter: <Inspection threw (true)>] }'
+  },
+  {
+    val: 1,
+    expected: '{ foo: [Getter: <Inspection threw (1)>] }'
+  },
+  {
+    val: 1n,
+    expected: '{ foo: [Getter: <Inspection threw (1n)>] }'
+  },
+  {
+    val: Symbol(),
+    expected: '{ foo: [Getter: <Inspection threw (Symbol())>] }'
+  },
+  {
+    val: () => {},
+    expected: '{ foo: [Getter: <Inspection threw ([Function: val])>] }'
+  },
+  {
+    val: 'string',
+    expected: "{ foo: [Getter: <Inspection threw ('string')>] }"
+  },
+  {
+    val: [],
+    expected: '{ foo: [Getter: <Inspection threw ([])>] }'
+  },
+  {
+    val: { get message() { return 'Oops'; } },
+    expected: "{ foo: [Getter: <Inspection threw ({ message: [Getter: 'Oops'] })>] }"
+  },
+  {
+    val: Error,
+    expected: '{ foo: [Getter: <Inspection threw ([Function: Error])>] }'
+  },
+].forEach(({ val, expected }) => {
+  assert.strictEqual(
+    inspect({
+      get foo() { throw val; }
+    }, { getters: true }),
+    expected,
+  );
+});
 
 // Check compact number mode.
 {
@@ -2953,11 +3199,10 @@ assert.strictEqual(
       frame.replaceAll('/', '\\'))
     ).join('\n');
   }
-  const escapedCWD = util.inspect(process.cwd()).slice(1, -1);
-  util.inspect(err, { colors: true }).split('\n').forEach((line, i) => {
+  util.inspect(err, { colors: true }).split('\n').forEach(common.mustCallAtLeast((line, i) => {
     let expected = stack[i].replace(/node_modules\/(@[^/]+\/[^/]+|[^/]+)/gi, (_, m) => {
       return `node_modules/\u001b[4m${m}\u001b[24m`;
-    }).replaceAll(new RegExp(`(\\(?${escapedCWD}(\\\\|/))`, 'gi'), (_, m) => {
+    }).replaceAll(new RegExp(`(\\(?${RegExp.escape(process.cwd())}(\\\\|/))`, 'gi'), (_, m) => {
       return `\x1B[90m${m}\x1B[39m`;
     });
     if (expected.includes(process.cwd()) && expected.endsWith(')')) {
@@ -2971,7 +3216,7 @@ assert.strictEqual(
       expected = expected.replaceAll('/', '\\');
     }
     assert.strictEqual(line, expected);
-  });
+  }));
 
   // Check ESM
   const encodedCwd = url.pathToFileURL(process.cwd());
@@ -3183,11 +3428,26 @@ assert.strictEqual(
 }
 
 {
+  // A node_modules segment that is the last path component (no trailing
+  // separator after the module name) must not send markNodeModules into an
+  // infinite loop that exhausts the heap.
+  // https://github.com/nodejs/node/issues/64011
+  const err = new Error('boom');
+  err.stack = 'Error: boom\n    at /app/node_modules/foo.js:1:1';
+  const out = util.inspect(err, { colors: true });
+  assert.strictEqual(
+    out,
+    'Error: boom\n' +
+      '    at /app/node_modules/\x1B[4mfoo.js:1:1\x1B[24m',
+  );
+}
+
+{
   // Cross platform checks.
   const err = new Error('foo');
-  util.inspect(err, { colors: true }).split('\n').forEach((line, i) => {
+  util.inspect(err, { colors: true }).split('\n').forEach(common.mustCallAtLeast((line, i) => {
     assert(i < 2 || line.startsWith('\u001b[90m'));
-  });
+  }));
 }
 
 {
@@ -3275,23 +3535,21 @@ assert.strictEqual(
 
   assert.strictEqual(
     inspect(Object.getPrototypeOf(bar), { showHidden: true, getters: true }),
-    '<ref *1> Foo [Map] {\n' +
-    '    [constructor]: [class Bar extends Foo] {\n' +
-    '      [length]: 0,\n' +
-    "      [name]: 'Bar',\n" +
-    '      [prototype]: [Circular *1],\n' +
-    '      [Symbol(Symbol.species)]: [Getter: <Inspection threw ' +
-      "(Symbol.prototype.toString requires that 'this' be a Symbol)>]\n" +
-    '    },\n' +
-    "    [xyz]: [Getter: 'YES!'],\n" +
-    '    [Symbol(nodejs.util.inspect.custom)]: ' +
-      '[Function: [nodejs.util.inspect.custom]] {\n' +
-    '      [length]: 0,\n' +
-    "      [name]: '[nodejs.util.inspect.custom]'\n" +
-    '    },\n' +
-    '    [abc]: [Getter: true],\n' +
-    '    [def]: [Getter/Setter: false]\n' +
-    '  }'
+    '<ref *2> Foo [Map] {\n' +
+      '  [constructor]: <ref *1> [class Bar extends Foo] {\n' +
+      '    [length]: 0,\n' +
+      "    [name]: 'Bar',\n" +
+      '    [prototype]: [Circular *2],\n' +
+      '    [Symbol(Symbol.species)]: [Getter] [Circular *1]\n' +
+      '  },\n' +
+      "  [xyz]: [Getter: 'YES!'],\n" +
+      '  [Symbol(nodejs.util.inspect.custom)]: [Function: [nodejs.util.inspect.custom]] {\n' +
+      '    [length]: 0,\n' +
+      "    [name]: '[nodejs.util.inspect.custom]'\n" +
+      '  },\n' +
+      '  [abc]: [Getter: true],\n' +
+      '  [def]: [Getter/Setter: false]\n' +
+      '}'
   );
 
   assert.strictEqual(
@@ -3524,6 +3782,13 @@ assert.strictEqual(
     util.inspect({ ['__proto__']: { a: 1 } }),
     "{ ['__proto__']: { a: 1 } }"
   );
+
+  const o = { ['__proto__']: { a: 1 } };
+  Object.defineProperty(o, '__proto__', { enumerable: false });
+  assert.strictEqual(
+    util.inspect(o, { showHidden: true }),
+    "{ [['__proto__']]: { a: 1 } }"
+  );
 }
 
 {
@@ -3549,6 +3814,7 @@ assert.strictEqual(
   assert.strictEqual(util.inspect(NaN), 'NaN');
   assert.strictEqual(util.inspect(Infinity), 'Infinity');
   assert.strictEqual(util.inspect(-Infinity), '-Infinity');
+  assert.strictEqual(util.inspect(-0), '-0');
 
   assert.strictEqual(
     util.inspect(new Float64Array([100_000_000])),
@@ -3580,6 +3846,9 @@ assert.strictEqual(
     '-123_456_789.123_456_78'
   );
 
+  // -0 should be formatted as '-0' even with numericSeparator enabled
+  assert.strictEqual(util.inspect(-0, { numericSeparator: true }), '-0');
+
   // Regression test for https://github.com/nodejs/node/issues/59376
   // numericSeparator should work correctly for negative fractional numbers
   {
@@ -3600,6 +3869,12 @@ assert.strictEqual(
       '-0.123_45'
     );
   }
+
+  // Numbers in scientific notation should not get malformed separators
+  assert.strictEqual(util.inspect(1e-7, { numericSeparator: true }), '1e-7');
+  assert.strictEqual(util.inspect(1.5e-10, { numericSeparator: true }), '1.5e-10');
+  assert.strictEqual(util.inspect(1.23e-100, { numericSeparator: true }), '1.23e-100');
+  assert.strictEqual(util.inspect(1.23456789e-12, { numericSeparator: true }), '1.23456789e-12');
 }
 
 // Regression test for https://github.com/nodejs/node/issues/41244
@@ -3608,7 +3883,30 @@ assert.strictEqual(
     get [Symbol.iterator]() {
       throw new Error();
     }
-  }), '{ [Symbol(Symbol.iterator)]: [Getter] }');
+  }), '{ Symbol(Symbol.iterator): [Getter] }');
+}
+
+{
+  const sym = Symbol('bar()');
+  const o = {
+    'foo': 0,
+    'Symbol(foo)': 0,
+    [Symbol('foo')]: 0,
+    [Symbol('foo()')]: 0,
+    [sym]: 0,
+  };
+  Object.defineProperty(o, sym, { enumerable: false });
+
+  assert.strictEqual(
+    util.inspect(o, { showHidden: true }),
+    '{\n' +
+    '  foo: 0,\n' +
+    "  'Symbol(foo)': 0,\n" +
+    '  Symbol(foo): 0,\n' +
+    '  Symbol(foo()): 0,\n' +
+    '  [Symbol(bar())]: 0\n' +
+    '}',
+  );
 }
 
 {
@@ -3765,4 +4063,10 @@ ${error.stack.split('\n').slice(1).join('\n')}`,
   assert.strictEqual(inspect(error), `[object Error] {\n  stack: [Getter/Setter],\n  name: [Getter],\n  cause: [Getter]\n}`);
   assert.match(inspect(DOMException.prototype), /^\[object DOMException\] \{/);
   delete Error[Symbol.hasInstance];
+}
+
+{
+  const obj = { a: 'short string', b: [1, 2], c: { d: true } };
+  const expected = "{ a: 'short string', b: [ 1, 2 ], c: { d: true } }";
+  assert.strictEqual(util.inspect(obj, { breakLength: Infinity }), expected);
 }

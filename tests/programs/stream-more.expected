@@ -1,4 +1,4 @@
-compose: A!B!
+compose: A! B!
 b read: from a
 a read: from b
 b ended
