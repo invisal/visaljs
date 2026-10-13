@@ -1,0 +1,194 @@
+---
+// The Node API page: for each of Node's built-in modules, which exports visaljs implements, stubs
+// or lacks, one level deep, from node/compat.json (tests/compat/node.ts).
+import { Badge } from "@cloudflare/kumo/components/badge";
+import { Input } from "@cloudflare/kumo/components/input";
+import Prose from "../../components/Prose.astro";
+import Layout from "../../layouts/Layout.astro";
+import { type ModuleCoverage, nodeCompat, type Status } from "../../lib/compat.ts";
+
+const REPO = "https://github.com/invisal/visaljs";
+const compat = nodeCompat();
+const { modules: m, exports: e } = compat.summary;
+
+const total = (c: ModuleCoverage) => c.implemented.length + c.stubbed.length + c.missing.length;
+const percent = (a: number, b: number) => (b ? Math.round((1000 * a) / b) / 10 : 100);
+const num = (n: number) => n.toLocaleString("en-US");
+
+/* provided modules, best covered first; then the ones not provided, by name */
+const entries = Object.entries(compat.modules);
+const provided = entries
+  .filter(([, c]) => c.status !== "missing")
+  .sort(([an, a], [bn, b]) => percent(b.implemented.length, total(b)) - percent(a.implemented.length, total(a)) || an.localeCompare(bn));
+const notProvided = entries.filter(([, c]) => c.status === "missing").sort(([a], [b]) => a.localeCompare(b));
+
+const STATUS = {
+  complete: { label: "complete", variant: "success" },
+  partial: { label: "partial", variant: "info" },
+  stub: { label: "stubs only", variant: "warning" },
+  missing: { label: "not provided", variant: "outline" },
+} as const satisfies Record<Status, { label: string; variant: string }>;
+
+const stats: [string, string, string][] = [
+  [`${percent(e.implemented, e.total)}%`, "of exports", `${num(e.implemented)} of ${num(e.total)} exports implemented`],
+  [num(e.stubbed), "stubbed", "present, but throw ERR_VISALJS_UNSUPPORTED when called"],
+  [`${m.total - m.missing} / ${m.total}`, "modules", "provided: importing any other is a compile error"],
+  [String(m.complete), "complete", "modules with every export implemented"],
+];
+
+/** What the filter matches a module against: its name and its exports. */
+const filterText = (name: string, c: ModuleCoverage) => [name, ...c.implemented, ...c.stubbed, ...c.missing].join(" ").toLowerCase();
+
+function groups(c: ModuleCoverage): [string, string[], string][] {
+  const all: [string, string[], string][] = [
+    ["Implemented", c.implemented, "border-kumo-success/40 bg-kumo-success-tint text-kumo-success"],
+    ["Stubbed", c.stubbed, "border-kumo-warning/40 bg-kumo-warning-tint text-kumo-warning"],
+    ["Missing", c.missing, "border-kumo-hairline text-kumo-subtle"],
+    ["Not in Node", c.extra ?? [], "border-kumo-hairline text-kumo-subtle"],
+  ];
+  return all.filter(([, names]) => names.length > 0);
+}
+---
+
+<Layout title="Node API · visaljs" page="node">
+  <nav slot="sidebar" class="space-y-4 text-sm">
+    <Input id="filter" type="search" placeholder="Filter modules and exports…" aria-label="Filter modules and exports" className="w-full" />
+    {
+      [["Provided", "provided", provided], ["Not provided", "not-provided", notProvided]].map(([title, id, list]) => (
+        <div data-section={id as string}>
+          <a href={`#${id}`} class="mb-1 block font-semibold text-kumo-default hover:text-kumo-strong">
+            {title as string}
+          </a>
+          <ul class="space-y-0.5 border-l border-kumo-hairline">
+            {(list as [string, ModuleCoverage][]).map(([name, c]) => (
+              <li data-filter={filterText(name, c)}>
+                <a
+                  href={`#node-${name}`}
+                  class="-ml-px flex justify-between gap-2 border-l border-transparent py-0.5 pl-3 font-mono text-[12.5px] text-kumo-subtle hover:border-kumo-brand hover:text-kumo-link"
+                >
+                  <span>{name}</span>
+                  <span class="text-kumo-inactive">
+                    {c.implemented.length}/{total(c)}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))
+    }
+  </nav>
+
+  <section id="overview" class="scroll-mt-20 space-y-5 pb-8">
+    <h1 class="text-3xl font-bold tracking-tight">Node API</h1>
+    <p class="max-w-3xl text-kumo-default">
+      <Prose
+        text={`Which parts of Node's built-in modules a compiled program can use. For each module, an export is what \`require("node:…")\` gives under Node ${compat.node}: implemented, stubbed (it exists but throws when called), or missing. Measured by compiling a program that imports every provided module and lists its exports.`}
+      />
+    </p>
+    <div class="grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {
+        stats.map(([value, label, detail]) => (
+          <div class="rounded-lg border border-kumo-hairline p-4">
+            <div class="text-2xl font-bold text-kumo-link">{value}</div>
+            <div class="text-sm font-semibold text-kumo-default">{label}</div>
+            <div class="mt-1 text-xs text-kumo-subtle">{detail}</div>
+          </div>
+        ))
+      }
+    </div>
+    <div class="max-w-4xl space-y-1.5">
+      <div class="flex h-3 overflow-hidden rounded-full bg-kumo-tint" role="img" aria-label={`${e.implemented} implemented, ${e.stubbed} stubbed, ${e.missing} missing`}>
+        <div class="bg-kumo-success" style={`width:${percent(e.implemented, e.total)}%`}></div>
+        <div class="bg-kumo-warning" style={`width:${percent(e.stubbed, e.total)}%`}></div>
+      </div>
+      <div class="flex flex-wrap gap-4 text-xs text-kumo-subtle">
+        <span><span class="mr-1 inline-block size-2 rounded-full bg-kumo-success"></span>implemented {num(e.implemented)}</span>
+        <span><span class="mr-1 inline-block size-2 rounded-full bg-kumo-warning"></span>stubbed {num(e.stubbed)}</span>
+        <span><span class="mr-1 inline-block size-2 rounded-full bg-kumo-fill"></span>missing {num(e.missing)}</span>
+      </div>
+    </div>
+    <div class="max-w-4xl rounded-lg border border-kumo-hairline p-4 text-sm text-kumo-default">
+      <h2 class="mb-1 font-semibold text-kumo-strong">Reading this page</h2>
+      <ul class="list-disc space-y-1 pl-4">
+        <li><Prose text="One level deep: `http.createServer` counts, the methods of the server it returns don't. Whether every option works is what the differential tests check." /></li>
+        <li><Prose text="A stub lets code that only mentions an export compile and run; calling it throws `ERR_VISALJS_UNSUPPORTED`." /></li>
+        <li>
+          Generated by <code class="rounded bg-kumo-tint px-1 py-0.5 font-mono text-[0.85em] text-kumo-strong">node tests/compat/node.ts</code> into{" "}
+          <a href={`${REPO}/blob/main/node/compat.json`} class="text-kumo-link hover:underline">node/compat.json</a>; the notes come from{" "}
+          <a href={`${REPO}/blob/main/node/compat.notes.json`} class="text-kumo-link hover:underline">node/compat.notes.json</a>.
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  {
+    [["provided", `Provided (${provided.length})`, "Importing these works. Expand a module to see its exports.", provided], ["not-provided", `Not provided (${notProvided.length})`, "Importing these is a compile error: `node:dns is not provided by visaljs`.", notProvided]].map(([id, title, intro, list]) => (
+      <section id={id as string} data-section={id as string} class="scroll-mt-16 pt-6">
+        <h2 class="text-2xl font-bold tracking-tight">{title as string}</h2>
+        <p class="mt-2 mb-4 max-w-3xl text-kumo-subtle">
+          <Prose text={intro as string} />
+        </p>
+        <div class="max-w-5xl divide-y divide-kumo-hairline border-y border-kumo-hairline">
+          {(list as [string, ModuleCoverage][]).map(([name, c]) => (
+            <details id={`node-${name}`} data-filter={filterText(name, c)} class="group scroll-mt-20">
+              <summary class="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 py-3 hover:bg-kumo-elevated sm:grid-cols-[11rem_minmax(0,1fr)_9rem]">
+                <span class="flex items-center gap-2 font-mono text-[15px] font-semibold text-kumo-strong">
+                  <span class="text-kumo-inactive transition group-open:rotate-90">▸</span>
+                  node:{name}
+                </span>
+                <span class="col-span-2 flex h-2 overflow-hidden rounded-full bg-kumo-tint sm:col-span-1 sm:row-start-1 sm:col-start-2">
+                  <span class="bg-kumo-success" style={`width:${percent(c.implemented.length, total(c))}%`}></span>
+                  <span class="bg-kumo-warning" style={`width:${percent(c.stubbed.length, total(c))}%`}></span>
+                </span>
+                <span class="flex items-center justify-end gap-2 text-xs sm:row-start-1 sm:col-start-3">
+                  <span class="text-kumo-subtle tabular-nums">
+                    {c.implemented.length} / {total(c)}
+                  </span>
+                  <Badge variant={STATUS[c.status].variant}>{STATUS[c.status].label}</Badge>
+                </span>
+              </summary>
+              <div class="space-y-3 pt-1 pb-5 pl-6">
+                {c.notes && (
+                  <p class="max-w-3xl text-sm text-kumo-default">
+                    <Prose text={c.notes} />
+                  </p>
+                )}
+                {total(c) === 0 && <p class="text-sm text-kumo-subtle italic">Node's module has no exports to count.</p>}
+                {groups(c).map(([label, names, chip]) => (
+                  <div>
+                    <h3 class="mb-1.5 text-xs font-semibold tracking-wide text-kumo-subtle uppercase">
+                      {label} ({names.length})
+                    </h3>
+                    <ul class="flex flex-wrap gap-1.5">
+                      {names.map((n) => (
+                        <li data-export={n.toLowerCase()} class={`rounded border px-1.5 py-0.5 font-mono text-[12px] ${chip}`}>
+                          {n}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ))}
+        </div>
+      </section>
+    ))
+  }
+</Layout>
+
+<script>
+  /* the filter: keep the modules whose name or exports match, open them to show the matching
+   * exports (highlighted), and hide the sections left empty */
+  const input = document.getElementById("filter") as HTMLInputElement;
+  input.addEventListener("input", () => {
+    const q = input.value.trim().toLowerCase();
+    for (const el of document.querySelectorAll<HTMLElement>("[data-filter]")) {
+      el.hidden = !!q && !el.dataset.filter!.includes(q);
+      if (el instanceof HTMLDetailsElement) el.open = !!q && !el.hidden && !el.id.slice(5).includes(q);
+    }
+    for (const el of document.querySelectorAll<HTMLElement>("[data-export]")) el.classList.toggle("ring-1", !!q && el.dataset.export!.includes(q));
+    for (const el of document.querySelectorAll<HTMLElement>("[data-section]")) el.hidden = ![...el.querySelectorAll<HTMLElement>("[data-filter]")].some((o) => !o.hidden);
+  });
+</script>

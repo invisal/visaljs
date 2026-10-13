@@ -1,0 +1,24 @@
+A start
+B start
+sync
+early returned a promise: true
+function true
+[object AsyncFunction] false
+new: TypeError
+A after 1: 1
+B after 1: 1
+then 1
+caught rejected
+finally
+early rejected: ReferenceError
+A after 2: 2
+B after 2: 2
+then 2
+method 105
+arrow 101
+A result 3
+fails rejected: TypeError: thrown after await
+class 1
+from thenable!
+exprs x/yz
+sum 55

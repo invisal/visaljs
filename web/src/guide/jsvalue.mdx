@@ -1,0 +1,131 @@
+---
+title: "Representing JavaScript values"
+order: 2
+icon: "binary"
+---
+
+C is statically typed. Every variable has one type, and the compiler has to know it at compile time. JavaScript is dynamically typed, so a variable can hold a number now and a string later. We need one C type that can hold any JavaScript value, and we call it `JSValue`.
+
+```js
+let a = 5.5;
+a = "hello";
+a = null;
+```
+
+The simple way is a struct with a tag and a union, but that costs 16 bytes per value. A `JSValue` is in every variable, argument, array slot and object property, and that's a cost we don't want to pay.
+
+Let's start with numbers. A JavaScript number is a 64-bit floating-point number, a `double` in C. It turns out there's a trick that lets a double store the other values too, so a value needs only 8 bytes. To use it, we first need to understand floating point.
+
+## Understanding floating point
+
+A double, as the [IEEE 754](https://en.wikipedia.org/wiki/Double-precision_floating-point_format) standard defines it, is 64 bits in three parts.
+
+- The sign, 1 bit, says positive or negative.
+- The exponent, 11 bits, says how big the number is.
+- The fraction (also called the mantissa), 52 bits, holds its digits.
+
+Here is 3.25 as a double.
+
+<FloatTable values={[3.25]} bare />
+
+### Special rules
+
+A double reserves the exponents that are all zeros or all ones for special values. Here are some of them.
+
+<FloatTable values={[0, -0, Infinity, -Infinity, NaN]} />
+
+NaN is the interesting one. Any fraction that is not all zeros makes a NaN, so almost 2<sup>53</sup> bit patterns all mean NaN, and JavaScript only ever needs one of them. The rest is free space, and that's where the other values go.
+
+## NaN-boxing
+
+Every JavaScript value has to fit in one 64-bit word, the 8 bytes we promised. Here's the `JSValue` itself.
+
+```c
+typedef struct {
+    uint64_t bits;
+} JSValue;
+```
+
+It's an integer, not a double, but a double and a 64-bit integer are the same 64 bits. Only how we read them differs.
+
+We divide the 64 bits into two parts, the top 16 bits and the low 48 bits. The top 16 bits are a tag that says what the value is, and the low 48 bits hold it.
+
+| Value           | Top 16 bits   | Low 48 bits                                                 |
+| --------------- | ------------- | ----------------------------------------------------------- |
+| `null`          | `0x0000`      | `0x02`                                                      |
+| `false`         | `0x0000`      | `0x06`                                                      |
+| `true`          | `0x0000`      | `0x07`                                                      |
+| `undefined`     | `0x0000`      | `0x0A`                                                      |
+| `EMPTY`         | `0x0000`      | `0x00`                                                      |
+| `EXCEPTION`     | `0x0000`      | `0x0E`                                                      |
+| Pointer         | `0x0000`      | Anything else, the address                                  |
+| 32-bit integer  | `0xFFFE`      | The integer, in the low 32 bits                             |
+| Double          | Anything else | The rest of the double, stored as its bits + 2<sup>49</sup> |
+
+The 32-bit integers are a faster way to store whole numbers. We'll come back to them when we make numbers fast.
+
+### Constants
+
+The values with no payload are small numbers, all below 16.
+
+```c
+#define JS_TAG_EMPTY      UINT64_C(0x00)  /* ours: an array hole, a let not set yet */
+#define JS_TAG_NULL       UINT64_C(0x02)
+#define JS_TAG_FALSE      UINT64_C(0x06)
+#define JS_TAG_TRUE       UINT64_C(0x07)
+#define JS_TAG_UNDEFINED  UINT64_C(0x0A)
+#define JS_TAG_EXCEPTION  UINT64_C(0x0E)  /* ours: this call threw (chapter Errors) */
+```
+
+`EMPTY` and `EXCEPTION` are our own, and JavaScript never sees them.
+
+### Doubles
+
+A double takes every tag the others don't use. But 0 and the tiniest numbers start with `0x0000`, so we add 2<sup>49</sup> to every double, which moves its top 16 bits up by 2. The patterns pushed onto `0xFFFE` and `0x0000` are negative NaNs, and we keep only one NaN, so nothing is lost.
+
+```c
+#define JS_DOUBLE_OFF  (UINT64_C(1) << 49)
+#define JS_CANON_NAN   UINT64_C(0x7FF8000000000000)
+
+static inline JSValue js_double(double d) {
+    uint64_t b;
+    memcpy(&b, &d, 8);            /* the double's bits, as an integer */
+    if (d != d) b = JS_CANON_NAN; /* every NaN becomes the one we keep */
+    return (JSValue){ b + JS_DOUBLE_OFF };
+}
+
+static inline double js_as_double(JSValue v) {
+    uint64_t b = v.bits - JS_DOUBLE_OFF;
+    double d;
+    memcpy(&d, &b, 8);
+    return d;
+}
+```
+
+### What about strings and objects?
+
+They're the pointers in the table above. They live in memory, and the `JSValue` holds their address under the `0x0000` tag. An address uses only the low 48 bits, so it fits as it is. How their memory is freed is the garbage collector's job (chapter Garbage Collector, coming soon).
+
+## Emit to C
+
+Now the compiler can turn any JavaScript value into a `JSValue`. A double goes through `js_double`, and each constant has a ready-made `JSValue`, like `JS_NULL` for `JS_TAG_NULL`.
+
+<Pair>
+
+```js
+let a = 5.5;
+let b = null;
+let c = true;
+let d;
+```
+
+```c
+JSValue a = js_double(5.5);
+JSValue b = JS_NULL;
+JSValue c = JS_TRUE;
+JSValue d = JS_UNDEFINED;
+```
+
+</Pair>
+
+Now we know how to store any value. Next, we need to operate on them.

@@ -1,0 +1,90 @@
+globals @0 n
+
+function main()
+bb0:
+  %0 = empty
+  store_global @0, %0
+  %pick0 = make_function pick
+  declare_global function ."pick", %pick0  !mayThrow
+  %1 = const 5
+  store_global @0, %1
+  %n0 = load_global @0
+  %2 = const 2
+  %3 = add %n0, %2  !mayThrow
+  store_global @0, %3
+  %n1 = load_global @0
+  %4 = const 2
+  %5 = exp %n1, %4  !mayThrow
+  store_global @0, %5
+  %6 = const 0
+  %7 = const "b"
+  %8 = call_direct pick(%6, %7)  !mayThrow
+  %n2 = load_global @0
+  %9 = to_numeric %n2  !mayThrow
+  %10 = inc %9  !mayThrow
+  store_global @0, %10
+  %n3 = load_global @0
+  %11 = to_numeric %n3  !mayThrow
+  %12 = dec %11  !mayThrow
+  store_global @0, %12
+  %13 = call_runtime print(%8, %9, %12)  !mayThrow
+  %14 = const undefined
+  return %14
+
+function pick(%a0, %b0)
+bb0:
+  %x0 = empty
+  %y0 = empty
+  %z0 = empty
+  branch %a0, bb1, bb2
+bb1:
+  jump bb2
+bb2:  ; preds bb0, bb1
+  %x1 = phi [bb0: %a0], [bb1: %b0]
+  branch %a0, bb4, bb3
+bb3:
+  jump bb4
+bb4:  ; preds bb2, bb3
+  %y1 = phi [bb2: %a0], [bb3: %b0]
+  %0 = is_nullish %a0
+  branch %0, bb5, bb6
+bb5:
+  jump bb6
+bb6:  ; preds bb4, bb5
+  %z1 = phi [bb4: %a0], [bb5: %b0]
+  branch %x1, bb8, bb7
+bb7:
+  jump bb8
+bb8:  ; preds bb6, bb7
+  %1 = phi [bb6: %x1], [bb7: %y1]
+  %x2 = phi [bb6: %x1], [bb7: %y1]
+  branch %y1, bb9, bb10
+bb9:
+  jump bb10
+bb10:  ; preds bb8, bb9
+  %2 = phi [bb8: %y1], [bb9: %z1]
+  %y2 = phi [bb8: %y1], [bb9: %z1]
+  %3 = is_nullish %z1
+  branch %3, bb11, bb12
+bb11:
+  %z2 = const 42
+  jump bb12
+bb12:  ; preds bb10, bb11
+  %4 = phi [bb10: %z1], [bb11: %z2]
+  %z3 = phi [bb10: %z1], [bb11: %z2]
+  branch %x2, bb13, bb14
+bb13:
+  jump bb15
+bb14:
+  jump bb15
+bb15:  ; preds bb13, bb14
+  %5 = phi [bb13: %y2], [bb14: %z3]
+  %6 = typeof %x2
+  %7 = const 0
+  %8 = const undefined
+  %9 = add %6, %8  !mayThrow
+  %10 = neg %a0  !mayThrow
+  %11 = add %9, %10  !mayThrow
+  %12 = not %b0
+  %13 = add %11, %12  !mayThrow
+  return %13

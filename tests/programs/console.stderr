@@ -1,0 +1,4 @@
+to stderr
+{ warn: true }
+Assertion failed: printed on stderr
+Assertion failed

@@ -1,0 +1,134 @@
+-- basics
+encrypted true authorized true servername localhost
+protocol TLSv1.2 cipher {
+  name: 'ECDHE-RSA-AES128-GCM-SHA256',
+  standardName: 'TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256',
+  version: 'TLSv1.2'
+}
+ephemeral { type: 'ECDH', name: 'X25519', size: 253 } reused false
+peer [Object: null prototype] {
+  C: 'PT',
+  O: 'visaljs tests',
+  CN: 'localhost'
+} visaljs Test CA DNS:localhost, DNS:*.example.test, IP Address:127.0.0.1, IP Address:0:0:0:0:0:0:0:1, email:tls@example.test, URI:https://example.test/
+peer Oct  6 22:08:31 2026 GMT Sep 12 22:08:31 2126 GMT 1001 2048 0x10001 1129 [ '1.3.6.1.5.5.7.3.1' ]
+peer infoAccess [Object: null prototype] {
+  'OCSP - URI': [ 'http://ocsp.example.test/' ],
+  'CA Issuers - URI': [ 'http://ca.example.test/ca.der' ]
+}
+fingerprint256 true
+chain visaljs Test CA true true
+getCertificate (client has none) {}
+finished 12 12
+data echo:ping
+server TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256 localhost {} null
+keying material agrees true 64
+finished messages cross [ 12, 12 ]
+-- EC certificate
+  client: secureConnect authorized=true error=null alpn=false
+  client: end "hello from server"
+  server: secureConnection authorized=false error=null servername=localhost alpn=false
+-- EC certificate, RSA CA only
+  client: error UNABLE_TO_VERIFY_LEAF_SIGNATURE
+  server: secureConnection authorized=false error=null servername=localhost alpn=false
+-- default CAs (the bundled roots)
+  client: error UNABLE_TO_VERIFY_LEAF_SIGNATURE
+  server: secureConnection authorized=false error=null servername=localhost alpn=false
+-- self-signed
+  client: error DEPTH_ZERO_SELF_SIGNED_CERT
+  server: secureConnection authorized=false error=null servername=localhost alpn=false
+-- self-signed, trusted
+  client: secureConnect authorized=true error=null alpn=false
+  client: end "hello from server"
+  server: secureConnection authorized=false error=null servername=localhost alpn=false
+-- expired
+  client: error CERT_HAS_EXPIRED
+  server: secureConnection authorized=false error=null servername=localhost alpn=false
+-- wrong host
+  client: error ERR_TLS_CERT_ALTNAME_INVALID (Host: localhost. is not in the cert's altnames: DNS:other.test)
+  server: secureConnection authorized=false error=null servername=localhost alpn=false
+-- wrong host, not rejected
+  client: secureConnect authorized=false error=ERR_TLS_CERT_ALTNAME_INVALID alpn=false
+  client: end "hello from server"
+  server: secureConnection authorized=false error=null servername=localhost alpn=false
+-- an IP address
+  client: secureConnect authorized=true error=null alpn=false
+  client: end "hello from server"
+  server: secureConnection authorized=false error=null servername=false alpn=false
+-- an IP address not in the certificate
+  client: error ERR_TLS_CERT_ALTNAME_INVALID (IP: 127.0.0.1 is not in the cert's list: )
+  server: secureConnection authorized=false error=null servername=false alpn=false
+-- a wildcard name
+  client: secureConnect authorized=true error=null alpn=false
+  client: end "hello from server"
+  server: secureConnection authorized=false error=null servername=api.example.test alpn=false
+-- a custom checkServerIdentity
+  client: secureConnect authorized=true error=null alpn=false
+  client: end "hello from server"
+  server: secureConnection authorized=false error=null servername=localhost alpn=false
+-- ALPN
+  client: secureConnect authorized=true error=null alpn=h2
+  client: end "hello from server"
+  server: secureConnection authorized=false error=null servername=localhost alpn=h2
+-- ALPN, the server has none
+  client: secureConnect authorized=true error=null alpn=false
+  client: end "hello from server"
+  server: secureConnection authorized=false error=null servername=localhost alpn=false
+-- ALPN, no protocol in common
+  client: error ERR_SSL_TLSV1_ALERT_NO_APPLICATION_PROTOCOL (tlsv1 alert no application protocol)
+  server: tlsClientError ERR_SSL_NO_APPLICATION_PROTOCOL
+-- ALPNCallback
+  client: secureConnect authorized=true error=null alpn=c
+  client: end "hello from server"
+  server: secureConnection authorized=false error=null servername=localhost alpn=c
+-- SNI localhost → localhost server saw localhost
+-- SNI one.other.test → other.test server saw one.other.test
+-- SNI other.test → localhost server saw other.test
+-- SNICallback a.test other.test
+-- SNICallback b.test localhost
+   asked for [ 'a.test', 'b.test' ]
+-- client certificate
+  client: secureConnect authorized=true error=null alpn=false
+  client: end "ok"
+  server: secureConnection authorized=true error=null servername=localhost alpn=false
+  server: peer test client 1.3.6.1.5.5.7.3.2
+-- client certificate missing, not rejected
+  client: secureConnect authorized=true error=null alpn=false
+  client: end "ok"
+  server: secureConnection authorized=false error=UNABLE_TO_GET_ISSUER_CERT servername=localhost alpn=false
+  server: peer {}
+-- client certificate missing, rejected
+  client: error ERR_SSL_SSL/TLS_ALERT_HANDSHAKE_FAILURE (ssl/tls alert handshake failure)
+  server: tlsClientError ERR_SSL_PEER_DID_NOT_RETURN_A_CERTIFICATE
+-- client certificate from another CA
+  client: secureConnect authorized=true error=null alpn=false
+  client: end "hello from server"
+  server: secureConnection authorized=false error=SELF_SIGNED_CERT_IN_CHAIN servername=localhost alpn=false
+-- resumption true null false null true
+-- upgrade: server read "SSLRequest"
+   client read S
+   server secure TLSv1.2
+   client secureConnect true true
+   client data "got written before the handshake" raw closed true
+-- not TLS: error ERR_SSL_PACKET_LENGTH_TOO_LONG (packet length too long)
+-- hang up: end ""; error ECONNRESET
+-- not a TLS client: tlsClientError ERR_SSL_HTTP_REQUEST; tlsClientError ECONNRESET
+-- no cipher in common
+  client: error ERR_SSL_SSL/TLS_ALERT_HANDSHAKE_FAILURE (ssl/tls alert handshake failure)
+  server: tlsClientError ERR_SSL_NO_SHARED_CIPHER
+-- 3 MiB through TLS: 3145728 7ac9d8a150816ea0 7ac9d8a150816ea0
+-- module
+true true
+true true true
+true true
+auto TLSv1.2 3 600
+TypeError [ERR_TLS_INVALID_PROTOCOL_VERSION]: "TLSv1.9" is not a valid minimum TLS protocol version
+Error [ERR_SSL_NO_CIPHER_MATCH]: error:0A0000B9:SSL routines::no cipher match
+Error [ERR_OSSL_X509_KEY_VALUES_MISMATCH]: error:05800074:x509 certificate routines::key values mismatch
+true
+TypeError [ERR_INVALID_ARG_TYPE]: The "options.checkServerIdentity" property must be of type function. Received type number (1)
+<Buffer 02 68 32 08 68 74 74 70 2f 31 2e 31>
+ok ERR_TLS_CERT_ALTNAME_INVALID: Host: example.com. is not in the cert's altnames: DNS:*.example.com
+ERR_TLS_CERT_ALTNAME_INVALID: Host: a.b.example.com. is not in the cert's altnames: DNS:*.example.com ok
+ok ERR_TLS_CERT_ALTNAME_INVALID: IP: 10.0.0.1 is not in the cert's list: 10.0.0.2
+ERR_TLS_CERT_ALTNAME_INVALID: Cert does not contain a DNS name ok

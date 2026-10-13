@@ -1,0 +1,22 @@
+{
+  "name": "@visaljs/optimizer",
+  "version": "0.0.0",
+  "description": "IR to IR optimization passes for visaljs (type inference, unboxing)",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@visaljs/ir": "*"
+  },
+  "devDependencies": {
+    "@visaljs/compiler": "*"
+  }
+}

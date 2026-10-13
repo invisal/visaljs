@@ -1,0 +1,9 @@
+true true false false
+true false
+true true false
+true false
+true
+function [Symbol.hasInstance] 1 true false false
+false false false
+TypeError: number 1 is not a function | TypeError: Right-hand side of 'instanceof' is not callable | TypeError: Right-hand side of 'instanceof' is not an object
+false [ 'Symbol(Symbol.hasInstance)', 'prototype' ]

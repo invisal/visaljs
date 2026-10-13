@@ -1,0 +1,20 @@
+Stats: true true false false 12 number true
+directory: true false missing: undefined
+ENOENT stat ENOENT: no such file or directory, stat 'nope'
+[
+  [ 'keys', false, true, true ],
+  [ 'require-builtins.cjs', true, false, true ],
+  [ 'tls', false, true, true ],
+  [ 'wpt-url', false, true, true ]
+]
+[ 'a.txt', 'b.bin' ] true
+ENOTDIR scandir ENOTDIR: not a directory, scandir 'a.txt'
+range: world bytes: [ 0, 1, 2, 255 ]
+chunks: [ 'hell', 'o wo', 'rld\n' ]
+stream error: ENOENT open
+hello world true [ 'a.txt', 'b.bin' ]
+access: ENOENT
+fs.promises: true
+stat callback: null 12 later: true
+readdir callback: null [ 'a.txt', 'b.bin' ]
+readFile callback: ENOENT

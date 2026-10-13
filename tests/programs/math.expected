@@ -1,0 +1,6 @@
+5 Infinity -Infinity 0 true NaN
+0.8414709848078965 0.873119622676856 -0.3745856401585947 8.218407461554972e+307 2.302585092994046 2.6881038582144647e+43 1.4142135623730951 0.01
+-0 3 -2 0 -4 -0 3 5 1.4142135623730952e+300 0 Infinity
+31 -5 5.5 5.050000190734863 2.356194490192345 1.00000000005e-10 -Infinity
+3.141592653589793 2.718281828459045 1.4142135623730951 abs,acos,acosh,asin,asinh,atan,atanh,atan2,ceil,cbrt,expm1,clz32,cos,cosh,exp,floor,fround,hypot,imul,log,log1p,log2,log10,max,min,pow,random,round,sign,sin,sinh,sqrt,tan,tanh,trunc,E,LN10,LN2,LOG10E,LOG2E,PI,SQRT1_2,SQRT2 [object Math] Math
+true number 1 max Object [Math] {}

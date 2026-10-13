@@ -1,0 +1,50 @@
+modp1 96 b52ba6a3026520a6 02 0 DiffieHellmanGroup undefined
+modp2 128 3f35a3f5f6c4376a 02 0 DiffieHellmanGroup undefined
+modp5 192 64fcc83ec403930b 02 0 DiffieHellmanGroup undefined
+modp14 256 d66436f79bbd6b2e 02 0 DiffieHellmanGroup undefined
+modp15 384 48cf8b092fbce435 02 0 DiffieHellmanGroup undefined
+modp16 512 4ee95187682bcb23 02 0 DiffieHellmanGroup undefined
+modp17 768 d1bfe6d0925ce7e4 02 0 DiffieHellmanGroup undefined
+modp18 1024 39ab4feab950a312 02 0 DiffieHellmanGroup undefined
+Error [ERR_CRYPTO_UNKNOWN_DH_GROUP]: Unknown DH group
+///////////JD9qiIWjC
+0 0 DiffieHellman
+Error [ERR_CRYPTO_INVALID_STATE]: No public key - did you forget to generate one?
+alice public 3b36b7552f901068 0123456789abcdef0123456789abcdef
+bob public 9a6e5610cc9f6d96
+secret 256 47c5d46dd3fb6153 true
+true true true
+RangeError [ERR_CRYPTO_INVALID_KEYLEN]: Supplied key is too small
+RangeError [ERR_CRYPTO_INVALID_KEYLEN]: Supplied key is too small
+RangeError [ERR_CRYPTO_INVALID_KEYTYPE]: Unspecified validation error
+RangeError [ERR_CRYPTO_INVALID_KEYTYPE]: Unspecified validation error
+129
+128 128
+0
+not safe
+TypeError [ERR_INVALID_ARG_VALUE]: Invalid DH parameters
+129
+TypeError [ERR_INVALID_ARG_TYPE]: The "sizeOrKey" argument must be one of type number or string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView. Received an instance of Object
+64 02 0 true true
+dh {} public
+true 3082011706092a864886f70d010301308201080282010100ffffffffffffffffc90fdaa2 0201003082011706092a864886f70d010301308201080282010100ffffffffffffffffc9
+true
+stateless 256 true
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY]: Incompatible key types for Diffie-Hellman: dh and x25519
+Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
+TypeError [ERR_INCOMPATIBLE_OPTION_PAIR]: Option "group" cannot be used in combination with option "prime"
+TypeError [ERR_MISSING_OPTION]: At least one of the group, prime, or primeLength options is required
+true
+true 8 true
+bigint true true true
+true true
+11n
+true true false true false true false true false
+true true
+RangeError [ERR_OUT_OF_RANGE]: The value of "size" is out of range. It must be >= 1 && <= 2147483647. Received 0
+RangeError [ERR_OUT_OF_RANGE]: invalid options.add
+RangeError [ERR_OUT_OF_RANGE]: invalid options.rem
+RangeError [ERR_OUT_OF_RANGE]: The value of "candidate" is out of range. It must be >= 0. Received -1n
+TypeError [ERR_INVALID_ARG_TYPE]: The "candidate" argument must be of type bigint or an instance of ArrayBuffer, TypedArray, Buffer, or DataView. Received type string ('7')
+async undefined bigint true
+async check undefined true

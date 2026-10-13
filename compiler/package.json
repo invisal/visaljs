@@ -1,0 +1,22 @@
+{
+  "name": "@visaljs/compiler",
+  "version": "0.0.0",
+  "description": "JavaScript to C: parse, analyze, lower to IR, emit C (a library)",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@visaljs/ir": "*",
+    "@visaljs/runtime": "*",
+    "typescript": "6.0.3"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./ast": "./src/frontend/ast.ts"
+  }
+}

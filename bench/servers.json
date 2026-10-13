@@ -1,0 +1,213 @@
+{
+  "date": "2026-10-13",
+  "node": "v22.23.3",
+  "bun": "1.4.3",
+  "machine": "linux/x64, 4 cores: the server on 2, wrk on 2",
+  "wrk": "wrk -t2 -c50, 10 s per route",
+  "apps": [
+    {
+      "app": "express",
+      "framework": "express",
+      "version": "5.2.1",
+      "routes": [
+        "/",
+        "/json",
+        "/users/42?q=x&tag=a&tag=b"
+      ],
+      "results": [
+        {
+          "name": "visaljs",
+          "size": 10700000,
+          "startup": 65.0,
+          "idle": 21299,
+          "peak": 27648,
+          "routes": [
+            {
+              "path": "/",
+              "rps": 4077,
+              "p50": 11.3,
+              "p99": 28.44,
+              "errors": 0
+            },
+            {
+              "path": "/json",
+              "rps": 4218,
+              "p50": 11.21,
+              "p99": 22.13,
+              "errors": 0
+            },
+            {
+              "path": "/users/42?q=x&tag=a&tag=b",
+              "rps": 4080,
+              "p50": 11.58,
+              "p99": 22.06,
+              "errors": 0
+            }
+          ]
+        },
+        {
+          "name": "node (SEA)",
+          "size": 125800000,
+          "startup": 152.0,
+          "idle": 56934,
+          "peak": 132096,
+          "routes": [
+            {
+              "path": "/",
+              "rps": 3285,
+              "p50": 13.97,
+              "p99": 92.47,
+              "errors": 0
+            },
+            {
+              "path": "/json",
+              "rps": 3171,
+              "p50": 14.72,
+              "p99": 34.45,
+              "errors": 0
+            },
+            {
+              "path": "/users/42?q=x&tag=a&tag=b",
+              "rps": 2827,
+              "p50": 16.41,
+              "p99": 36.36,
+              "errors": 0
+            }
+          ]
+        },
+        {
+          "name": "bun (compiled)",
+          "size": 91900000,
+          "startup": 120.0,
+          "idle": 39629,
+          "peak": 88678,
+          "routes": [
+            {
+              "path": "/",
+              "rps": 9872,
+              "p50": 4.66,
+              "p99": 12.67,
+              "errors": 0
+            },
+            {
+              "path": "/json",
+              "rps": 10975,
+              "p50": 4.26,
+              "p99": 9.44,
+              "errors": 0
+            },
+            {
+              "path": "/users/42?q=x&tag=a&tag=b",
+              "rps": 9891,
+              "p50": 4.75,
+              "p99": 10.83,
+              "errors": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "app": "hono",
+      "framework": "hono",
+      "version": "4.13.13",
+      "routes": [
+        "/",
+        "/json",
+        "/users/42?q=x"
+      ],
+      "results": [
+        {
+          "name": "visaljs",
+          "size": 4100000,
+          "startup": 30.0,
+          "idle": 8397,
+          "peak": 17510,
+          "routes": [
+            {
+              "path": "/",
+              "rps": 5945,
+              "p50": 8.11,
+              "p99": 15.64,
+              "errors": 0
+            },
+            {
+              "path": "/json",
+              "rps": 5672,
+              "p50": 8.54,
+              "p99": 17.4,
+              "errors": 0
+            },
+            {
+              "path": "/users/42?q=x",
+              "rps": 5501,
+              "p50": 8.71,
+              "p99": 21.17,
+              "errors": 0
+            }
+          ]
+        },
+        {
+          "name": "node (SEA)",
+          "size": 125000000,
+          "startup": 122.0,
+          "idle": 54272,
+          "peak": 95846,
+          "routes": [
+            {
+              "path": "/",
+              "rps": 3047,
+              "p50": 12.06,
+              "p99": 227.1,
+              "errors": 0
+            },
+            {
+              "path": "/json",
+              "rps": 5874,
+              "p50": 8.07,
+              "p99": 17.49,
+              "errors": 0
+            },
+            {
+              "path": "/users/42?q=x",
+              "rps": 5973,
+              "p50": 8.1,
+              "p99": 15.23,
+              "errors": 0
+            }
+          ]
+        },
+        {
+          "name": "bun (compiled)",
+          "size": 90900000,
+          "startup": 76.0,
+          "idle": 31437,
+          "peak": 70758,
+          "routes": [
+            {
+              "path": "/",
+              "rps": 6196,
+              "p50": 7.61,
+              "p99": 15.91,
+              "errors": 0
+            },
+            {
+              "path": "/json",
+              "rps": 5047,
+              "p50": 8.81,
+              "p99": 46.9,
+              "errors": 0
+            },
+            {
+              "path": "/users/42?q=x",
+              "rps": 5694,
+              "p50": 8.32,
+              "p99": 17.27,
+              "errors": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

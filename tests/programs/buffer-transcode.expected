@@ -1,0 +1,11 @@
+utf8 to ascii: [104,63,108,108,111,63,63]
+utf8 to latin1: [104,233,108,108,111,63,63]
+utf8 to ucs2: [104,0,233,0,172,32,61,216,0,222]
+latin1 to utf8: [104,195,169]
+ucs2 to utf8: [104,226,130,172]
+binary: [97,98]
+Uint8Array: [104,0,105,0]
+hex: U_ILLEGAL_ARGUMENT_ERROR Unable to transcode Buffer [U_ILLEGAL_ARGUMENT_ERROR]
+empty: []
+string: ERR_INVALID_ARG_TYPE The "source" argument must be an instance of Buffer or Uint8Array. Received type string ('str')
+resolveObjectURL: undefined

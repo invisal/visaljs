@@ -1,0 +1,26 @@
+function main()
+bb0:
+  %twice0 = make_function twice
+  declare_global function ."twice", %twice0  !mayThrow
+  %0 = global_name "Promise"  !mayThrow
+  %1 = get_prop %0, ."resolve"  !mayThrow
+  %2 = const 21
+  %3 = call %1, %0, %2  !mayThrow
+  %4 = call_direct twice(%3)  !mayThrow
+  %5 = get_prop %4, ."then"  !mayThrow
+  %6 = global_name "print"  !mayThrow
+  %7 = call %5, %4, %6  !mayThrow
+  %8 = const undefined
+  return %8
+
+function twice(%p0)
+bb0:
+  async_start
+  jump bb1
+bb1:
+  %a0 = empty
+  %b0 = empty
+  %a1 = await %p0  !mayThrow
+  %b1 = await %p0  !mayThrow
+  %0 = add %a1, %b1  !mayThrow
+  return %0

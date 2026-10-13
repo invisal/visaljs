@@ -1,0 +1,79 @@
+globals @0 sumTo, @1 hash, @2 label
+
+function main() strict
+bb0:
+  %0 = const undefined
+  return %0
+
+function sumTo(%n0) strict
+bb0:
+  %s0 = const 0
+  %i0 = const 0
+  jump bb2
+bb1:
+  return %s1
+bb2:  ; preds bb0, bb4
+  %i1: Int32 (i32) = phi [bb0: %i0], [bb4: %i2]
+  %s1: Number (f64) = phi [bb0: %s0], [bb4: %s2]
+  %0: Boolean (bool) = num_lt %i1, %n0
+  branch %0, bb3, bb1
+bb3:
+  %1 = const 0.5
+  %2: Number (f64) = num_mul %i1, %1
+  %s2: Number (f64) = num_add %s1, %2
+  jump bb4
+bb4:
+  %i2: Int32 (i32) = num_inc %i1
+  jump bb2
+
+function hash(%s0) strict
+bb0:
+  %h0 = const 0
+  %i0 = const 0
+  jump bb2
+bb1:
+  return %h1
+bb2:  ; preds bb0, bb4
+  %i1: Int32 (i32) = phi [bb0: %i0], [bb4: %i2]
+  %h1: Int32 = phi [bb0: %h0], [bb4: %h2]
+  %0: Int32 = get_prop %s0, ."length"  !mayThrow
+  %1: Boolean (bool) = num_lt %i1, %0
+  branch %1, bb3, bb1
+bb3:
+  %2 = const 31
+  %3: Number = num_mul %h1, %2
+  %4 = get_prop %s0, ."charCodeAt"  !mayThrow
+  %5 = call %4, %s0, %i1  ?char_code_at  !mayThrow
+  %6: Number|String = add %3, %5  ?number  !mayThrow
+  %7 = const 0
+  %h2: Int32 = bitor %6, %7  ?number  !mayThrow
+  jump bb4
+bb4:
+  %i2: Int32 (i32) = num_inc %i1
+  jump bb2
+
+function label(%x0) strict
+bb0:
+  %out0 = const ""
+  %0 = iter_start %x0  !mayThrow
+  jump bb1
+bb1:  ; preds bb0, bb5
+  %out1: String = phi [bb0: %out0], [bb5: %out2]
+  %part0 = iter_next %0  !mayThrow
+  %1: Boolean = not_empty %part0
+  branch %1, bb4, bb2
+bb2:
+  %2 = const "<"
+  %3: String = add %2, %out1  !mayThrow
+  %4 = const ">"
+  %5: String = add %3, %4  !mayThrow
+  return %5
+bb3:
+  %6 = take_exception
+  iter_close_throw %0
+  throw %6
+bb4:  ; handler bb3
+  %out2: String = add %out1, %part0  !mayThrow
+  jump bb5
+bb5:  ; handler bb3
+  jump bb1

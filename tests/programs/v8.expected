@@ -1,0 +1,60 @@
+undefined: ff0f5f -> undefined
+null: ff0f30 -> null
+true: ff0f54 -> true
+false: ff0f46 -> false
+int: ff0f4954 -> 42
+negative: ff0f490d -> -7
+max: ff0f49feffffff0f -> 2147483647
+min: ff0f49ffffffff0f -> -2147483648
+double: ff0f4e000000000000f83f -> 1.5
+big: ff0f4e0000000000007042 -> 1099511627776
+nan: ff0f4e000000000000f87f -> NaN
+minusZero: ff0f4e0000000000000080 -> -0
+bigint: ff0f5a107b00000000000000 -> 123n
+negBigint: ff0f5a110500000000000000 -> -5n
+hugeBigint: ff0f5a2000000000000000004000000000000000 -> 1180591620717411303424n
+latin1: ff0f220568e96c6c6f -> héllo
+twoByte: ff0f6308780078007800e565 -> xxx日
+emptyString: ff0f2200 -> 
+array: ff0f4103490222016154240003 -> [object Array][1,"a",true]0,1,2
+nested: ff0f6f2201616f2201624101302400017b017b01 -> [object Object]{"a":{"b":[null]}}a
+keys: ff0f6f490022017a490222016122016249047b03 -> [object Object]{"0":"z","1":"a","b":2}0,1,b
+date: ff0f440000000000000000 -> [object Date]"1970-01-01T00:00:00.000Z"
+regexp: ff0f52220461622b6303 -> [object RegExp]{}
+map: ff0f3b490222036f6e6522016b6f22017649047b013a04 -> Map[[1,"one"],["k",{"v":2}]]
+set: ff0f274902220374776f2c02 -> Set[1,"two"]
+arrayBuffer: ff0f4203010203 -> ArrayBuffer:010203
+stringObject: ff0f73220173 -> [object String]"s"0
+numberObject: ff0f6e0000000000000840 -> [object Number]3
+booleanObject: ff0f78 -> [object Boolean]false
+uint8: ff0f5c01020102 -> Uint8Array:0102
+buffer: ff0f5c0a026869 -> Buffer:6869
+float64: ff0f5c0808000000000000e03f -> Float64Array:000000000000e03f
+dataView: ff0f5c09020000 -> DataView:0000
+bigint64: ff0f5c0b08ffffffffffffffff -> BigInt64Array:ffffffffffffffff
+sparse: ff0f61034900490249044906400203 -> [object Array][1,null,3]0,2
+extra: ff0f4102490249042205657874726154240102 -> [object Array][1,2]0,1,extra
+refs: ff0f41026f7b005e01240002 -> [object Array][{},{}]0,1
+twoByteInArray: ff0f41016302e565240001 -> [object Array]["日"]0
+error: ff0f72526d2201722e -> RangeError:r:undefined
+cause: ff0f726d22016363490a2e -> Error:c:5
+refs kept: true
+function: Error true
+symbol: Error  Symbol(s) could not be cloned.
+Serializer: ff0f4204050006005657000400ac028280808010000000000000d03f0908
+readHeader: true version 15
+view: Uint16Array 5,6
+raw: 300 1,2 0.25 0908
+heap: total_heap_size,total_heap_size_executable,total_physical_size,total_available_size,used_heap_size,heap_size_limit,malloced_memory,peak_malloced_memory,does_zap_garbage,number_of_native_contexts,number_of_detached_contexts,total_global_handles_size,used_global_handles_size,external_memory
+heap types: true
+spaces: 11 space_name,space_size,space_used_size,space_available_size,physical_space_size
+code: code_and_metadata_size,bytecode_and_metadata_size,external_script_source_size,cpu_profiler_metadata_size
+cpp: committed_size_bytes,resident_size_bytes,used_size_bytes,space_statistics,type_names,detail_level brief
+cpp bad: TypeError ERR_INVALID_ARG_VALUE The argument 'type' must be one of: 'brief', 'detailed'. Received 'x'
+tag: number
+oneByte: true false
+oneByte bad: TypeError ERR_INVALID_ARG_TYPE The "content" argument must be of type string. Received type number (1)
+promiseHooks: createHook,onInit,onBefore,onAfter,onSettled
+snapshot: 0
+addSerializeCallback: Error ERR_NOT_BUILDING_SNAPSHOT Operation cannot be invoked when not building startup snapshot
+GCProfiler: 1 true true

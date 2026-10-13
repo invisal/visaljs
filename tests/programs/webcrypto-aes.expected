@@ -1,0 +1,134 @@
+CryptoKey {
+  type: 'secret',
+  extractable: true,
+  algorithm: { name: 'AES-CBC', length: 128 },
+  usages: [ 'encrypt', 'decrypt' ]
+}
+CryptoKey {
+  type: 'secret',
+  extractable: true,
+  algorithm: { name: 'AES-CBC', length: 128 },
+  usages: [ 'encrypt' ]
+}
+DataError [0]: Invalid key length
+SyntaxError [12]: Unsupported key usage for an AES key
+SyntaxError [12]: Unsupported key usage for an AES key
+CryptoKey {
+  type: 'secret',
+  extractable: true,
+  algorithm: { name: 'AES-KW', length: 128 },
+  usages: [ 'wrapKey', 'unwrapKey' ]
+}
+SyntaxError [12]: Usages cannot be empty when importing a secret key.
+CryptoKey {
+  type: 'secret',
+  extractable: true,
+  algorithm: { name: 'AES-CBC', length: 128 },
+  usages: [ 'encrypt' ]
+}
+DataError [0]: JWK "alg" does not match the requested algorithm
+DataError [0]: Invalid key length
+DataError [0]: Invalid JWK "use" Parameter
+{
+  key_ops: [ 'encrypt', 'decrypt' ],
+  ext: true,
+  alg: 'A128CBC',
+  kty: 'oct',
+  k: 'AQEBAQEBAQEBAQEBAQEBAQ'
+}
+{
+  key_ops: [ 'wrapKey' ],
+  ext: true,
+  alg: 'A256KW',
+  kty: 'oct',
+  k: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+}
+{
+  key_ops: [ 'encrypt' ],
+  ext: true,
+  alg: 'A192GCM',
+  kty: 'oct',
+  k: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+}
+{
+  key_ops: [ 'encrypt' ],
+  ext: true,
+  alg: 'A256CTR',
+  kty: 'oct',
+  k: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+}
+NotSupportedError [9]: Unable to export AES-CBC secret key using spki format
+ArrayBuffer f230676c38a7d716ebed81718e4fc8aa
+OperationError [0]: algorithm.iv must contain exactly 16 bytes
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'AesCbcParams' because 'iv' is required in 'AesCbcParams'.
+OperationError [0]: The operation failed for an operation-specific reason
+OperationError [0]: The operation failed for an operation-specific reason
+InvalidAccessError [15]: The requested operation is not valid for the provided key
+ArrayBuffer 9b513e1f4951cb21501452a6bad7bd88ead75808ac
+ArrayBuffer 9b513e1f4978430c917c21544768828803
+OperationError [0]: 100 is not a valid AES-GCM tag length
+OperationError [0]: The operation failed for an operation-specific reason
+OperationError [0]: The operation failed for an operation-specific reason
+OperationError [0]: The operation failed for an operation-specific reason
+OperationError [0]: The provided data is too small.
+OperationError [0]: The provided data is too small.
+ArrayBuffer 6ad77cdab9adb3bfed21ef94210e121e8cb6e6ec3db0397a0ec17331f8297c71b3ef7ad9c0313a99
+ArrayBuffer 6ad77cdab9adb3bfed21ef94210e121eb6aeaffa752dc08b51639731761aed00e431c158177be7de
+OperationError [0]: AES-CTR algorithm.length must be between 1 and 128
+OperationError [0]: AES-CTR algorithm.length must be between 1 and 128
+OperationError [0]: algorithm.counter must contain exactly 16 bytes
+OperationError [0]: The operation failed for an operation-specific reason
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'AesCtrParams' because 'length' is required in 'AesCtrParams'.
+[ { name: 'AES-GCM', length: 256 }, [ 'encrypt' ] ]
+OperationError [0]: AES key length must be 128, 192, or 256 bits
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'AesKeyGenParams' because 'length' is required in 'AesKeyGenParams'.
+SyntaxError [12]: Unsupported key usage for an AES key
+[ 'wrapKey', 'unwrapKey' ]
+ArrayBuffer a6854fe987bc7afd97b3df2b9eaee136e8d9c780d5423e72
+ArrayBuffer b96ce4e6b6e404885573eb9a088acc227a73941a99d77d82cd80c24d3a54dbb9f263b6ff3dd263f1deab304462ba9cf5d34d483fa534d903aadf1304c08e9723ee938f65791ef10d5da4a54c8828e77fe4140e522cbce146d86df11141c135e69f4d0707481ce07c5391e1a29b839764
+InvalidAccessError [15]: The requested operation is not valid for the provided key
+ArrayBuffer f2355372279402289934fff206c5909c2046ba2d2f3f38a94658dae51b433655
+ArrayBuffer 881639165fca6c59eb17c4a825a1fffe4c173a575845e91ffc350e331eea6ed32c3d7c4535da2e9398d7bad319cb3c29be6b146010250789d320012fc9294f5dd75544f084ee369342eef506bf93c53dc2bfc71e6f5a71d2e8dd2961bb266a34093baed51eb8e090c8c4dfe798b708614b6a6cb990
+[
+  { name: 'AES-CBC', length: 128 },
+  [ 'encrypt' ],
+  '01010101010101010101010101010101'
+]
+OperationError [0]: The operation failed for an operation-specific reason
+OperationError [0]: The operation failed for an operation-specific reason
+CryptoKey {
+  type: 'secret',
+  extractable: false,
+  algorithm: { name: 'AES-CBC', length: 128 },
+  usages: [ 'decrypt' ]
+}
+ArrayBuffer 4b4a4e4b88e99462c956df88359bc162fe839f5a073f95f0d8129a9582fcc1c0
+OperationError [0]: AES key length must be 128, 192, or 256 bits
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'AesDerivedKeyParams' because 'length' is required in 'AesDerivedKeyParams'.
+InvalidAccessError [15]: The requested operation is not valid for the provided key
+NotSupportedError [9]: Unrecognized algorithm name
+OperationError [0]: The operation failed for an operation-specific reason
+OperationError [0]: The operation failed for an operation-specific reason
+OperationError [0]: The operation failed for an operation-specific reason
+ArrayBuffer f3cdc3c7c88b8c7213eb873d704c2f4430
+ArrayBuffer d1999adfc2ffe9d39dbecfdbe932a91086
+ArrayBuffer 96e79732871044f57319f0686e8bd43d8e
+secret
+OperationError [0]: The operation failed for an operation-specific reason
+a longer message, more than one block
+counter mode
+TypeError [ERR_OUT_OF_RANGE]: Failed to normalize algorithm: 'tagLength' of 'AesGcmParams' (passed algorithm) is outside the expected range of 0 to 255.
+TypeError [ERR_OUT_OF_RANGE]: Failed to normalize algorithm: 'length' of 'AesCtrParams' (passed algorithm) is outside the expected range of 0 to 255.
+TypeError [ERR_OUT_OF_RANGE]: Failed to normalize algorithm: 'length' of 'AesKeyGenParams' (passed algorithm) is outside the expected range of 0 to 65535.
+OperationError [0]: The operation failed for an operation-specific reason
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'encrypt' on 'SubtleCrypto': 3rd argument is not instance of ArrayBuffer, Buffer, TypedArray, or DataView.
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'encrypt' on 'SubtleCrypto': 2nd argument is not of type CryptoKey.
+TypeError [ERR_MISSING_ARGS]: Failed to execute 'encrypt' on 'SubtleCrypto': 3 arguments required, but only 2 present.
+InvalidAccessError [15]: The requested operation is not valid for the provided key
+OperationError [0]: The operation failed for an operation-specific reason
+DataError [0]: Invalid wrapped JWK key
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'AesCbcParams' because 'iv' is required in 'AesCbcParams'.
+NotSupportedError [9]: Unrecognized algorithm name
+TypeError [ERR_MISSING_ARGS]: Failed to execute 'wrapKey' on 'SubtleCrypto': 4 arguments required, but only 3 present.
+TypeError [ERR_MISSING_ARGS]: Failed to execute 'unwrapKey' on 'SubtleCrypto': 7 arguments required, but only 6 present.
+InvalidAccessException [0]: key is not extractable

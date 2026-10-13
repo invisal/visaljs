@@ -1,0 +1,15 @@
+{
+  "name": "@visaljs-apps/express",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An Express app, compiled by visaljs",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build server.js -o server",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "5.2.1"
+  }
+}

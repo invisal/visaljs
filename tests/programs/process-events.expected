@@ -1,0 +1,13 @@
+true process true
+true false [ '1 2' ]
+0 1
+main done
+timer
+beforeExit 0 0
+more work 1
+beforeExit 0 1
+more work 2
+beforeExit 0 2
+a microtask doesn't bring beforeExit back
+exit 0
+true 0

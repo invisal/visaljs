@@ -1,0 +1,43 @@
+@source "../../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@import "@cloudflare/kumo/styles/tailwind";
+@import "tailwindcss";
+
+/* the guide's MDX: prose, lists and code blocks */
+.guide {
+  @apply space-y-4;
+}
+.guide > p,
+.guide > ul {
+  @apply max-w-3xl text-kumo-default;
+}
+.guide > ul {
+  @apply list-disc space-y-1.5 pl-6;
+}
+.guide > figure {
+  @apply max-w-4xl;
+}
+.guide > p a,
+.guide > ul a {
+  @apply text-kumo-link underline decoration-kumo-line underline-offset-2 hover:decoration-current;
+}
+/*
+ * the guide's Markdown tables, styled like FloatTable: as wide as their content, a border on each
+ * cell and round corners. Rounding needs separate borders (collapsed ones ignore border-radius),
+ * so each cell draws only its right and bottom border and the table draws the outer edge.
+ */
+.guide > table {
+  @apply border-separate border-spacing-0 overflow-hidden rounded border border-kumo-line bg-kumo-base text-base;
+}
+.guide > table th,
+.guide > table td {
+  @apply border-r border-b border-kumo-line px-3 py-2 text-left;
+}
+.guide > table tr > :last-child {
+  @apply border-r-0;
+}
+.guide > table > :last-child > tr:last-child > * {
+  @apply border-b-0;
+}
+.guide > table th {
+  @apply text-base font-medium tracking-wide;
+}

@@ -1,0 +1,26 @@
+[object AsyncGenerator] function
+true
+count 3
+count 2
+count 1
+sum 6
+consumed
+queued 2 1 liftoff! undefined!
+first awaited
+finally ran
+return bye true
+after true
+caught x
+rejected boom
+done true
+got awaited
+finally ran
+after break
+yield* gave inner done
+delegated abcd
+tick 0
+tick 1
+one tick 0
+ticker closed
+static k
+g1 t0 g2 t1 n1 w1 t2 n2 t3 ret r w2 t4 t5 t6 t7 t8 d1 t9

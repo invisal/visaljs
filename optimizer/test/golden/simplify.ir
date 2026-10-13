@@ -1,0 +1,75 @@
+globals @0 count, @1 late, @2 always
+
+function main() strict
+bb0:
+  %0 = const undefined
+  return %0
+
+function count(%n0) strict
+bb0:
+  %c0 = const 0
+  %i0 = const 0
+  jump bb2
+bb1:
+  %0: Number (f64) = num_add %c1, %n0
+  return %0
+bb2:  ; preds bb0, bb4
+  %i1: Int32 (i32) = phi [bb0: %i0], [bb4: %i2]
+  %c1: Number (f64) = phi [bb0: %c0], [bb4: %c2]
+  %1 = const 10
+  %2: Boolean (bool) = num_lt %i1, %1
+  branch %2, bb3, bb1
+bb3:
+  %3 = const 2
+  %4: Number (f64) = num_mul %i1, %3
+  %c2: Number (f64) = num_add %c1, %4
+  jump bb4
+bb4:
+  %i2: Int32 (i32) = num_inc %i1
+  jump bb2
+
+function late(%flag0) strict
+bb0:
+  %0 = const undefined
+  %env0 = env_new %0, 1 slots
+  %1 = const 1
+  env_store %env0, %1, 0:0
+  %read0: Object = make_function anonymous, %env0
+  branch %flag0, bb1, bb3
+bb1:
+  %2 = const 2
+  env_store %env0, %2, 0:0
+  jump bb3
+bb3:  ; preds bb0, bb1
+  %3 = const undefined
+  %4 = call %read0, %3  !mayThrow
+  %x0 = env_load %env0, 0:0
+  %5: Number|String|BigInt = add %4, %x0  !mayThrow
+  return %5
+
+function always(%o0) strict
+bb0:
+  jump bb1
+bb1:
+  %0 = const true
+  set_prop %o0, %0, ."seen"  !mayThrow
+  jump bb3
+bb3:
+  %k0 = const 0
+  jump bb6
+bb4:
+  %k1: Number (f64) = phi [bb8: %k2]
+  return %k1
+bb6:  ; handler bb5
+  jump bb7
+bb7:  ; handler bb5
+  %k2: Number (f64) = num_inc %k0
+  jump bb8
+bb8:  ; handler bb5
+  jump bb4
+
+function anonymous(%env0) strict
+bb0:
+  %x0 = env_load %env0, 0:0
+  %x1 = check_tdz %x0  !mayThrow
+  return %x1

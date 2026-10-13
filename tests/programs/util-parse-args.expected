@@ -1,0 +1,35 @@
+long: {"values":{"verbose":true,"name":"ada","tag":["a","b"],"color":true,"level":"info"},"positionals":[]}
+short: {"values":{"verbose":true,"name":"bob","tag":["x","y"],"color":true,"level":"info"},"positionals":[]}
+group: {"values":{"verbose":true,"flag":[true,true],"name":"zed","color":true,"level":"info"},"positionals":[]}
+defaults: {"values":{"color":true,"level":"info"},"positionals":[]}
+override default: {"values":{"level":"debug","color":false},"positionals":[]}
+negative of a string: TypeError ERR_PARSE_ARGS_UNKNOWN_OPTION "Unknown option '--no-level'"
+negative with a value: TypeError ERR_PARSE_ARGS_INVALID_OPTION_VALUE "Option '--color' does not take an argument"
+positionals: {"values":{"verbose":true,"color":true,"level":"info"},"positionals":["a","b"]}
+terminator: {"values":{"verbose":true,"color":true,"level":"info"},"positionals":["--name","-x"]}
+tokens: {"values":{"verbose":true,"name":"x","color":true,"level":"info"},"positionals":["y"],"tokens":[{"kind":"option","name":"verbose","rawName":"-v","index":0},{"kind":"option","name":"name","rawName":"-n","index":0,"value":"x","inlineValue":false},{"kind":"option-terminator","index":2},{"kind":"positional","index":3,"value":"y"}]}
+tokens inline: {"values":{"name":"q","tag":["w"],"color":true,"level":"info"},"positionals":[],"tokens":[{"kind":"option","name":"name","rawName":"--name","index":0,"value":"z","inlineValue":true},{"kind":"option","name":"name","rawName":"-n","index":1,"value":"q","inlineValue":true},{"kind":"option","name":"tag","rawName":"-t","index":2,"value":"w","inlineValue":false}]}
+not strict: {"values":{"unknown":true,"name":"-u=3","verbose":"yes","color":true,"level":"info"},"positionals":["pos"]}
+not strict tokens: {"values":{"a":true,"b":true,"c":true,"x":"1"},"positionals":[],"tokens":[{"kind":"option","name":"a","rawName":"-a","index":0},{"kind":"option","name":"b","rawName":"-b","index":0},{"kind":"option","name":"c","rawName":"-c","index":0},{"kind":"option","name":"x","rawName":"--x","index":1,"value":"1","inlineValue":true}]}
+empty value: {"values":{"name":"","color":true,"level":"info"},"positionals":[]}
+value like an option: TypeError ERR_PARSE_ARGS_INVALID_OPTION_VALUE "Option '--name' argument is ambiguous.\nDid you forget to specify the option argument for '--name'?\nTo specify an option argument starting with a dash use '--name=-XYZ'."
+value like an option inline: {"values":{"name":"-v","color":true,"level":"info"},"positionals":[]}
+short value like an option: TypeError ERR_PARSE_ARGS_INVALID_OPTION_VALUE "Option '-n' argument is ambiguous.\nDid you forget to specify the option argument for '-n'?\nTo specify an option argument starting with a dash use '--name=-XYZ' or '-n-XYZ'."
+dash: {"values":{"color":true,"level":"info"},"positionals":["-"]}
+proto: TypeError ERR_PARSE_ARGS_UNKNOWN_OPTION "Unknown option '--__proto__'"
+unknown: TypeError ERR_PARSE_ARGS_UNKNOWN_OPTION "Unknown option '--nope'"
+unknown short: TypeError ERR_PARSE_ARGS_UNKNOWN_OPTION "Unknown option '-z'. To specify a positional argument starting with a '-', place it at the end of the command after '--', as in '-- \"-z\""
+unexpected positional: TypeError ERR_PARSE_ARGS_UNEXPECTED_POSITIONAL "Unexpected argument 'file.txt'. This command does not take positional arguments"
+missing value: TypeError ERR_PARSE_ARGS_INVALID_OPTION_VALUE "Option '-n, --name <value>' argument missing"
+missing short value: TypeError ERR_PARSE_ARGS_INVALID_OPTION_VALUE "Option '-n, --name <value>' argument missing"
+boolean with value: TypeError ERR_PARSE_ARGS_INVALID_OPTION_VALUE "Option '-v, --verbose' does not take an argument"
+bad type: TypeError ERR_INVALID_ARG_TYPE "The \"options.x.type\" property must be ('string|boolean'). Received type string ('number')"
+bad short: TypeError ERR_INVALID_ARG_VALUE "The property 'options.x.short' must be a single character. Received 'xy'"
+bad default: TypeError ERR_INVALID_ARG_TYPE "The \"options.x.default\" property must be of type string. Received type number (3)"
+bad multiple default: TypeError ERR_INVALID_ARG_TYPE "The \"options.x.default[1]\" property must be of type boolean. Received type string ('no')"
+bad multiple: TypeError ERR_INVALID_ARG_TYPE "The \"options.x.multiple\" property must be of type boolean. Received type string ('yes')"
+bad args: TypeError ERR_INVALID_ARG_TYPE "The \"args\" argument must be an instance of Array. Received type string ('--x')"
+bad args item: TypeError ERR_PARSE_ARGS_UNKNOWN_OPTION "Unknown option '--x'"
+bad strict: TypeError ERR_INVALID_ARG_TYPE "The \"strict\" argument must be of type boolean. Received type string ('no')"
+bad options: TypeError ERR_INVALID_ARG_TYPE "The \"options\" argument must be of type object. Received an instance of Array"
+bad option config: TypeError ERR_INVALID_ARG_TYPE "The \"options.x\" property must be of type object. Received type string ('string')"

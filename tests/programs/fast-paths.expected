@@ -1,0 +1,62 @@
+3,1,4,1,2,-2,false,true,false,true,true,false,2,2,3,-3,4,1,0,3.5,1.5,5,1.25,2.5,-2.5,false,false,true,true,false,true,2,2,3,-3,4,1,0,1,-1,0,0,0,0,true,true,false,false,false,true,0,0,1,-1,0,0,0,NaN,NaN,NaN,NaN,NaN,NaN,false,false,false,false,false,true,0,0,1,-1,0,0,0,21,1,4,1,2,-2,false,true,false,true,true,false,2,2,3,-3,4,1,0,x1,NaN,NaN,NaN,NaN,NaN,false,false,false,false,false,true,0,0,1,-1,0,0,0,2,0,2,0.5,1,-1,true,true,false,false,false,true,1,0,0,-2,2,0,0,1,-1,0,0,0,0,true,true,false,false,false,true,0,0,1,-1,0,0,0,NaN,NaN,NaN,NaN,NaN,NaN,false,false,false,false,false,true,0,0,1,-1,0,0,0,3,1,4,1,2,-2,false,true,false,true,true,false,2,2,3,-3,4,1,0,31,2,6,1.5,0,-3,false,false,true,true,false,true,3,2,2,-4,6,1,0,-2147483647,-2147483649,-4294967296,-1073741824,-2,2147483648,true,true,false,false,false,true,-2147483648,0,-2147483647,2147483647,0,-1073741824,8
+12n
+TypeError
+4 4 4.5 4n NaN
+4,16,16,16,16,NaN,2.5,-3,-2,-2,0.7071067811865476,0.5,0,1,0,0,0,0,0,0,NaN,NaN,NaN,NaN,NaN,Infinity,Infinity,Infinity,Infinity,Infinity,3,9,9,9,9,0,0,0,0,0,1.4142135623730951,2,2,2,2
+patched 4
+2 NaN 2
+3
+[
+  NaN, 104, 233, 108,
+  108, 111, NaN, 104,
+  233, 104
+] [
+    NaN, 26085,
+  26412,   NaN,
+  26085, 26412,
+  26085
+] [
+  114, 115, 116, 117,
+  118, 119, 120, 121,
+  122,  65
+] [ NaN, 117, 118, 119 ]
+99 94 20
+[ 'a', '日', 'A', 65535, 'B', '' ]
+patched ab0
+97 52 [ 120, 121 ]
+[
+  'string:abab',
+  undefined,
+  2,
+  'String',
+  'ab',
+  undefined,
+  2,
+  undefined,
+  'Number',
+  '4',
+  undefined,
+  undefined,
+  undefined,
+  'Boolean',
+  'true',
+  'string:cc',
+  undefined,
+  1,
+  'String',
+  'c',
+  undefined,
+  4.25,
+  undefined,
+  'Number',
+  '8.5',
+  'string:Symbol.iteratorSymbol.iterator',
+  undefined,
+  15,
+  'String',
+  'Symbol.iterator'
+]
+undefined
+16050 abcdefgh {"k0":0,"k1":1,"k2":2,"k3":3,"k4":4,"k5":5,"k6":6,"k7":7,"k8":8,"k9":9,"k10":10}
+24.425 true undefined
+ReferenceError missingGlobal is not defined

@@ -1,0 +1,37 @@
+callbackified: Callbackified 3
+value: null 3
+rejected: failed
+falsy: ERR_FALSY_VALUE_REJECTION 0 Promise was rejected with falsy value
+no callback: ERR_INVALID_ARG_TYPE
+debuglog enabled: false true
+names: ENOENT EACCES Unknown system error -999
+message: no such file or directory
+map: true ["ENOENT","no such file or directory"] [-7,-13,-98]
+getSystemErrorName(2): ERR_OUT_OF_RANGE
+getSystemErrorName(1.5): ERR_OUT_OF_RANGE
+getSystemErrorName("x"): ERR_INVALID_ARG_TYPE
+styled: "x"
+forced: "\u001b[1m\u001b[4m\u001b[32my\u001b[39m\u001b[24m\u001b[22m"
+none: "z"
+alias: "\u001b[90mg\u001b[39m" 44
+styleText error: ERR_INVALID_ARG_VALUE
+styleText error: ERR_INVALID_ARG_TYPE
+styleText error: ERR_INVALID_ARG_TYPE
+diff strings: [[0,"a"],[1,"b"],[0,"c"],[-1,"b"],[0,"d"]]
+diff arrays: [[0,"a"],[-1,"c"],[0,"b"],[1,"x"]]
+diff same: [] [[-1,"a"]]
+mime: text html text/html utf-8 false
+mime string: text/html;charset=utf-8;q=0.9;x="a\"b" "text/html;charset=utf-8;q=0.9;x=\"a\\\"b\""
+mime edited: text/plain;charset=utf-8;x="a\"b";boundary="a b" charset,x,boundary
+bad mime "text": ERR_INVALID_MIME_SYNTAX The MIME syntax for a type in "text" is invalid
+bad mime "/html": ERR_INVALID_MIME_SYNTAX The MIME syntax for a type in "/html" is invalid
+bad mime "text/": ERR_INVALID_MIME_SYNTAX The MIME syntax for a subtype in "text/" is invalid
+bad mime "te xt/html": ERR_INVALID_MIME_SYNTAX The MIME syntax for a type in "te xt/html" is invalid at 2
+bad param: The MIME syntax for a parameter name in "bad name" is invalid at 3
+parseEnv: {"A":"1","B":"x\ny","C":"q"}
+toUSVString: "a�b"
+aborted resolved
+aborted bad resource: ERR_INVALID_ARG_TYPE
+is*: true false true true true
+_extend: {"a":1,"b":2}
+again: false

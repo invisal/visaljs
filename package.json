@@ -1,0 +1,48 @@
+{
+  "name": "visaljs-workspace",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "ir",
+    "compiler",
+    "optimizer",
+    "runtime",
+    "node",
+    "cli",
+    "web"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "eslint . && node tests/lint/gc-stores.ts",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tests/tsconfig.json && tsc -p bench/tsconfig.json",
+    "test": "npm run test:compiler && npm run test:runtime",
+    "test:compiler": "vitest run",
+    "test262": "node tests/runner/main.ts",
+    "apps:install": "node tests/apps/install.ts",
+    "test:runtime": "cmake -S runtime -B build/runtime && cmake --build build/runtime && ctest --test-dir build/runtime --output-on-failure",
+    "web:dev": "npm run dev -w web",
+    "web:deploy": "npm run deploy -w web",
+    "differential": "node tests/differential/main.ts",
+    "nodejs": "node tests/nodejs/main.ts",
+    "nodejs:sync": "node tests/nodejs/sync.ts",
+    "bench:servers": "node bench/servers.ts",
+    "bench:react-ssr": "node bench/react-ssr.ts",
+    "bench:kernels": "node bench/kernels.ts",
+    "bench:gc": "node bench/gc.ts",
+    "bench:gc-server": "node bench/gc-server.ts",
+    "bench:size": "node bench/size.ts",
+    "prebuilt": "node cli/scripts/prebuilt.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.6.3",
+    "eslint": "10.11.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1",
+    "vitest": "5.0.2",
+    "yaml": "2.9.1"
+  }
+}

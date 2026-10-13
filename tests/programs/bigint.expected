@@ -1,0 +1,58 @@
+0n 123n 255n 15n 10n 1000000n 18446744073709551616n -9007199254740993n
+18446744073709551615n -18446744073709551615n 18446744073709551616n 340282366920938463426481119284349108225n 6148914691236517205n 1n
+-3n -3n -1n 1n 1267650600228229401496703205376n -9223372036854775808n 1n -1n
+1253254289419684899836964752574345n 92n -121932631137021795226185032733622923332237463801111263526900n
+15n -1n -8n -6n 0n 248n 1606938044258990275541962092341162602522202993782792835301377n
+1267650600228229401496703205376n -158456325028528675187087900672n -1n 20n 0n 2n
+-37n 37n 0n bigint object
+true false true true false true true false
+true true true false true true false true true
+[ -2n, 0n, 5n, 10n ] true 0
+one 2 true falsy true
+-123 7 7 18446744073709552000 -9007199254740992 15 0 1,2
+31n 42n -12n 0n 1152921504606846976n 1n 9n
+a ff -11111111 6x5kxtvuwilukg 1,234,567
+-1n 255n -9223372036854775808n 18446744073709551615n 0n
+[object BigInt] true 3n
+TypeError: Cannot mix BigInt and other types, use explicit conversions
+TypeError: Cannot convert a BigInt value to a number
+RangeError: Division by zero
+RangeError: Division by zero
+RangeError: undefined must be positive
+TypeError: BigInts have no unsigned right shift, use >> instead
+TypeError: Cannot convert a BigInt value to a number
+TypeError: Do not know how to serialize a BigInt
+RangeError: The number 1.5 cannot be converted to a BigInt because it is not an integer
+SyntaxError: Cannot convert 1e3 to a BigInt
+TypeError: Cannot convert undefined to a BigInt
+TypeError: BigInt is not a constructor
+RangeError: toString() radix argument must be between 2 and 36
+TypeError: BigInt.prototype.toString requires that 'this' be a BigInt
+RangeError: Maximum BigInt size exceeded
+{"a":"1n","b":["2n"]}
+[ 1n, -2n ] { big: 100000000000000000000n } [BigInt: 5n] [ [BigInt: -6n] ]
+5n and 6n and 7n
+BigInt64Array(4) [
+  1n,
+  -2n,
+  -9223372036854775808n,
+  9223372036854775807n
+] BigUint64Array(3) [ 1n, 18446744073709551615n, 5n ] 4 8 -9223372036854775808n 18446744073709551615n 1|-2|-9223372036854775808|9223372036854775807
+7766279631452241920n 18446744073709551613n true 1 18446744073709551613,18446744073709551615,5
+BigInt64Array(4) [
+  -9223372036854775808n,
+  -2n,
+  7766279631452241920n,
+  9223372036854775807n
+] BigUint64Array(3) [ 5n, 18446744073709551613n, 18446744073709551615n ] BigInt64Array(4) [
+  9223372036854775807n,
+  -9223372036854775808n,
+  -2n,
+  7766279631452241920n
+] BigUint64Array(3) [ 18446744073709551613n, 7n, 5n ] BigInt64Array(4) [ -2914184810805067776n, -4n, 0n, -2n ] 7766279631452241917n
+-5n 18446744073709551611n 18446744073709551614n -2n 251
+BigInt64Array(1) [ -1n ] BigUint64Array(1) [ 7n ] BigInt64Array(4) [ 7766279631452241920n, 7n, 7n, 9223372036854775807n ]
+TypeError: Cannot convert 1 to a BigInt
+TypeError: Cannot convert 1 to a BigInt
+TypeError: Cannot mix BigInt and other types, use explicit conversions
+TypeError: Cannot convert 1 to a BigInt

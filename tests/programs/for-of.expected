@@ -1,0 +1,31 @@
+1,2,3
+3 a|😀|b
+0
+all: 6 [get next next next next]
+break: 2 [get next next return]
+return: early [get next next return]
+throw: threw body [get next next return]
+continue: 4 [get next next next next]
+labelled continue: 11 21  [get next return get next return]
+no return method: ok [get next]
+return throws on break: threw from return [get next return]
+return throws after a throw: threw body wins [get next return]
+finally: from try [get next finally return]
+next throws: threw next failed []
+next not an object: threw Iterator result 1 is not an object []
+TypeError: 5 is not iterable
+TypeError
+1,2,3
+q
+{7,false} {8,false} {undefined,true}
+0=a 1=b
+0 1
+true
+true
+true
+qrs
+1,2 [get next next next]
+3
+5
+3 true
+patched

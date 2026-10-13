@@ -1,0 +1,15 @@
+{
+  "name": "@visaljs-apps/markdown",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Markdown to HTML with the marked npm package, compiled by visaljs",
+  "type": "module",
+  "main": "md2html.js",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build md2html.js -o md2html",
+    "start": "node md2html.js sample.md"
+  },
+  "dependencies": {
+    "marked": "18.0.14"
+  }
+}

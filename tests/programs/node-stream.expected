@@ -1,0 +1,27 @@
+data <Buffer 61> true
+data <Buffer 62> true
+data <Buffer 63> true
+end true
+close true
+read "héllo" utf8
+[ 1, { two: 2 }, 'three' ]
+[ 'x', 'y' ]
+write 1 true write 2 false 6 true
+drain [ 'ab', 'cdef' ]
+end callback [ 'ab', 'cdef', '!' ] true
+finish
+error ERR_STREAM_WRITE_AFTER_END write after end
+piped ONE TWO[flushed]
+pipeline done undefined p-i-p-e-
+pipeline error source failed
+pipeline promise ab
+finished undefined
+finished early ERR_STREAM_PREMATURE_CLOSE
+destroyed with bye true true
+duplex got to duplex
+duplex data from duplex
+duplex finish
+duplex end
+toWeb [ 'w1', 'w2' ]
+fromWeb [ 'fw' ]
+true true true function

@@ -1,0 +1,3 @@
+# LF everywhere, Windows checkouts included: the C, the expected outputs and the shell steps
+# compare bytes. Git still detects binary files (text=auto) and leaves them alone.
+* text=auto eol=lf

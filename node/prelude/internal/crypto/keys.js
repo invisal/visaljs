@@ -1,0 +1,634 @@
+// node:crypto's keys: KeyObject and its subclasses, as Node's lib/internal/crypto/keys.js
+// defines them (the same symbols, so they inspect as Node's do), over the runtime's key handles,
+// which CryptoKey shares. PEM (base64 and its labels) and JWK (base64url and its members) are
+// here; DER is the runtime's.
+// Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
+import {
+  cryptoHashInfo, cryptoKeyEquals, cryptoRandomFill, cryptoKeyExport, cryptoKeyFromParts, cryptoKeyGenerate, cryptoKeyHandleOf, cryptoKeyInfo,
+  cryptoKeyParse, cryptoKeyParts, cryptoKeyPublic, cryptoKeySecret, cryptoKeySecretBytes, cryptoToCryptoKey,
+} from "visaljs:host";
+import { codeError, invalidArgType, invalidArgValue, notSupported, outOfRange, validateFunction, validateString } from "../errors.js";
+import { dhKeyParts, dhParameters } from "./diffiehellman.js";
+import { kKeyType } from "./key_type.js";
+import { isAnyArrayBuffer, isArrayBufferView, kHandle, validateNumber, validateObject } from "./util.js";
+
+const kAsymmetricKeyType = Symbol("kAsymmetricKeyType");
+const kAsymmetricKeyDetails = Symbol("kAsymmetricKeyDetails");
+
+const later = (fn) => setTimeout(fn, 0);
+const isStringOrBuffer = (v) => typeof v === "string" || isArrayBufferView(v) || isAnyArrayBuffer(v);
+
+/* ---- errors ------------------------------------------------------------------------------------ */
+
+const keyObjectType = (actual, expected) =>
+  codeError(TypeError, "ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE", `Invalid key object type ${actual}, expected ${expected}.`);
+const incompatible = (encoding, why) =>
+  codeError(Error, "ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS", `The selected key encoding ${encoding} ${why}.`);
+const invalidJwk = () => codeError(TypeError, "ERR_CRYPTO_INVALID_JWK", "Invalid JWK data");
+
+/* the runtime's error codes for a key it couldn't decode or encode */
+function keyError(code) {
+  switch (code) {
+    case 1: return codeError(Error, "ERR_OSSL_UNSUPPORTED", "error:1E08010C:DECODER routines::unsupported");
+    case 2: return codeError(Error, "ERR_OSSL_ASN1_WRONG_TAG", "error:068000A8:asn1 encoding routines::wrong tag");
+    case 3: return notSupported("This key type");
+    default: return new Error("Key operation failed");
+  }
+}
+
+/** validateOneOf: `The property 'options.format' must be one of: undefined, 'buffer', 'jwk'. Received 'pem'` */
+function validateOneOf(value, name, oneOf) {
+  if (!oneOf.includes(value)) {
+    const allowed = oneOf.map((v) => (typeof v === "string" ? `'${v}'` : String(v))).join(", ");
+    throw invalidArgValue(name, "must be one of: " + allowed, value);
+  }
+}
+
+function validateUint32(value, name) {
+  validateNumber(value, name);
+  if (!Number.isInteger(value)) throw outOfRange(name, "an integer", value);
+  if (value < 0 || value > 4294967295) throw outOfRange(name, ">= 0 && <= 4294967295", value);
+}
+
+function validateIntegerIn(value, name, min, max) {
+  validateNumber(value, name);
+  if (!Number.isInteger(value)) throw outOfRange(name, "an integer", value);
+  if (value < min || value > max) throw outOfRange(name, `>= ${min} && <= ${max}`, value);
+}
+
+/* ---- secret keys ------------------------------------------------------------------------------- */
+
+/** A secret key's bytes from what the APIs accept: a string in `encoding`, a buffer or view, a
+ *  secret KeyObject or CryptoKey. */
+export function prepareSecretKey(key, encoding, bufferOnly = false) {
+  if (!bufferOnly) {
+    if (key instanceof KeyObject) {
+      if (key.type !== "secret") throw keyObjectType(key.type, "secret");
+      return cryptoKeySecretBytes(key[kHandle]);
+    }
+    const handle = cryptoKeyHandleOf(key);
+    if (handle !== undefined) {
+      const type = cryptoKeyInfo(handle)[0];
+      if (type !== "secret") throw keyObjectType(type, "secret");
+      return cryptoKeySecretBytes(handle);
+    }
+  }
+  if (typeof key === "string") {
+    return Buffer.from(key, encoding === undefined || encoding === "buffer" || !Buffer.isEncoding(encoding) ? "utf8" : encoding);
+  }
+  if (isArrayBufferView(key) || isAnyArrayBuffer(key)) return key;
+  const expected = bufferOnly
+    ? "an instance of ArrayBuffer, Buffer, TypedArray, or DataView"
+    : "of type string or an instance of ArrayBuffer, Buffer, TypedArray, DataView, KeyObject, or CryptoKey";
+  throw invalidArgType("key", expected, key);
+}
+
+/* ---- KeyObject --------------------------------------------------------------------------------- */
+
+function isKeyHandle(handle) {
+  try {
+    cryptoKeyInfo(handle);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export class KeyObject {
+  constructor(type, handle) {
+    if (type !== "secret" && type !== "public" && type !== "private") throw invalidArgValue("type", "is invalid", type);
+    if (typeof handle !== "object" || handle === null || !isKeyHandle(handle)) throw invalidArgType("handle", "of type object", handle);
+    this[kKeyType] = type;
+    Object.defineProperty(this, kHandle, { value: handle, enumerable: false, configurable: false, writable: false });
+  }
+
+  get type() {
+    return this[kKeyType];
+  }
+
+  static from(key) {
+    const handle = cryptoKeyHandleOf(key);
+    if (handle === undefined) throw invalidArgType("key", "an instance of CryptoKey", key);
+    return wrapHandle(handle);
+  }
+
+  equals(otherKeyObject) {
+    if (!(otherKeyObject instanceof KeyObject)) throw invalidArgType("otherKeyObject", "an instance of KeyObject", otherKeyObject);
+    return otherKeyObject.type === this.type && cryptoKeyEquals(this[kHandle], otherKeyObject[kHandle]);
+  }
+}
+
+class SecretKeyObject extends KeyObject {
+  constructor(handle) {
+    super("secret", handle);
+  }
+
+  get symmetricKeySize() {
+    return cryptoKeySecretBytes(this[kHandle]).length;
+  }
+
+  export(options) {
+    if (options !== undefined) {
+      validateObject(options, "options");
+      validateOneOf(options.format, "options.format", [undefined, "buffer", "jwk"]);
+      if (options.format === "jwk") return { kty: "oct", k: cryptoKeySecretBytes(this[kHandle]).toString("base64url") };
+    }
+    return cryptoKeySecretBytes(this[kHandle]);
+  }
+
+  toCryptoKey(algorithm, extractable, keyUsages) {
+    return cryptoToCryptoKey("raw", cryptoKeySecretBytes(this[kHandle]), algorithm, extractable, keyUsages);
+  }
+}
+
+/* asymmetricKeyDetails: Node's normalized form of the key's details */
+const bitLength = (b) => {
+  let bits = (b.length - 1) * 8;
+  for (let top = b[0]; top; top >>= 1) bits++;
+  return bits;
+};
+
+function keyDetails(handle) {
+  const [, kind, namedCurve, pss] = cryptoKeyInfo(handle);
+  if (kind === "ec") return { namedCurve };
+  if (kind === "dsa") {
+    const [p, q] = cryptoKeyParts(handle);
+    return { modulusLength: bitLength(p), divisorLength: bitLength(q) };
+  }
+  const [n, e] = cryptoKeyParts(handle);
+  let bits = (n.length - 1) * 8;
+  for (let top = n[0]; top; top >>= 1) bits++;
+  const details = { modulusLength: bits, publicExponent: BigInt("0x" + e.toString("hex")) };
+  if (pss) {
+    details.hashAlgorithm = pss[0];
+    details.mgf1HashAlgorithm = pss[1];
+    details.saltLength = pss[2];
+  }
+  return details;
+}
+
+class AsymmetricKeyObject extends KeyObject {
+  get asymmetricKeyType() {
+    return this[kAsymmetricKeyType] ||= cryptoKeyInfo(this[kHandle])[1];
+  }
+
+  get asymmetricKeyDetails() {
+    switch (this.asymmetricKeyType) {
+      case "rsa":
+      case "rsa-pss":
+      case "ec":
+      case "dsa":
+        return this[kAsymmetricKeyDetails] ||= keyDetails(this[kHandle]);
+      default:
+        return {};
+    }
+  }
+
+  toCryptoKey(algorithm, extractable, keyUsages) {
+    const der = cryptoKeyExport(this[kHandle], this.type === "public" ? 0 : 2);
+    return cryptoToCryptoKey(this.type === "public" ? "spki" : "pkcs8", der, algorithm, extractable, keyUsages);
+  }
+}
+
+class PublicKeyObject extends AsymmetricKeyObject {
+  constructor(handle) {
+    super("public", handle);
+  }
+
+  export(options) {
+    if (options && options.format === "jwk") return exportJwk(this[kHandle], false);
+    const { format, type } = parseKeyEncoding(options, this.asymmetricKeyType, true);
+    return exportKey(this[kHandle], format, type, false);
+  }
+}
+
+class PrivateKeyObject extends AsymmetricKeyObject {
+  constructor(handle) {
+    super("private", handle);
+  }
+
+  export(options) {
+    if (options && options.format === "jwk") {
+      if (options.passphrase !== undefined) throw incompatible("jwk", "does not support encryption");
+      return exportJwk(this[kHandle], true);
+    }
+    const { format, type, cipher } = parseKeyEncoding(options, this.asymmetricKeyType, false);
+    if (cipher != null) throw notSupported("Encrypting a private key");
+    return exportKey(this[kHandle], format, type, true);
+  }
+}
+
+function wrapHandle(handle) {
+  switch (cryptoKeyInfo(handle)[0]) {
+    case "secret": return new SecretKeyObject(handle);
+    case "public": return new PublicKeyObject(handle);
+    default: return new PrivateKeyObject(handle);
+  }
+}
+
+/* ---- encodings: PEM and DER -------------------------------------------------------------------- */
+
+/* the runtime's encodings */
+const SPKI = 0, PKCS1 = 1, PKCS8 = 2, SEC1 = 3, CERT = 4;
+const ENCODING_NAMES = { pkcs1: PKCS1, spki: SPKI, pkcs8: PKCS8, sec1: SEC1 };
+
+function option(name, objName) {
+  return objName === undefined ? `options.${name}` : `options.${objName}.${name}`;
+}
+
+function parseKeyFormat(formatStr, defaultFormat, optionName) {
+  if (formatStr === undefined && defaultFormat !== undefined) return defaultFormat;
+  if (formatStr === "pem" || formatStr === "der" || formatStr === "jwk") return formatStr;
+  throw invalidArgValue(optionName, "is invalid", formatStr);
+}
+
+function parseKeyType(typeStr, required, keyType, isPublic, optionName) {
+  if (typeStr === undefined && !required) return undefined;
+  if (typeStr === "pkcs1") {
+    if (keyType !== undefined && keyType !== "rsa") throw incompatible(typeStr, "can only be used for RSA keys");
+    return typeStr;
+  }
+  if (typeStr === "spki" && isPublic !== false) return typeStr;
+  if (typeStr === "pkcs8" && isPublic !== true) return typeStr;
+  if (typeStr === "sec1" && isPublic !== true) {
+    if (keyType !== undefined && keyType !== "ec") throw incompatible(typeStr, "can only be used for EC keys");
+    return typeStr;
+  }
+  throw invalidArgValue(optionName, "is invalid", typeStr);
+}
+
+function parseKeyEncoding(enc, keyType, isPublic, objName) {
+  validateObject(enc, "options");
+  const isInput = keyType === undefined;
+  const format = parseKeyFormat(enc.format, isInput ? "pem" : undefined, option("format", objName));
+  const isRequired = (!isInput || format === "der") && format !== "jwk";
+  const type = parseKeyType(enc.type, isRequired, keyType, isPublic, option("type", objName));
+  let cipher, passphrase;
+  if (isPublic !== true) {
+    ({ cipher, passphrase } = enc);
+    if (!isInput) {
+      if (cipher != null) {
+        if (typeof cipher !== "string") throw invalidArgValue(option("cipher", objName), "is invalid", cipher);
+        if (format === "der" && (type === "pkcs1" || type === "sec1")) throw incompatible(type, "does not support encryption");
+      } else if (passphrase !== undefined) {
+        throw invalidArgValue(option("cipher", objName), "is invalid", cipher);
+      }
+    }
+  }
+  return { format, type, cipher, passphrase };
+}
+
+const PEM_LABELS = { [SPKI]: "PUBLIC KEY", [PKCS8]: "PRIVATE KEY", [SEC1]: "EC PRIVATE KEY" };
+
+function exportKey(handle, format, type, isPrivate) {
+  const encoding = ENCODING_NAMES[type];
+  const der = cryptoKeyExport(handle, encoding);
+  if (typeof der === "number") throw keyError(der);
+  if (format === "der") return der;
+  const label = encoding === PKCS1 ? (isPrivate ? "RSA PRIVATE KEY" : "RSA PUBLIC KEY") : PEM_LABELS[encoding];
+  const body = der.toString("base64").replace(/(.{64})/g, "$1\n").replace(/\n$/, "");
+  return `-----BEGIN ${label}-----\n${body}\n-----END ${label}-----\n`;
+}
+
+/* A PEM's label → the encoding it holds, and whether it is private */
+const PEM_TYPES = {
+  "PUBLIC KEY": [SPKI, false],
+  "RSA PUBLIC KEY": [PKCS1, false],
+  "CERTIFICATE": [CERT, false],
+  "PRIVATE KEY": [PKCS8, true],
+  "RSA PRIVATE KEY": [PKCS1, true],
+  "EC PRIVATE KEY": [SEC1, true],
+};
+
+/** A key handle from PEM or DER: the private key when `wantPrivate`, else a public one (a
+ *  private key's public part, as createPublicKey takes it). */
+function parseKey(data, format, type, wantPrivate) {
+  if (format === "der") {
+    const encoding = ENCODING_NAMES[type];
+    const isPrivate = encoding === PKCS8 || encoding === SEC1 || (encoding === PKCS1 && wantPrivate);
+    const handle = cryptoKeyParse(data, encoding, isPrivate);
+    if (typeof handle === "number") throw keyError(handle);
+    return wantPrivate || !isPrivate ? handle : cryptoKeyPublic(handle);
+  }
+  const text = typeof data === "string" ? data : Buffer.from(isAnyArrayBuffer(data) ? new Uint8Array(data) : data).toString("latin1");
+  const m = /-----BEGIN ([A-Z0-9 ]+)-----\r?\n([\s\S]*?)-----END \1-----/.exec(text);
+  if (m === null) throw keyError(1);
+  if (m[1] === "ENCRYPTED PRIVATE KEY" || m[2].includes(":")) throw notSupported("An encrypted private key");
+  const known = PEM_TYPES[m[1]];
+  if (known === undefined || (wantPrivate && !known[1])) throw keyError(1);
+  const handle = cryptoKeyParse(Buffer.from(m[2], "base64"), known[0], known[1]);
+  if (typeof handle === "number") throw keyError(handle);
+  return known[1] && !wantPrivate ? cryptoKeyPublic(handle) : handle;
+}
+
+/* ---- JWK --------------------------------------------------------------------------------------- */
+
+const b64u = (buf) => buf.toString("base64url");
+const CURVE_SIZES = { "P-256": 32, "P-384": 48, "P-521": 66 };
+const JWK_CURVES = { prime256v1: "P-256", secp384r1: "P-384", secp521r1: "P-521" };
+
+function exportJwk(handle, isPrivate) {
+  const [, kind, namedCurve] = cryptoKeyInfo(handle);
+  const parts = cryptoKeyParts(handle);
+  if (kind === "rsa") {
+    const jwk = { kty: "RSA", n: b64u(parts[0]), e: b64u(parts[1]) };
+    if (isPrivate) ["d", "p", "q", "dp", "dq", "qi"].forEach((name, i) => (jwk[name] = b64u(parts[i + 2])));
+    return jwk;
+  }
+  if (kind === "ec") {
+    const size = (parts[0].length - 1) / 2;
+    const jwk = { kty: "EC", x: b64u(parts[0].subarray(1, 1 + size)), y: b64u(parts[0].subarray(1 + size)), crv: JWK_CURVES[namedCurve] };
+    if (isPrivate) jwk.d = b64u(parts[1]);
+    return jwk;
+  }
+  if (kind === "x25519" || kind === "ed25519") {
+    const crv = kind === "x25519" ? "X25519" : "Ed25519";
+    return isPrivate ? { crv, d: b64u(parts[1]), x: b64u(parts[0]), kty: "OKP" } : { crv, x: b64u(parts[0]), kty: "OKP" };
+  }
+  throw codeError(Error, "ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE", "Unsupported JWK Key Type.");
+}
+
+function fromParts(kind, isPrivate, crv, parts) {
+  const handle = cryptoKeyFromParts(kind, isPrivate, crv, parts);
+  if (typeof handle === "number") throw handle === 3 ? notSupported("This curve") : invalidJwk();
+  return handle;
+}
+
+function keyFromJwk(key, isPublic) {
+  validateObject(key, "key");
+  validateOneOf(key.kty, "key.kty", ["RSA", "EC", "OKP"]);
+  const b64 = (s) => Buffer.from(s, "base64");
+  if (key.kty === "OKP") {
+    validateString(key.crv, "key.crv");
+    validateOneOf(key.crv, "key.crv", ["Ed25519", "Ed448", "X25519", "X448"]);
+    validateString(key.x, "key.x");
+    if (!isPublic) validateString(key.d, "key.d");
+    const data = isPublic ? b64(key.x) : b64(key.d);
+    if (key.crv !== "X25519" && key.crv !== "Ed25519") throw notSupported(key.crv + " keys");
+    if (data.byteLength !== 32) throw invalidJwk();
+    const kind = key.crv.toLowerCase();
+    return isPublic ? fromParts(kind, false, undefined, [data]) : fromParts(kind, true, undefined, [undefined, data]);
+  }
+  if (key.kty === "EC") {
+    validateString(key.crv, "key.crv");
+    validateOneOf(key.crv, "key.crv", ["P-256", "secp256k1", "P-384", "P-521"]);
+    validateString(key.x, "key.x");
+    validateString(key.y, "key.y");
+    if (!isPublic) validateString(key.d, "key.d");
+    const size = CURVE_SIZES[key.crv];
+    const x = b64(key.x);
+    const y = b64(key.y);
+    if (size !== undefined && (x.length !== size || y.length !== size)) throw invalidJwk();
+    const point = Buffer.concat([Buffer.from([4]), x, y]);
+    return isPublic ? fromParts("ec", false, key.crv, [point]) : fromParts("ec", true, key.crv, [point, b64(key.d)]);
+  }
+  validateString(key.n, "key.n");
+  validateString(key.e, "key.e");
+  const names = ["n", "e"];
+  if (!isPublic) {
+    for (const name of ["d", "p", "q", "dp", "dq", "qi"]) {
+      validateString(key[name], "key." + name);
+      names.push(name);
+    }
+  }
+  return fromParts("rsa", !isPublic, undefined, names.map((name) => b64(key[name])));
+}
+
+/* ---- createSecretKey, createPublicKey, createPrivateKey ---------------------------------------- */
+
+export function createSecretKey(key, encoding) {
+  const bytes = prepareSecretKey(key, encoding, true);
+  return new SecretKeyObject(cryptoKeySecret(bytes));
+}
+
+/* Where an asymmetric key is wanted (Node's kCreatePublic, …) */
+const CREATE_PUBLIC = 0, CREATE_PRIVATE = 1, CONSUME_PUBLIC = 2, CONSUME_PRIVATE = 3;
+
+/* a KeyObject (or CryptoKey) given where an asymmetric key is wanted */
+function handleOfKeyObject(key, ctx) {
+  if (ctx === CREATE_PRIVATE) throw invalidArgType("key", "of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView", key);
+  if (key.type !== "private") {
+    if (ctx === CONSUME_PRIVATE || ctx === CREATE_PUBLIC) throw keyObjectType(key.type, "private");
+    if (key.type !== "public") throw keyObjectType(key.type, "private or public");
+  }
+  return key[kHandle];
+}
+
+/** prepareAsymmetricKey: a handle (for CREATE_PUBLIC from a PEM or DER private key, its public
+ *  part), and whether it came from a KeyObject or CryptoKey. */
+function prepareAsymmetricKey(key, ctx) {
+  const wantPrivate = ctx === CREATE_PRIVATE || ctx === CONSUME_PRIVATE;
+  const asKeyObject = (v) => {
+    if (v instanceof KeyObject) return v;
+    const handle = cryptoKeyHandleOf(v);
+    return handle === undefined ? undefined : wrapHandle(handle);
+  };
+  let keyObject = asKeyObject(key);
+  if (keyObject) return { key: handleOfKeyObject(keyObject, ctx), keyObject: true };
+  if (isStringOrBuffer(key)) return { key: parseKey(key, "pem", undefined, wantPrivate) };
+  if (typeof key === "object" && key !== null) {
+    const { key: data, encoding, format } = key;
+    keyObject = asKeyObject(data);
+    if (keyObject) return { key: handleOfKeyObject(keyObject, ctx), keyObject: true };
+    if (format === "jwk") {
+      validateObject(data, "key.key");
+      return { key: keyFromJwk(data, !wantPrivate) };
+    }
+    if (!isStringOrBuffer(data)) {
+      throw invalidArgType("key.key", "of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView", data);
+    }
+    const { format: fmt, type } = parseKeyEncoding(key, undefined, wantPrivate ? false : undefined);
+    const bytes = typeof data === "string" && fmt === "der" ? Buffer.from(data, encoding ?? "utf8") : data;
+    return { key: parseKey(bytes, fmt, type, wantPrivate) };
+  }
+  const expected = ctx === CREATE_PRIVATE
+    ? "of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView"
+    : "of type string or an instance of ArrayBuffer, Buffer, TypedArray, DataView, KeyObject, or CryptoKey";
+  throw invalidArgType("key", expected, key);
+}
+
+/** The handle of a private key from what sign, privateDecrypt, … take. */
+export function preparePrivateKey(key) {
+  return prepareAsymmetricKey(key, CONSUME_PRIVATE).key;
+}
+
+/** The handle of a public or private key from what verify, publicEncrypt, … take. */
+export function preparePublicOrPrivateKey(key) {
+  return prepareAsymmetricKey(key, CONSUME_PUBLIC).key;
+}
+
+export function createPublicKey(key) {
+  const { key: handle, keyObject } = prepareAsymmetricKey(key, CREATE_PUBLIC);
+  return new PublicKeyObject(keyObject ? cryptoKeyPublic(handle) : handle);
+}
+
+export function createPrivateKey(key) {
+  return new PrivateKeyObject(prepareAsymmetricKey(key, CREATE_PRIVATE).key);
+}
+
+/** The asymmetric key type of a handle ('rsa', 'ec', …). */
+export function asymmetricKeyTypeOf(handle) {
+  return cryptoKeyInfo(handle)[1];
+}
+
+/** A key's RSA-PSS parameters: [hash, mgf1, saltLength], or null. */
+export function pssParamsOf(handle) {
+  return cryptoKeyInfo(handle)[3];
+}
+
+/* ---- generateKey, generateKeyPair -------------------------------------------------------------- */
+
+function secretKeyJob(type, options) {
+  validateString(type, "type");
+  validateObject(options, "options");
+  const { length } = options;
+  switch (type) {
+    case "hmac":
+      validateIntegerIn(length, "options.length", 8, 2 ** 31 - 1);
+      break;
+    case "aes":
+      validateOneOf(length, "options.length", [128, 192, 256]);
+      break;
+    default:
+      throw invalidArgValue("type", "must be a supported key type", type);
+  }
+  return () => {
+    const bytes = Buffer.alloc(Math.floor(length / 8));
+    cryptoRandomFill(bytes, 0, bytes.length);
+    return new SecretKeyObject(cryptoKeySecret(bytes));
+  };
+}
+
+export function generateKeySync(type, options) {
+  return secretKeyJob(type, options)();
+}
+
+export function generateKey(type, options, callback) {
+  if (typeof options === "function") {
+    callback = options;
+    options = undefined;
+  }
+  validateFunction(callback, "callback");
+  const job = secretKeyJob(type, options);
+  const key = job();
+  later(() => callback(null, key));
+}
+
+function pairEncodings(keyType, options) {
+  const { publicKeyEncoding, privateKeyEncoding } = options ?? {};
+  let pub, priv;
+  if (publicKeyEncoding != null) {
+    if (typeof publicKeyEncoding !== "object") throw invalidArgValue("options.publicKeyEncoding", "is invalid", publicKeyEncoding);
+    pub = publicKeyEncoding.format === "jwk" ? { format: "jwk" } : parseKeyEncoding(publicKeyEncoding, keyType, true, "publicKeyEncoding");
+  }
+  if (privateKeyEncoding != null) {
+    if (typeof privateKeyEncoding !== "object") throw invalidArgValue("options.privateKeyEncoding", "is invalid", privateKeyEncoding);
+    priv = privateKeyEncoding.format === "jwk" ? { format: "jwk" } : parseKeyEncoding(privateKeyEncoding, keyType, false, "privateKeyEncoding");
+    if (priv.cipher != null) throw notSupported("Encrypting a private key");
+  }
+  return { pub, priv };
+}
+
+function keyPairJob(type, options) {
+  validateString(type, "type");
+  const encodings = pairEncodings(type, options);
+  if (options !== undefined) validateObject(options, "options");
+  let generate;
+  switch (type) {
+    case "rsa":
+    case "rsa-pss": {
+      validateObject(options, "options");
+      const { modulusLength } = options;
+      validateUint32(modulusLength, "options.modulusLength");
+      let { publicExponent } = options;
+      if (publicExponent == null) publicExponent = 0x10001;
+      else validateUint32(publicExponent, "options.publicExponent");
+      let pss = null;
+      if (type === "rsa-pss") {
+        const { hashAlgorithm, mgf1HashAlgorithm, saltLength } = options;
+        if (saltLength !== undefined) validateIntegerIn(saltLength, "options.saltLength", 0, 2147483647);
+        if (hashAlgorithm !== undefined) validateString(hashAlgorithm, "options.hashAlgorithm");
+        if (mgf1HashAlgorithm !== undefined) validateString(mgf1HashAlgorithm, "options.mgf1HashAlgorithm");
+        if (hashAlgorithm !== undefined || mgf1HashAlgorithm !== undefined || saltLength !== undefined) {
+          const hash = hashAlgorithm ?? "sha1";
+          pss = [hash, mgf1HashAlgorithm ?? hash, saltLength ?? cryptoHashInfo(hash)];
+        }
+      }
+      if (modulusLength < 512) throw new Error("error:1C8000AB:Provider routines::key size too small");
+      if (modulusLength > 4096) throw notSupported("An RSA key of more than 4096 bits");
+      generate = () => cryptoKeyGenerate(type, modulusLength, publicExponent, pss);
+      break;
+    }
+    case "ec": {
+      validateObject(options, "options");
+      const { namedCurve, paramEncoding } = options;
+      validateString(namedCurve, "options.namedCurve");
+      if (paramEncoding != null && paramEncoding !== "named") {
+        if (paramEncoding === "explicit") throw notSupported("Explicit EC parameters");
+        throw invalidArgValue("options.paramEncoding", "is invalid", paramEncoding);
+      }
+      generate = () => cryptoKeyGenerate("ec", namedCurve);
+      generate.curve = namedCurve;
+      break;
+    }
+    case "x25519":
+    case "ed25519":
+      generate = () => cryptoKeyGenerate(type);
+      break;
+    case "dsa": {
+      validateObject(options, "options");
+      const { modulusLength } = options;
+      validateUint32(modulusLength, "options.modulusLength");
+      let { divisorLength } = options;
+      if (divisorLength == null) divisorLength = 224;  /* OpenSSL 3's default */
+      else validateIntegerIn(divisorLength, "options.divisorLength", 0, 2147483647);
+      generate = () => cryptoKeyGenerate("dsa", modulusLength, divisorLength);
+      break;
+    }
+    case "dh": {
+      const params = dhParameters(options);
+      generate = () => {
+        const handle = cryptoKeyFromParts("dh", true, undefined, dhKeyParts(params));
+        return handle;
+      };
+      break;
+    }
+    case "ed448":
+    case "x448":
+      throw notSupported(`A ${type} key`);
+    default:
+      throw invalidArgValue("type", "must be a supported key type", type);
+  }
+  return () => {
+    const handle = generate();
+    if (typeof handle === "number") {
+      if (type === "ec") throw codeError(TypeError, "ERR_CRYPTO_INVALID_CURVE", "Invalid EC curve name");
+      throw new Error("Key generation failed");
+    }
+    const privateKey = new PrivateKeyObject(handle);
+    const publicKey = new PublicKeyObject(cryptoKeyPublic(handle));
+    const encode = (key, enc) => (enc === undefined ? key : enc.format === "jwk" ? key.export({ format: "jwk" }) : key.export(enc));
+    return { publicKey: encode(publicKey, encodings.pub), privateKey: encode(privateKey, encodings.priv) };
+  };
+}
+
+export function generateKeyPairSync(type, options) {
+  return keyPairJob(type, options)();
+}
+
+export function generateKeyPair(type, options, callback) {
+  if (typeof options === "function") {
+    callback = options;
+    options = undefined;
+  }
+  validateFunction(callback, "callback");
+  const job = keyPairJob(type, options);
+  let result;
+  try {
+    result = job();
+  } catch (e) {
+    later(() => callback(e));
+    return;
+  }
+  later(() => callback(null, result.publicKey, result.privateKey));
+}

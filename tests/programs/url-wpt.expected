@@ -1,0 +1,1261 @@
+0 "http://example\t.\norg" http://example.org/ | http://example.org | http: |  |  | example.org | example.org |  | / |  |  true
+1 "http://user:pass@foo:21/bar;par?b#c" http://user:pass@foo:21/bar;par?b#c | http://foo:21 | http: | user | pass | foo:21 | foo | 21 | /bar;par | ?b | #c true
+2 "https://test:@test" https://test@test/ | https://test | https: | test |  | test | test |  | / |  |  true
+3 "https://:@test" https://test/ | https://test | https: |  |  | test | test |  | / |  |  true
+4 "non-special://test:@test/x" non-special://test@test/x | null | non-special: | test |  | test | test |  | /x |  |  true
+5 "non-special://:@test/x" non-special://test/x | null | non-special: |  |  | test | test |  | /x |  |  true
+6 "http:foo.com" http://example.org/foo/foo.com | http://example.org | http: |  |  | example.org | example.org |  | /foo/foo.com |  |  true
+7 "\t   :foo.com   \n" http://example.org/foo/:foo.com | http://example.org | http: |  |  | example.org | example.org |  | /foo/:foo.com |  |  true
+8 " foo.com  " http://example.org/foo/foo.com | http://example.org | http: |  |  | example.org | example.org |  | /foo/foo.com |  |  true
+9 "a:\t foo.com" a: foo.com | null | a: |  |  |  |  |  |  foo.com |  |  true
+10 "http://f:21/ b ? d # e " http://f:21/%20b%20?%20d%20#%20e | http://f:21 | http: |  |  | f:21 | f | 21 | /%20b%20 | ?%20d%20 | #%20e true
+11 "lolscheme:x x#x x" lolscheme:x x#x%20x | null | lolscheme: |  |  |  |  |  | x x |  | #x%20x true
+12 "http://f:/c" http://f/c | http://f | http: |  |  | f | f |  | /c |  |  true
+13 "http://f:0/c" http://f:0/c | http://f:0 | http: |  |  | f:0 | f | 0 | /c |  |  true
+14 "http://f:00000000000000/c" http://f:0/c | http://f:0 | http: |  |  | f:0 | f | 0 | /c |  |  true
+15 "http://f:00000000000000000000080/c" http://f/c | http://f | http: |  |  | f | f |  | /c |  |  true
+16 "http://f:b/c" failure false
+17 "http://f: /c" failure false
+18 "http://f:\n/c" http://f/c | http://f | http: |  |  | f | f |  | /c |  |  true
+19 "http://f:fifty-two/c" failure false
+20 "http://f:999999/c" failure false
+21 "non-special://f:999999/c" failure false
+22 "http://f: 21 / b ? d # e " failure false
+23 "" http://example.org/foo/bar | http://example.org | http: |  |  | example.org | example.org |  | /foo/bar |  |  true
+24 "  \t" http://example.org/foo/bar | http://example.org | http: |  |  | example.org | example.org |  | /foo/bar |  |  true
+25 ":foo.com/" http://example.org/foo/:foo.com/ | http://example.org | http: |  |  | example.org | example.org |  | /foo/:foo.com/ |  |  true
+26 ":foo.com\\" http://example.org/foo/:foo.com/ | http://example.org | http: |  |  | example.org | example.org |  | /foo/:foo.com/ |  |  true
+27 ":" http://example.org/foo/: | http://example.org | http: |  |  | example.org | example.org |  | /foo/: |  |  true
+28 ":a" http://example.org/foo/:a | http://example.org | http: |  |  | example.org | example.org |  | /foo/:a |  |  true
+29 ":/" http://example.org/foo/:/ | http://example.org | http: |  |  | example.org | example.org |  | /foo/:/ |  |  true
+30 ":\\" http://example.org/foo/:/ | http://example.org | http: |  |  | example.org | example.org |  | /foo/:/ |  |  true
+31 ":#" http://example.org/foo/:# | http://example.org | http: |  |  | example.org | example.org |  | /foo/: |  |  true
+32 "#" http://example.org/foo/bar# | http://example.org | http: |  |  | example.org | example.org |  | /foo/bar |  |  true
+33 "#/" http://example.org/foo/bar#/ | http://example.org | http: |  |  | example.org | example.org |  | /foo/bar |  | #/ true
+34 "#\\" http://example.org/foo/bar#\ | http://example.org | http: |  |  | example.org | example.org |  | /foo/bar |  | #\ true
+35 "#;?" http://example.org/foo/bar#;? | http://example.org | http: |  |  | example.org | example.org |  | /foo/bar |  | #;? true
+36 "?" http://example.org/foo/bar? | http://example.org | http: |  |  | example.org | example.org |  | /foo/bar |  |  true
+37 "/" http://example.org/ | http://example.org | http: |  |  | example.org | example.org |  | / |  |  true
+38 ":23" http://example.org/foo/:23 | http://example.org | http: |  |  | example.org | example.org |  | /foo/:23 |  |  true
+39 "/:23" http://example.org/:23 | http://example.org | http: |  |  | example.org | example.org |  | /:23 |  |  true
+40 "\\x" http://example.org/x | http://example.org | http: |  |  | example.org | example.org |  | /x |  |  true
+41 "\\\\x\\hello" http://x/hello | http://x | http: |  |  | x | x |  | /hello |  |  true
+42 "::" http://example.org/foo/:: | http://example.org | http: |  |  | example.org | example.org |  | /foo/:: |  |  true
+43 "::23" http://example.org/foo/::23 | http://example.org | http: |  |  | example.org | example.org |  | /foo/::23 |  |  true
+44 "foo://" foo:// | null | foo: |  |  |  |  |  |  |  |  true
+45 "http://a:b@c:29/d" http://a:b@c:29/d | http://c:29 | http: | a | b | c:29 | c | 29 | /d |  |  true
+46 "http://é@é" http://%C3%A9@xn--9ca/ | http://xn--9ca | http: | %C3%A9 |  | xn--9ca | xn--9ca |  | / |  |  true
+47 "http://é@example.com" http://%C3%A9@example.com/ | http://example.com | http: | %C3%A9 |  | example.com | example.com |  | / |  |  true
+48 "http::@c:29" http://example.org/foo/:@c:29 | http://example.org | http: |  |  | example.org | example.org |  | /foo/:@c:29 |  |  true
+49 "http://&a:foo(b]c@d:2/" http://&a:foo(b%5Dc@d:2/ | http://d:2 | http: | &a | foo(b%5Dc | d:2 | d | 2 | / |  |  true
+50 "http://::@c@d:2" http://:%3A%40c@d:2/ | http://d:2 | http: |  | %3A%40c | d:2 | d | 2 | / |  |  true
+51 "http://foo.com:b@d/" http://foo.com:b@d/ | http://d | http: | foo.com | b | d | d |  | / |  |  true
+52 "http://foo.com/\\@" http://foo.com//@ | http://foo.com | http: |  |  | foo.com | foo.com |  | //@ |  |  true
+53 "http:\\\\foo.com\\" http://foo.com/ | http://foo.com | http: |  |  | foo.com | foo.com |  | / |  |  true
+54 "http:\\\\a\\b:c\\d@foo.com\\" http://a/b:c/d@foo.com/ | http://a | http: |  |  | a | a |  | /b:c/d@foo.com/ |  |  true
+55 "http://a:b@c\\" http://a:b@c/ | http://c | http: | a | b | c | c |  | / |  |  true
+56 "ws://a@b\\c" ws://a@b/c | ws://b | ws: | a |  | b | b |  | /c |  |  true
+57 "foo:/" foo:/ | null | foo: |  |  |  |  |  | / |  |  true
+58 "foo:/bar.com/" foo:/bar.com/ | null | foo: |  |  |  |  |  | /bar.com/ |  |  true
+59 "foo://///////" foo:///////// | null | foo: |  |  |  |  |  | /////// |  |  true
+60 "foo://///////bar.com/" foo://///////bar.com/ | null | foo: |  |  |  |  |  | ///////bar.com/ |  |  true
+61 "foo:////://///" foo:////:///// | null | foo: |  |  |  |  |  | //:///// |  |  true
+62 "c:/foo" c:/foo | null | c: |  |  |  |  |  | /foo |  |  true
+63 "//foo/bar" http://foo/bar | http://foo | http: |  |  | foo | foo |  | /bar |  |  true
+64 "http://foo/path;a??e#f#g" http://foo/path;a??e#f#g | http://foo | http: |  |  | foo | foo |  | /path;a | ??e | #f#g true
+65 "http://foo/abcd?efgh?ijkl" http://foo/abcd?efgh?ijkl | http://foo | http: |  |  | foo | foo |  | /abcd | ?efgh?ijkl |  true
+66 "http://foo/abcd#foo?bar" http://foo/abcd#foo?bar | http://foo | http: |  |  | foo | foo |  | /abcd |  | #foo?bar true
+67 "[61:24:74]:98" http://example.org/foo/[61:24:74]:98 | http://example.org | http: |  |  | example.org | example.org |  | /foo/[61:24:74]:98 |  |  true
+68 "http:[61:27]/:foo" http://example.org/foo/[61:27]/:foo | http://example.org | http: |  |  | example.org | example.org |  | /foo/[61:27]/:foo |  |  true
+69 "http://[1::2]:3:4" failure false
+70 "http://2001::1" failure false
+71 "http://2001::1]" failure false
+72 "http://2001::1]:80" failure false
+73 "http://[2001::1]" http://[2001::1]/ | http://[2001::1] | http: |  |  | [2001::1] | [2001::1] |  | / |  |  true
+74 "http://[::127.0.0.1]" http://[::7f00:1]/ | http://[::7f00:1] | http: |  |  | [::7f00:1] | [::7f00:1] |  | / |  |  true
+75 "http://[::127.0.0.1.]" failure false
+76 "http://[0:0:0:0:0:0:13.1.68.3]" http://[::d01:4403]/ | http://[::d01:4403] | http: |  |  | [::d01:4403] | [::d01:4403] |  | / |  |  true
+77 "http://[2001::1]:80" http://[2001::1]/ | http://[2001::1] | http: |  |  | [2001::1] | [2001::1] |  | / |  |  true
+78 "http:/example.com/" http://example.org/example.com/ | http://example.org | http: |  |  | example.org | example.org |  | /example.com/ |  |  true
+79 "http:/" http://example.com/ | http://example.com | http: |  |  | example.com | example.com |  | / |  |  true
+80 "ftp:/example.com/" ftp://example.com/ | ftp://example.com | ftp: |  |  | example.com | example.com |  | / |  |  true
+81 "https:/example.com/" https://example.com/ | https://example.com | https: |  |  | example.com | example.com |  | / |  |  true
+82 "madeupscheme:/example.com/" madeupscheme:/example.com/ | null | madeupscheme: |  |  |  |  |  | /example.com/ |  |  true
+83 "file:/example.com/" file:///example.com/ | null | file: |  |  |  |  |  | /example.com/ |  |  true
+84 "file://example:1/" failure false
+85 "file://example:test/" failure false
+86 "file://example%/" failure false
+87 "file://[example]/" failure false
+88 "ftps:/example.com/" ftps:/example.com/ | null | ftps: |  |  |  |  |  | /example.com/ |  |  true
+89 "gopher:/example.com/" gopher:/example.com/ | null | gopher: |  |  |  |  |  | /example.com/ |  |  true
+90 "ws:/example.com/" ws://example.com/ | ws://example.com | ws: |  |  | example.com | example.com |  | / |  |  true
+91 "wss:/example.com/" wss://example.com/ | wss://example.com | wss: |  |  | example.com | example.com |  | / |  |  true
+92 "data:/example.com/" data:/example.com/ | null | data: |  |  |  |  |  | /example.com/ |  |  true
+93 "javascript:/example.com/" javascript:/example.com/ | null | javascript: |  |  |  |  |  | /example.com/ |  |  true
+94 "mailto:/example.com/" mailto:/example.com/ | null | mailto: |  |  |  |  |  | /example.com/ |  |  true
+95 "http:example.com/" http://example.org/foo/example.com/ | http://example.org | http: |  |  | example.org | example.org |  | /foo/example.com/ |  |  true
+96 "ftp:example.com/" ftp://example.com/ | ftp://example.com | ftp: |  |  | example.com | example.com |  | / |  |  true
+97 "https:example.com/" https://example.com/ | https://example.com | https: |  |  | example.com | example.com |  | / |  |  true
+98 "madeupscheme:example.com/" madeupscheme:example.com/ | null | madeupscheme: |  |  |  |  |  | example.com/ |  |  true
+99 "ftps:example.com/" ftps:example.com/ | null | ftps: |  |  |  |  |  | example.com/ |  |  true
+100 "gopher:example.com/" gopher:example.com/ | null | gopher: |  |  |  |  |  | example.com/ |  |  true
+101 "ws:example.com/" ws://example.com/ | ws://example.com | ws: |  |  | example.com | example.com |  | / |  |  true
+102 "wss:example.com/" wss://example.com/ | wss://example.com | wss: |  |  | example.com | example.com |  | / |  |  true
+103 "data:example.com/" data:example.com/ | null | data: |  |  |  |  |  | example.com/ |  |  true
+104 "javascript:example.com/" javascript:example.com/ | null | javascript: |  |  |  |  |  | example.com/ |  |  true
+105 "mailto:example.com/" mailto:example.com/ | null | mailto: |  |  |  |  |  | example.com/ |  |  true
+106 "/a/b/c" http://example.org/a/b/c | http://example.org | http: |  |  | example.org | example.org |  | /a/b/c |  |  true
+107 "/a/ /c" http://example.org/a/%20/c | http://example.org | http: |  |  | example.org | example.org |  | /a/%20/c |  |  true
+108 "/a%2fc" http://example.org/a%2fc | http://example.org | http: |  |  | example.org | example.org |  | /a%2fc |  |  true
+109 "/a/%2f/c" http://example.org/a/%2f/c | http://example.org | http: |  |  | example.org | example.org |  | /a/%2f/c |  |  true
+110 "#β" http://example.org/foo/bar#%CE%B2 | http://example.org | http: |  |  | example.org | example.org |  | /foo/bar |  | #%CE%B2 true
+111 "data:text/html,test#test" data:text/html,test#test | null | data: |  |  |  |  |  | text/html,test |  | #test true
+112 "tel:1234567890" tel:1234567890 | null | tel: |  |  |  |  |  | 1234567890 |  |  true
+113 "ssh://example.com/foo/bar.git" ssh://example.com/foo/bar.git | null | ssh: |  |  | example.com | example.com |  | /foo/bar.git |  |  true
+114 "file:c:\\foo\\bar.html" file:///c:/foo/bar.html | null | file: |  |  |  |  |  | /c:/foo/bar.html |  |  true
+115 "  File:c|////foo\\bar.html" file:///c:////foo/bar.html | null | file: |  |  |  |  |  | /c:////foo/bar.html |  |  true
+116 "C|/foo/bar" file:///C:/foo/bar | null | file: |  |  |  |  |  | /C:/foo/bar |  |  true
+117 "/C|\\foo\\bar" file:///C:/foo/bar | null | file: |  |  |  |  |  | /C:/foo/bar |  |  true
+118 "//C|/foo/bar" file:///C:/foo/bar | null | file: |  |  |  |  |  | /C:/foo/bar |  |  true
+119 "//server/file" file://server/file | null | file: |  |  | server | server |  | /file |  |  true
+120 "\\\\server\\file" file://server/file | null | file: |  |  | server | server |  | /file |  |  true
+121 "/\\server/file" file://server/file | null | file: |  |  | server | server |  | /file |  |  true
+122 "file:///foo/bar.txt" file:///foo/bar.txt | null | file: |  |  |  |  |  | /foo/bar.txt |  |  true
+123 "file:///home/me" file:///home/me | null | file: |  |  |  |  |  | /home/me |  |  true
+124 "//" file:/// | null | file: |  |  |  |  |  | / |  |  true
+125 "///" file:/// | null | file: |  |  |  |  |  | / |  |  true
+126 "///test" file:///test | null | file: |  |  |  |  |  | /test |  |  true
+127 "file://test" file://test/ | null | file: |  |  | test | test |  | / |  |  true
+128 "file://localhost" file:/// | null | file: |  |  |  |  |  | / |  |  true
+129 "file://localhost/" file:/// | null | file: |  |  |  |  |  | / |  |  true
+130 "file://localhost/test" file:///test | null | file: |  |  |  |  |  | /test |  |  true
+131 "test" file:///tmp/mock/test | null | file: |  |  |  |  |  | /tmp/mock/test |  |  true
+132 "file:test" file:///tmp/mock/test | null | file: |  |  |  |  |  | /tmp/mock/test |  |  true
+133 "file:///w|m" file:///w|m | null | file: |  |  |  |  |  | /w|m |  |  true
+134 "file:///w||m" file:///w||m | null | file: |  |  |  |  |  | /w||m |  |  true
+135 "file:///w|/m" file:///w:/m | null | file: |  |  |  |  |  | /w:/m |  |  true
+136 "file:C|/m/" file:///C:/m/ | null | file: |  |  |  |  |  | /C:/m/ |  |  true
+137 "file:C||/m/" file:///C||/m/ | null | file: |  |  |  |  |  | /C||/m/ |  |  true
+138 "http://example.com/././foo" http://example.com/foo | http://example.com | http: |  |  | example.com | example.com |  | /foo |  |  true
+139 "http://example.com/./.foo" http://example.com/.foo | http://example.com | http: |  |  | example.com | example.com |  | /.foo |  |  true
+140 "http://example.com/foo/." http://example.com/foo/ | http://example.com | http: |  |  | example.com | example.com |  | /foo/ |  |  true
+141 "http://example.com/foo/./" http://example.com/foo/ | http://example.com | http: |  |  | example.com | example.com |  | /foo/ |  |  true
+142 "http://example.com/foo/bar/.." http://example.com/foo/ | http://example.com | http: |  |  | example.com | example.com |  | /foo/ |  |  true
+143 "http://example.com/foo/bar/../" http://example.com/foo/ | http://example.com | http: |  |  | example.com | example.com |  | /foo/ |  |  true
+144 "http://example.com/foo/..bar" http://example.com/foo/..bar | http://example.com | http: |  |  | example.com | example.com |  | /foo/..bar |  |  true
+145 "http://example.com/foo/bar/../ton" http://example.com/foo/ton | http://example.com | http: |  |  | example.com | example.com |  | /foo/ton |  |  true
+146 "http://example.com/foo/bar/../ton/../../a" http://example.com/a | http://example.com | http: |  |  | example.com | example.com |  | /a |  |  true
+147 "http://example.com/foo/../../.." http://example.com/ | http://example.com | http: |  |  | example.com | example.com |  | / |  |  true
+148 "http://example.com/foo/../../../ton" http://example.com/ton | http://example.com | http: |  |  | example.com | example.com |  | /ton |  |  true
+149 "http://example.com/foo/%2e" http://example.com/foo/ | http://example.com | http: |  |  | example.com | example.com |  | /foo/ |  |  true
+150 "http://example.com/foo/%2e%2" http://example.com/foo/%2e%2 | http://example.com | http: |  |  | example.com | example.com |  | /foo/%2e%2 |  |  true
+151 "http://example.com/foo/%2e./%2e%2e/.%2e/%2e.bar" http://example.com/%2e.bar | http://example.com | http: |  |  | example.com | example.com |  | /%2e.bar |  |  true
+152 "http://example.com////../.." http://example.com// | http://example.com | http: |  |  | example.com | example.com |  | // |  |  true
+153 "http://example.com/foo/bar//../.." http://example.com/foo/ | http://example.com | http: |  |  | example.com | example.com |  | /foo/ |  |  true
+154 "http://example.com/foo/bar//.." http://example.com/foo/bar/ | http://example.com | http: |  |  | example.com | example.com |  | /foo/bar/ |  |  true
+155 "http://example.com/foo" http://example.com/foo | http://example.com | http: |  |  | example.com | example.com |  | /foo |  |  true
+156 "http://example.com/%20foo" http://example.com/%20foo | http://example.com | http: |  |  | example.com | example.com |  | /%20foo |  |  true
+157 "http://example.com/foo%" http://example.com/foo% | http://example.com | http: |  |  | example.com | example.com |  | /foo% |  |  true
+158 "http://example.com/foo%2" http://example.com/foo%2 | http://example.com | http: |  |  | example.com | example.com |  | /foo%2 |  |  true
+159 "http://example.com/foo%2zbar" http://example.com/foo%2zbar | http://example.com | http: |  |  | example.com | example.com |  | /foo%2zbar |  |  true
+160 "http://example.com/foo%2Â©zbar" http://example.com/foo%2%C3%82%C2%A9zbar | http://example.com | http: |  |  | example.com | example.com |  | /foo%2%C3%82%C2%A9zbar |  |  true
+161 "http://example.com/foo%41%7a" http://example.com/foo%41%7a | http://example.com | http: |  |  | example.com | example.com |  | /foo%41%7a |  |  true
+162 "http://example.com/foo\t%91" http://example.com/foo%C2%91%91 | http://example.com | http: |  |  | example.com | example.com |  | /foo%C2%91%91 |  |  true
+163 "http://example.com/foo%00%51" http://example.com/foo%00%51 | http://example.com | http: |  |  | example.com | example.com |  | /foo%00%51 |  |  true
+164 "http://example.com/(%28:%3A%29)" http://example.com/(%28:%3A%29) | http://example.com | http: |  |  | example.com | example.com |  | /(%28:%3A%29) |  |  true
+165 "http://example.com/%3A%3a%3C%3c" http://example.com/%3A%3a%3C%3c | http://example.com | http: |  |  | example.com | example.com |  | /%3A%3a%3C%3c |  |  true
+166 "http://example.com/foo\tbar" http://example.com/foobar | http://example.com | http: |  |  | example.com | example.com |  | /foobar |  |  true
+167 "http://example.com\\\\foo\\\\bar" http://example.com//foo//bar | http://example.com | http: |  |  | example.com | example.com |  | //foo//bar |  |  true
+168 "http://example.com/%7Ffp3%3Eju%3Dduvgw%3Dd" http://example.com/%7Ffp3%3Eju%3Dduvgw%3Dd | http://example.com | http: |  |  | example.com | example.com |  | /%7Ffp3%3Eju%3Dduvgw%3Dd |  |  true
+169 "http://example.com/@asdf%40" http://example.com/@asdf%40 | http://example.com | http: |  |  | example.com | example.com |  | /@asdf%40 |  |  true
+170 "http://example.com/你好你好" http://example.com/%E4%BD%A0%E5%A5%BD%E4%BD%A0%E5%A5%BD | http://example.com | http: |  |  | example.com | example.com |  | /%E4%BD%A0%E5%A5%BD%E4%BD%A0%E5%A5%BD |  |  true
+171 "http://example.com/‥/foo" http://example.com/%E2%80%A5/foo | http://example.com | http: |  |  | example.com | example.com |  | /%E2%80%A5/foo |  |  true
+172 "http://example.com/﻿/foo" http://example.com/%EF%BB%BF/foo | http://example.com | http: |  |  | example.com | example.com |  | /%EF%BB%BF/foo |  |  true
+173 "http://example.com/‮/foo/‭/bar" http://example.com/%E2%80%AE/foo/%E2%80%AD/bar | http://example.com | http: |  |  | example.com | example.com |  | /%E2%80%AE/foo/%E2%80%AD/bar |  |  true
+174 "http://www.google.com/foo?bar=baz#" http://www.google.com/foo?bar=baz# | http://www.google.com | http: |  |  | www.google.com | www.google.com |  | /foo | ?bar=baz |  true
+175 "http://www.google.com/foo?bar=baz# »" http://www.google.com/foo?bar=baz#%20%C2%BB | http://www.google.com | http: |  |  | www.google.com | www.google.com |  | /foo | ?bar=baz | #%20%C2%BB true
+176 "data:test# »" data:test#%20%C2%BB | null | data: |  |  |  |  |  | test |  | #%20%C2%BB true
+177 "http://www.google.com" http://www.google.com/ | http://www.google.com | http: |  |  | www.google.com | www.google.com |  | / |  |  true
+178 "http://192.0x00A80001" http://192.168.0.1/ | http://192.168.0.1 | http: |  |  | 192.168.0.1 | 192.168.0.1 |  | / |  |  true
+179 "http://www/foo%2Ehtml" http://www/foo%2Ehtml | http://www | http: |  |  | www | www |  | /foo%2Ehtml |  |  true
+180 "http://www/foo/%2E/html" http://www/foo/html | http://www | http: |  |  | www | www |  | /foo/html |  |  true
+181 "http://user:pass@/" failure false
+182 "http://%25DOMAIN:foobar@foodomain.com/" http://%25DOMAIN:foobar@foodomain.com/ | http://foodomain.com | http: | %25DOMAIN | foobar | foodomain.com | foodomain.com |  | / |  |  true
+183 "http:\\\\www.google.com\\foo" http://www.google.com/foo | http://www.google.com | http: |  |  | www.google.com | www.google.com |  | /foo |  |  true
+184 "http://foo:80/" http://foo/ | http://foo | http: |  |  | foo | foo |  | / |  |  true
+185 "http://foo:81/" http://foo:81/ | http://foo:81 | http: |  |  | foo:81 | foo | 81 | / |  |  true
+186 "httpa://foo:80/" httpa://foo:80/ | null | httpa: |  |  | foo:80 | foo | 80 | / |  |  true
+187 "http://foo:-80/" failure false
+188 "https://foo:443/" https://foo/ | https://foo | https: |  |  | foo | foo |  | / |  |  true
+189 "https://foo:80/" https://foo:80/ | https://foo:80 | https: |  |  | foo:80 | foo | 80 | / |  |  true
+190 "ftp://foo:21/" ftp://foo/ | ftp://foo | ftp: |  |  | foo | foo |  | / |  |  true
+191 "ftp://foo:80/" ftp://foo:80/ | ftp://foo:80 | ftp: |  |  | foo:80 | foo | 80 | / |  |  true
+192 "gopher://foo:70/" gopher://foo:70/ | null | gopher: |  |  | foo:70 | foo | 70 | / |  |  true
+193 "gopher://foo:443/" gopher://foo:443/ | null | gopher: |  |  | foo:443 | foo | 443 | / |  |  true
+194 "ws://foo:80/" ws://foo/ | ws://foo | ws: |  |  | foo | foo |  | / |  |  true
+195 "ws://foo:81/" ws://foo:81/ | ws://foo:81 | ws: |  |  | foo:81 | foo | 81 | / |  |  true
+196 "ws://foo:443/" ws://foo:443/ | ws://foo:443 | ws: |  |  | foo:443 | foo | 443 | / |  |  true
+197 "ws://foo:815/" ws://foo:815/ | ws://foo:815 | ws: |  |  | foo:815 | foo | 815 | / |  |  true
+198 "wss://foo:80/" wss://foo:80/ | wss://foo:80 | wss: |  |  | foo:80 | foo | 80 | / |  |  true
+199 "wss://foo:81/" wss://foo:81/ | wss://foo:81 | wss: |  |  | foo:81 | foo | 81 | / |  |  true
+200 "wss://foo:443/" wss://foo/ | wss://foo | wss: |  |  | foo | foo |  | / |  |  true
+201 "wss://foo:815/" wss://foo:815/ | wss://foo:815 | wss: |  |  | foo:815 | foo | 815 | / |  |  true
+202 "http:/example.com/" http://example.com/ | http://example.com | http: |  |  | example.com | example.com |  | / |  |  true
+203 "ftp:/example.com/" ftp://example.com/ | ftp://example.com | ftp: |  |  | example.com | example.com |  | / |  |  true
+204 "https:/example.com/" https://example.com/ | https://example.com | https: |  |  | example.com | example.com |  | / |  |  true
+205 "madeupscheme:/example.com/" madeupscheme:/example.com/ | null | madeupscheme: |  |  |  |  |  | /example.com/ |  |  true
+206 "file:/example.com/" file:///example.com/ | null | file: |  |  |  |  |  | /example.com/ |  |  true
+207 "ftps:/example.com/" ftps:/example.com/ | null | ftps: |  |  |  |  |  | /example.com/ |  |  true
+208 "gopher:/example.com/" gopher:/example.com/ | null | gopher: |  |  |  |  |  | /example.com/ |  |  true
+209 "ws:/example.com/" ws://example.com/ | ws://example.com | ws: |  |  | example.com | example.com |  | / |  |  true
+210 "wss:/example.com/" wss://example.com/ | wss://example.com | wss: |  |  | example.com | example.com |  | / |  |  true
+211 "data:/example.com/" data:/example.com/ | null | data: |  |  |  |  |  | /example.com/ |  |  true
+212 "javascript:/example.com/" javascript:/example.com/ | null | javascript: |  |  |  |  |  | /example.com/ |  |  true
+213 "mailto:/example.com/" mailto:/example.com/ | null | mailto: |  |  |  |  |  | /example.com/ |  |  true
+214 "http:example.com/" http://example.com/ | http://example.com | http: |  |  | example.com | example.com |  | / |  |  true
+215 "ftp:example.com/" ftp://example.com/ | ftp://example.com | ftp: |  |  | example.com | example.com |  | / |  |  true
+216 "https:example.com/" https://example.com/ | https://example.com | https: |  |  | example.com | example.com |  | / |  |  true
+217 "madeupscheme:example.com/" madeupscheme:example.com/ | null | madeupscheme: |  |  |  |  |  | example.com/ |  |  true
+218 "ftps:example.com/" ftps:example.com/ | null | ftps: |  |  |  |  |  | example.com/ |  |  true
+219 "gopher:example.com/" gopher:example.com/ | null | gopher: |  |  |  |  |  | example.com/ |  |  true
+220 "ws:example.com/" ws://example.com/ | ws://example.com | ws: |  |  | example.com | example.com |  | / |  |  true
+221 "wss:example.com/" wss://example.com/ | wss://example.com | wss: |  |  | example.com | example.com |  | / |  |  true
+222 "data:example.com/" data:example.com/ | null | data: |  |  |  |  |  | example.com/ |  |  true
+223 "javascript:example.com/" javascript:example.com/ | null | javascript: |  |  |  |  |  | example.com/ |  |  true
+224 "mailto:example.com/" mailto:example.com/ | null | mailto: |  |  |  |  |  | example.com/ |  |  true
+225 "https://example.com/aaa/bbb/%2e%2e?query" https://example.com/aaa/?query | https://example.com | https: |  |  | example.com | example.com |  | /aaa/ | ?query |  true
+226 "http:@www.example.com" http://www.example.com/ | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | / |  |  true
+227 "http:/@www.example.com" http://www.example.com/ | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | / |  |  true
+228 "http://@www.example.com" http://www.example.com/ | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | / |  |  true
+229 "http:a:b@www.example.com" http://a:b@www.example.com/ | http://www.example.com | http: | a | b | www.example.com | www.example.com |  | / |  |  true
+230 "http:/a:b@www.example.com" http://a:b@www.example.com/ | http://www.example.com | http: | a | b | www.example.com | www.example.com |  | / |  |  true
+231 "http://a:b@www.example.com" http://a:b@www.example.com/ | http://www.example.com | http: | a | b | www.example.com | www.example.com |  | / |  |  true
+232 "http://@pple.com" http://pple.com/ | http://pple.com | http: |  |  | pple.com | pple.com |  | / |  |  true
+233 "http::b@www.example.com" http://:b@www.example.com/ | http://www.example.com | http: |  | b | www.example.com | www.example.com |  | / |  |  true
+234 "http:/:b@www.example.com" http://:b@www.example.com/ | http://www.example.com | http: |  | b | www.example.com | www.example.com |  | / |  |  true
+235 "http://:b@www.example.com" http://:b@www.example.com/ | http://www.example.com | http: |  | b | www.example.com | www.example.com |  | / |  |  true
+236 "http:/:@/www.example.com" failure false
+237 "http://user@/www.example.com" failure false
+238 "http:@/www.example.com" failure false
+239 "http:/@/www.example.com" failure false
+240 "http://@/www.example.com" failure false
+241 "https:@/www.example.com" failure false
+242 "http:a:b@/www.example.com" failure false
+243 "http:/a:b@/www.example.com" failure false
+244 "http://a:b@/www.example.com" failure false
+245 "http::@/www.example.com" failure false
+246 "http:a:@www.example.com" http://a@www.example.com/ | http://www.example.com | http: | a |  | www.example.com | www.example.com |  | / |  |  true
+247 "http:/a:@www.example.com" http://a@www.example.com/ | http://www.example.com | http: | a |  | www.example.com | www.example.com |  | / |  |  true
+248 "http://a:@www.example.com" http://a@www.example.com/ | http://www.example.com | http: | a |  | www.example.com | www.example.com |  | / |  |  true
+249 "http://www.@pple.com" http://www.@pple.com/ | http://pple.com | http: | www. |  | pple.com | pple.com |  | / |  |  true
+250 "http:@:www.example.com" failure false
+251 "http:/@:www.example.com" failure false
+252 "http://@:www.example.com" failure false
+253 "http://:@www.example.com" http://www.example.com/ | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | / |  |  true
+254 "/" http://www.example.com/ | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | / |  |  true
+255 "/test.txt" http://www.example.com/test.txt | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | /test.txt |  |  true
+256 "." http://www.example.com/ | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | / |  |  true
+257 ".." http://www.example.com/ | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | / |  |  true
+258 "test.txt" http://www.example.com/test.txt | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | /test.txt |  |  true
+259 "./test.txt" http://www.example.com/test.txt | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | /test.txt |  |  true
+260 "../test.txt" http://www.example.com/test.txt | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | /test.txt |  |  true
+261 "../aaa/test.txt" http://www.example.com/aaa/test.txt | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | /aaa/test.txt |  |  true
+262 "../../test.txt" http://www.example.com/test.txt | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | /test.txt |  |  true
+263 "中/test.txt" http://www.example.com/%E4%B8%AD/test.txt | http://www.example.com | http: |  |  | www.example.com | www.example.com |  | /%E4%B8%AD/test.txt |  |  true
+264 "http://www.example2.com" http://www.example2.com/ | http://www.example2.com | http: |  |  | www.example2.com | www.example2.com |  | / |  |  true
+265 "//www.example2.com" http://www.example2.com/ | http://www.example2.com | http: |  |  | www.example2.com | www.example2.com |  | / |  |  true
+266 "file:..." file:///... | null | file: |  |  |  |  |  | /... |  |  true
+267 "file:.." file:/// | null | file: |  |  |  |  |  | / |  |  true
+268 "file:a" file:///a | null | file: |  |  |  |  |  | /a |  |  true
+269 "file:." file:/// | null | file: |  |  |  |  |  | / |  |  true
+270 "file:." file:/// | null | file: |  |  |  |  |  | / |  |  true
+271 "http://ExAmPlE.CoM" http://example.com/ | http://example.com | http: |  |  | example.com | example.com |  | / |  |  true
+272 "http://example example.com" failure false
+273 "http://Goo%20 goo%7C|.com" failure false
+274 "http://[]" failure false
+275 "http://[:]" failure false
+276 "http://GOO 　goo.com" failure false
+277 "http://GOO​⁠﻿goo.com" http://googoo.com/ | http://googoo.com | http: |  |  | googoo.com | googoo.com |  | / |  |  true
+278 "\u0000\u001b\u0004\u0012 http://example.com/\u001f \r " http://example.com/ | http://example.com | http: |  |  | example.com | example.com |  | / |  |  true
+279 "non-special:opaque  " non-special:opaque | null | non-special: |  |  |  |  |  | opaque |  |  true
+280 "non-special:opaque  ?hi" non-special:opaque  ?hi | null | non-special: |  |  |  |  |  | opaque   | ?hi |  true
+281 "non-special:opaque  #hi" non-special:opaque  #hi | null | non-special: |  |  |  |  |  | opaque   |  | #hi true
+282 "non-special:opaque  x?hi" non-special:opaque  x?hi | null | non-special: |  |  |  |  |  | opaque  x | ?hi |  true
+283 "non-special:opaque  x#hi" non-special:opaque  x#hi | null | non-special: |  |  |  |  |  | opaque  x |  | #hi true
+284 "non-special:opaque \t\t  \t#hi" non-special:opaque   #hi | null | non-special: |  |  |  |  |  | opaque    |  | #hi true
+285 "non-special:opaque \t\t  #hi" non-special:opaque   #hi | null | non-special: |  |  |  |  |  | opaque    |  | #hi true
+286 "non-special:opaque\t\t  \r #hi" non-special:opaque   #hi | null | non-special: |  |  |  |  |  | opaque    |  | #hi true
+287 "http://www.foo。bar.com" http://www.foo.bar.com/ | http://www.foo.bar.com | http: |  |  | www.foo.bar.com | www.foo.bar.com |  | / |  |  true
+288 "http://﷐zyx.com" failure false
+289 "http://%ef%b7%90zyx.com" failure false
+290 "https://�" failure false
+291 "https://%EF%BF%BD" failure false
+292 "https://x/�?�#�" https://x/%EF%BF%BD?%EF%BF%BD#%EF%BF%BD | https://x | https: |  |  | x | x |  | /%EF%BF%BD | ?%EF%BF%BD | #%EF%BF%BD true
+293 "http://a.b.c.xn--pokxncvks" failure false
+294 "http://10.0.0.xn--pokxncvks" failure false
+295 "http://a.b.c.XN--pokxncvks" failure false
+296 "http://a.b.c.Xn--pokxncvks" failure false
+297 "http://10.0.0.XN--pokxncvks" failure false
+298 "http://10.0.0.xN--pokxncvks" failure false
+299 "http://Ｇｏ.com" http://go.com/ | http://go.com | http: |  |  | go.com | go.com |  | / |  |  true
+300 "http://％４１.com" failure false
+301 "http://%ef%bc%85%ef%bc%94%ef%bc%91.com" failure false
+302 "http://％００.com" failure false
+303 "http://%ef%bc%85%ef%bc%90%ef%bc%90.com" failure false
+304 "http://你好你好" http://xn--6qqa088eba/ | http://xn--6qqa088eba | http: |  |  | xn--6qqa088eba | xn--6qqa088eba |  | / |  |  true
+305 "https://faß.ExAmPlE/" https://xn--fa-hia.example/ | https://xn--fa-hia.example | https: |  |  | xn--fa-hia.example | xn--fa-hia.example |  | / |  |  true
+306 "sc://faß.ExAmPlE/" sc://fa%C3%9F.ExAmPlE/ | null | sc: |  |  | fa%C3%9F.ExAmPlE | fa%C3%9F.ExAmPlE |  | / |  |  true
+307 "http://%zz%66%a.com" failure false
+308 "http://%25" failure false
+309 "http://hello%00" failure false
+310 "http://%30%78%63%30%2e%30%32%35%30.01" http://192.168.0.1/ | http://192.168.0.1 | http: |  |  | 192.168.0.1 | 192.168.0.1 |  | / |  |  true
+311 "http://%30%78%63%30%2e%30%32%35%30.01%2e" http://192.168.0.1/ | http://192.168.0.1 | http: |  |  | 192.168.0.1 | 192.168.0.1 |  | / |  |  true
+312 "http://192.168.0.257" failure false
+313 "http://%3g%78%63%30%2e%30%32%35%30%2E.01" failure false
+314 "http://192.168.0.1 hello" failure false
+315 "https://x x:12" failure false
+316 "http://０Ｘｃ０．０２５０．０１" http://192.168.0.1/ | http://192.168.0.1 | http: |  |  | 192.168.0.1 | 192.168.0.1 |  | / |  |  true
+317 "http://./" http://./ | http://. | http: |  |  | . | . |  | / |  |  true
+318 "http://../" http://../ | http://.. | http: |  |  | .. | .. |  | / |  |  true
+319 "h://." h://. | null | h: |  |  | . | . |  |  |  |  true
+320 "http://[www.google.com]/" failure false
+321 "http://[google.com]" failure false
+322 "http://[::1.2.3.4x]" failure false
+323 "http://[::1.2.3.]" failure false
+324 "http://[::1.2.]" failure false
+325 "http://[::.1.2]" failure false
+326 "http://[::1.]" failure false
+327 "http://[::.1]" failure false
+328 "http://[::%31]" failure false
+329 "http://%5B::1]" failure false
+330 "http://foo:💩@example.com/bar" http://foo:%F0%9F%92%A9@example.com/bar | http://example.com | http: | foo | %F0%9F%92%A9 | example.com | example.com |  | /bar |  |  true
+331 "http://😀x@host/" http://%F0%9F%98%80x@host/ | http://host | http: | %F0%9F%98%80x |  | host | host |  | / |  |  true
+332 "http://a:😀x@host/" http://a:%F0%9F%98%80x@host/ | http://host | http: | a | %F0%9F%98%80x | host | host |  | / |  |  true
+333 "http://😀@host/" http://%F0%9F%98%80@host/ | http://host | http: | %F0%9F%98%80 |  | host | host |  | / |  |  true
+334 "https://localhost?q=🔥" https://localhost/?q=%F0%9F%94%A5 | https://localhost | https: |  |  | localhost | localhost |  | / | ?q=%F0%9F%94%A5 |  true
+335 "https://localhost#🔥" https://localhost/#%F0%9F%94%A5 | https://localhost | https: |  |  | localhost | localhost |  | / |  | #%F0%9F%94%A5 true
+336 "#" test:test# | null | test: |  |  |  |  |  | test |  |  true
+337 "#x" mailto:x@x.com#x | null | mailto: |  |  |  |  |  | x@x.com |  | #x true
+338 "#x" data:,#x | null | data: |  |  |  |  |  | , |  | #x true
+339 "#x" about:blank#x | null | about: |  |  |  |  |  | blank |  | #x true
+340 "#x:y" about:blank#x:y | null | about: |  |  |  |  |  | blank |  | #x:y true
+341 "#" test:test?test# | null | test: |  |  |  |  |  | test | ?test |  true
+342 "https://@test@test@example:800/" https://%40test%40test@example:800/ | https://example:800 | https: | %40test%40test |  | example:800 | example | 800 | / |  |  true
+343 "https://@@@example" https://%40%40@example/ | https://example | https: | %40%40 |  | example | example |  | / |  |  true
+344 "http://`{}:`{}@h/`{}?`{}" http://%60%7B%7D:%60%7B%7D@h/%60%7B%7D?`{} | http://h | http: | %60%7B%7D | %60%7B%7D | h | h |  | /%60%7B%7D | ?`{} |  true
+345 "http://host/?'" http://host/?%27 | http://host | http: |  |  | host | host |  | / | ?%27 |  true
+346 "notspecial://host/?'" notspecial://host/?' | null | notspecial: |  |  | host | host |  | / | ?' |  true
+347 "/some/path" http://user@example.org/some/path | http://example.org | http: | user |  | example.org | example.org |  | /some/path |  |  true
+348 "" http://user:pass@example.org:21/smth | http://example.org:21 | http: | user | pass | example.org:21 | example.org | 21 | /smth |  |  true
+349 "/some/path" http://user:pass@example.org:21/some/path | http://example.org:21 | http: | user | pass | example.org:21 | example.org | 21 | /some/path |  |  true
+350 "i" failure false
+351 "i" failure false
+352 "i" sc:/pa/i | null | sc: |  |  |  |  |  | /pa/i |  |  true
+353 "i" sc://ho/i | null | sc: |  |  | ho | ho |  | /i |  |  true
+354 "i" sc:///pa/i | null | sc: |  |  |  |  |  | /pa/i |  |  true
+355 "../i" failure false
+356 "../i" failure false
+357 "../i" sc:/i | null | sc: |  |  |  |  |  | /i |  |  true
+358 "../i" sc://ho/i | null | sc: |  |  | ho | ho |  | /i |  |  true
+359 "../i" sc:///i | null | sc: |  |  |  |  |  | /i |  |  true
+360 "/i" failure false
+361 "/i" failure false
+362 "/i" sc:/i | null | sc: |  |  |  |  |  | /i |  |  true
+363 "/i" sc://ho/i | null | sc: |  |  | ho | ho |  | /i |  |  true
+364 "/i" sc:///i | null | sc: |  |  |  |  |  | /i |  |  true
+365 "?i" failure false
+366 "?i" failure false
+367 "?i" sc:/pa/pa?i | null | sc: |  |  |  |  |  | /pa/pa | ?i |  true
+368 "?i" sc://ho/pa?i | null | sc: |  |  | ho | ho |  | /pa | ?i |  true
+369 "?i" sc:///pa/pa?i | null | sc: |  |  |  |  |  | /pa/pa | ?i |  true
+370 "#i" sc:sd#i | null | sc: |  |  |  |  |  | sd |  | #i true
+371 "#i" sc:sd/sd#i | null | sc: |  |  |  |  |  | sd/sd |  | #i true
+372 "#i" sc:/pa/pa#i | null | sc: |  |  |  |  |  | /pa/pa |  | #i true
+373 "#i" sc://ho/pa#i | null | sc: |  |  | ho | ho |  | /pa |  | #i true
+374 "#i" sc:///pa/pa#i | null | sc: |  |  |  |  |  | /pa/pa |  | #i true
+375 "about:/../" about:/ | null | about: |  |  |  |  |  | / |  |  true
+376 "data:/../" data:/ | null | data: |  |  |  |  |  | / |  |  true
+377 "javascript:/../" javascript:/ | null | javascript: |  |  |  |  |  | / |  |  true
+378 "mailto:/../" mailto:/ | null | mailto: |  |  |  |  |  | / |  |  true
+379 "sc://ñ.test/" sc://%C3%B1.test/ | null | sc: |  |  | %C3%B1.test | %C3%B1.test |  | / |  |  true
+380 "sc://%/" sc://%/ | null | sc: |  |  | % | % |  | / |  |  true
+381 "sc://@/" failure false
+382 "sc://te@s:t@/" failure false
+383 "sc://:/" failure false
+384 "sc://:12/" failure false
+385 "x" sc://%C3%B1/x | null | sc: |  |  | %C3%B1 | %C3%B1 |  | /x |  |  true
+386 "sc:\\../" sc:\../ | null | sc: |  |  |  |  |  | \../ |  |  true
+387 "sc::a@example.net" sc::a@example.net | null | sc: |  |  |  |  |  | :a@example.net |  |  true
+388 "wow:%NBD" wow:%NBD | null | wow: |  |  |  |  |  | %NBD |  |  true
+389 "wow:%1G" wow:%1G | null | wow: |  |  |  |  |  | %1G |  |  true
+390 "wow:￿" wow:%EF%BF%BF | null | wow: |  |  |  |  |  | %EF%BF%BF |  |  true
+391 "sc://a\u0000b/" failure false
+392 "sc://a b/" failure false
+393 "sc://a<b" failure false
+394 "sc://a>b" failure false
+395 "sc://a[b/" failure false
+396 "sc://a\\b/" failure false
+397 "sc://a]b/" failure false
+398 "sc://a^b" failure false
+399 "sc://a|b/" failure false
+400 "foo://ho\tst/" foo://host/ | null | foo: |  |  | host | host |  | / |  |  true
+401 "foo://ho\nst/" foo://host/ | null | foo: |  |  | host | host |  | / |  |  true
+402 "foo://ho\rst/" foo://host/ | null | foo: |  |  | host | host |  | / |  |  true
+403 "http://a\u0000b/" failure false
+404 "http://a\u0001b/" failure false
+405 "http://a\u0002b/" failure false
+406 "http://a\u0003b/" failure false
+407 "http://a\u0004b/" failure false
+408 "http://a\u0005b/" failure false
+409 "http://a\u0006b/" failure false
+410 "http://a\u0007b/" failure false
+411 "http://a\bb/" failure false
+412 "http://a\u000bb/" failure false
+413 "http://a\fb/" failure false
+414 "http://a\u000eb/" failure false
+415 "http://a\u000fb/" failure false
+416 "http://a\u0010b/" failure false
+417 "http://a\u0011b/" failure false
+418 "http://a\u0012b/" failure false
+419 "http://a\u0013b/" failure false
+420 "http://a\u0014b/" failure false
+421 "http://a\u0015b/" failure false
+422 "http://a\u0016b/" failure false
+423 "http://a\u0017b/" failure false
+424 "http://a\u0018b/" failure false
+425 "http://a\u0019b/" failure false
+426 "http://a\u001ab/" failure false
+427 "http://a\u001bb/" failure false
+428 "http://a\u001cb/" failure false
+429 "http://a\u001db/" failure false
+430 "http://a\u001eb/" failure false
+431 "http://a\u001fb/" failure false
+432 "http://a b/" failure false
+433 "http://a%b/" failure false
+434 "http://a<b" failure false
+435 "http://a>b" failure false
+436 "http://a[b/" failure false
+437 "http://a]b/" failure false
+438 "http://a^b" failure false
+439 "http://a|b/" failure false
+440 "http://ab/" failure false
+441 "http://ho\tst/" http://host/ | http://host | http: |  |  | host | host |  | / |  |  true
+442 "http://ho\nst/" http://host/ | http://host | http: |  |  | host | host |  | / |  |  true
+443 "http://ho\rst/" http://host/ | http://host | http: |  |  | host | host |  | / |  |  true
+444 "http://ho%00st/" failure false
+445 "http://ho%01st/" failure false
+446 "http://ho%02st/" failure false
+447 "http://ho%03st/" failure false
+448 "http://ho%04st/" failure false
+449 "http://ho%05st/" failure false
+450 "http://ho%06st/" failure false
+451 "http://ho%07st/" failure false
+452 "http://ho%08st/" failure false
+453 "http://ho%09st/" failure false
+454 "http://ho%0Ast/" failure false
+455 "http://ho%0Bst/" failure false
+456 "http://ho%0Cst/" failure false
+457 "http://ho%0Dst/" failure false
+458 "http://ho%0Est/" failure false
+459 "http://ho%0Fst/" failure false
+460 "http://ho%10st/" failure false
+461 "http://ho%11st/" failure false
+462 "http://ho%12st/" failure false
+463 "http://ho%13st/" failure false
+464 "http://ho%14st/" failure false
+465 "http://ho%15st/" failure false
+466 "http://ho%16st/" failure false
+467 "http://ho%17st/" failure false
+468 "http://ho%18st/" failure false
+469 "http://ho%19st/" failure false
+470 "http://ho%1Ast/" failure false
+471 "http://ho%1Bst/" failure false
+472 "http://ho%1Cst/" failure false
+473 "http://ho%1Dst/" failure false
+474 "http://ho%1Est/" failure false
+475 "http://ho%1Fst/" failure false
+476 "http://ho%20st/" failure false
+477 "http://ho%23st/" failure false
+478 "http://ho%25st/" failure false
+479 "http://ho%2Fst/" failure false
+480 "http://ho%3Ast/" failure false
+481 "http://ho%3Cst/" failure false
+482 "http://ho%3Est/" failure false
+483 "http://ho%3Fst/" failure false
+484 "http://ho%40st/" failure false
+485 "http://ho%5Bst/" failure false
+486 "http://ho%5Cst/" failure false
+487 "http://ho%5Dst/" failure false
+488 "http://ho%7Cst/" failure false
+489 "http://ho%7Fst/" failure false
+490 "http://!\"$&'()*+,-.;=_`{}~/" http://!"$&'()*+,-.;=_`{}~/ | http://!"$&'()*+,-.;=_`{}~ | http: |  |  | !"$&'()*+,-.;=_`{}~ | !"$&'()*+,-.;=_`{}~ |  | / |  |  true
+491 "sc://\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\u000b\f\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f!\"$%&'()*+,-.;=_`{}~/" sc://%01%02%03%04%05%06%07%08%0B%0C%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F%7F!"$%&'()*+,-.;=_`{}~/ | null | sc: |  |  | %01%02%03%04%05%06%07%08%0B%0C%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F%7F!"$%&'()*+,-.;=_`{}~ | %01%02%03%04%05%06%07%08%0B%0C%0E%0F%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F%7F!"$%&'()*+,-.;=_`{}~ |  | / |  |  true
+492 "ftp://example.com%80/" failure false
+493 "ftp://example.com%A0/" failure false
+494 "https://example.com%80/" failure false
+495 "https://example.com%A0/" failure false
+496 "ftp://%e2%98%83" ftp://xn--n3h/ | ftp://xn--n3h | ftp: |  |  | xn--n3h | xn--n3h |  | / |  |  true
+497 "https://%e2%98%83" https://xn--n3h/ | https://xn--n3h | https: |  |  | xn--n3h | xn--n3h |  | / |  |  true
+498 "http://127.0.0.1:10100/relative_import.html" http://127.0.0.1:10100/relative_import.html | http://127.0.0.1:10100 | http: |  |  | 127.0.0.1:10100 | 127.0.0.1 | 10100 | /relative_import.html |  |  true
+499 "http://facebook.com/?foo=%7B%22abc%22" http://facebook.com/?foo=%7B%22abc%22 | http://facebook.com | http: |  |  | facebook.com | facebook.com |  | / | ?foo=%7B%22abc%22 |  true
+500 "https://localhost:3000/jqueryui@1.2.3" https://localhost:3000/jqueryui@1.2.3 | https://localhost:3000 | https: |  |  | localhost:3000 | localhost | 3000 | /jqueryui@1.2.3 |  |  true
+501 "h\tt\nt\rp://h\to\ns\rt:9\t0\n0\r0/p\ta\nt\rh?q\tu\ne\rry#f\tr\na\rg" http://host:9000/path?query#frag | http://host:9000 | http: |  |  | host:9000 | host | 9000 | /path | ?query | #frag true
+502 "?a=b&c=d" http://example.org/foo/bar?a=b&c=d | http://example.org | http: |  |  | example.org | example.org |  | /foo/bar | ?a=b&c=d |  true
+503 "??a=b&c=d" http://example.org/foo/bar??a=b&c=d | http://example.org | http: |  |  | example.org | example.org |  | /foo/bar | ??a=b&c=d |  true
+504 "http:" http://example.org/foo/bar | http://example.org | http: |  |  | example.org | example.org |  | /foo/bar |  |  true
+505 "http:" failure false
+506 "sc:" sc: | null | sc: |  |  |  |  |  |  |  |  true
+507 "http://foo.bar/baz?qux#foo\bbar" http://foo.bar/baz?qux#foo%08bar | http://foo.bar | http: |  |  | foo.bar | foo.bar |  | /baz | ?qux | #foo%08bar true
+508 "http://foo.bar/baz?qux#foo\"bar" http://foo.bar/baz?qux#foo%22bar | http://foo.bar | http: |  |  | foo.bar | foo.bar |  | /baz | ?qux | #foo%22bar true
+509 "http://foo.bar/baz?qux#foo<bar" http://foo.bar/baz?qux#foo%3Cbar | http://foo.bar | http: |  |  | foo.bar | foo.bar |  | /baz | ?qux | #foo%3Cbar true
+510 "http://foo.bar/baz?qux#foo>bar" http://foo.bar/baz?qux#foo%3Ebar | http://foo.bar | http: |  |  | foo.bar | foo.bar |  | /baz | ?qux | #foo%3Ebar true
+511 "http://foo.bar/baz?qux#foo`bar" http://foo.bar/baz?qux#foo%60bar | http://foo.bar | http: |  |  | foo.bar | foo.bar |  | /baz | ?qux | #foo%60bar true
+512 "http://1.2.3.4/" http://1.2.3.4/ | http://1.2.3.4 | http: |  |  | 1.2.3.4 | 1.2.3.4 |  | / |  |  true
+513 "http://1.2.3.4./" http://1.2.3.4/ | http://1.2.3.4 | http: |  |  | 1.2.3.4 | 1.2.3.4 |  | / |  |  true
+514 "http://192.168.257" http://192.168.1.1/ | http://192.168.1.1 | http: |  |  | 192.168.1.1 | 192.168.1.1 |  | / |  |  true
+515 "http://192.168.257." http://192.168.1.1/ | http://192.168.1.1 | http: |  |  | 192.168.1.1 | 192.168.1.1 |  | / |  |  true
+516 "http://192.168.257.com" http://192.168.257.com/ | http://192.168.257.com | http: |  |  | 192.168.257.com | 192.168.257.com |  | / |  |  true
+517 "http://256" http://0.0.1.0/ | http://0.0.1.0 | http: |  |  | 0.0.1.0 | 0.0.1.0 |  | / |  |  true
+518 "http://256.com" http://256.com/ | http://256.com | http: |  |  | 256.com | 256.com |  | / |  |  true
+519 "http://999999999" http://59.154.201.255/ | http://59.154.201.255 | http: |  |  | 59.154.201.255 | 59.154.201.255 |  | / |  |  true
+520 "http://999999999." http://59.154.201.255/ | http://59.154.201.255 | http: |  |  | 59.154.201.255 | 59.154.201.255 |  | / |  |  true
+521 "http://999999999.com" http://999999999.com/ | http://999999999.com | http: |  |  | 999999999.com | 999999999.com |  | / |  |  true
+522 "http://10000000000" failure false
+523 "http://10000000000.com" http://10000000000.com/ | http://10000000000.com | http: |  |  | 10000000000.com | 10000000000.com |  | / |  |  true
+524 "http://4294967295" http://255.255.255.255/ | http://255.255.255.255 | http: |  |  | 255.255.255.255 | 255.255.255.255 |  | / |  |  true
+525 "http://4294967296" failure false
+526 "http://18446744073709551616" failure false
+527 "http://18446744075840258049" failure false
+528 "http://0xffffffff" http://255.255.255.255/ | http://255.255.255.255 | http: |  |  | 255.255.255.255 | 255.255.255.255 |  | / |  |  true
+529 "http://0xffffffff1" failure false
+530 "http://256.256.256.256" failure false
+531 "https://0x.0x.0" https://0.0.0.0/ | https://0.0.0.0 | https: |  |  | 0.0.0.0 | 0.0.0.0 |  | / |  |  true
+532 "https://0x.0x.0x.0x" https://0.0.0.0/ | https://0.0.0.0 | https: |  |  | 0.0.0.0 | 0.0.0.0 |  | / |  |  true
+533 "https://00.00.00.00" https://0.0.0.0/ | https://0.0.0.0 | https: |  |  | 0.0.0.0 | 0.0.0.0 |  | / |  |  true
+534 "https://0000000000000000000000000000000000000000177.0.0.1" https://127.0.0.1/ | https://127.0.0.1 | https: |  |  | 127.0.0.1 | 127.0.0.1 |  | / |  |  true
+535 "https://0x100000000/test" failure false
+536 "https://256.0.0.1/test" failure false
+537 "file:///C%3A/" file:///C%3A/ | null | file: |  |  |  |  |  | /C%3A/ |  |  true
+538 "file:///C%7C/" file:///C%7C/ | null | file: |  |  |  |  |  | /C%7C/ |  |  true
+539 "file://%43%3A" failure false
+540 "file://%43%7C" failure false
+541 "file://%43|" failure false
+542 "file://C%7C" failure false
+543 "file://%43%7C/" failure false
+544 "https://%43%7C/" failure false
+545 "asdf://%43|/" failure false
+546 "asdf://%43%7C/" asdf://%43%7C/ | null | asdf: |  |  | %43%7C | %43%7C |  | / |  |  true
+547 "pix/submit.gif" file:///C:/Users/Domenic/Dropbox/GitHub/tmpvar/jsdom/test/level2/html/files/pix/submit.gif | null | file: |  |  |  |  |  | /C:/Users/Domenic/Dropbox/GitHub/tmpvar/jsdom/test/level2/html/files/pix/submit.gif |  |  true
+548 ".." file:///C:/ | null | file: |  |  |  |  |  | /C:/ |  |  true
+549 ".." file:/// | null | file: |  |  |  |  |  | / |  |  true
+550 "/" file:///C:/ | null | file: |  |  |  |  |  | /C:/ |  |  true
+551 "/" file://h/C:/ | null | file: |  |  | h | h |  | /C:/ |  |  true
+552 "/" file://h/ | null | file: |  |  | h | h |  | / |  |  true
+553 "//d:" file:///d: | null | file: |  |  |  |  |  | /d: |  |  true
+554 "//d:/.." file:///d:/ | null | file: |  |  |  |  |  | /d:/ |  |  true
+555 ".." file:/// | null | file: |  |  |  |  |  | / |  |  true
+556 ".." file:/// | null | file: |  |  |  |  |  | / |  |  true
+557 "" file:///test?test | null | file: |  |  |  |  |  | /test | ?test |  true
+558 "file:" file:///test?test | null | file: |  |  |  |  |  | /test | ?test |  true
+559 "?x" file:///test?x | null | file: |  |  |  |  |  | /test | ?x |  true
+560 "file:?x" file:///test?x | null | file: |  |  |  |  |  | /test | ?x |  true
+561 "#x" file:///test?test#x | null | file: |  |  |  |  |  | /test | ?test | #x true
+562 "file:#x" file:///test?test#x | null | file: |  |  |  |  |  | /test | ?test | #x true
+563 "file:\\\\//" file://// | null | file: |  |  |  |  |  | // |  |  true
+564 "file:\\\\\\\\" file://// | null | file: |  |  |  |  |  | // |  |  true
+565 "file:\\\\\\\\?fox" file:////?fox | null | file: |  |  |  |  |  | // | ?fox |  true
+566 "file:\\\\\\\\#guppy" file:////#guppy | null | file: |  |  |  |  |  | // |  | #guppy true
+567 "file://spider///" file://spider/// | null | file: |  |  | spider | spider |  | /// |  |  true
+568 "file:\\\\localhost//" file://// | null | file: |  |  |  |  |  | // |  |  true
+569 "file:///localhost//cat" file:///localhost//cat | null | file: |  |  |  |  |  | /localhost//cat |  |  true
+570 "file://\\/localhost//cat" file:////localhost//cat | null | file: |  |  |  |  |  | //localhost//cat |  |  true
+571 "file://localhost//a//../..//" file:///// | null | file: |  |  |  |  |  | /// |  |  true
+572 "/////mouse" file://///mouse | null | file: |  |  |  |  |  | ///mouse |  |  true
+573 "\\//pig" file:///pig | null | file: |  |  |  |  |  | /pig |  |  true
+574 "\\/localhost//pig" file:////pig | null | file: |  |  |  |  |  | //pig |  |  true
+575 "//localhost//pig" file:////pig | null | file: |  |  |  |  |  | //pig |  |  true
+576 "/..//localhost//pig" file://lion//localhost//pig | null | file: |  |  | lion | lion |  | //localhost//pig |  |  true
+577 "file://" file:/// | null | file: |  |  |  |  |  | / |  |  true
+578 "/rooibos" file://tea/rooibos | null | file: |  |  | tea | tea |  | /rooibos |  |  true
+579 "/?chai" file://tea/?chai | null | file: |  |  | tea | tea |  | / | ?chai |  true
+580 "C|" file://host/C: | null | file: |  |  | host | host |  | /C: |  |  true
+581 "C|" file://host/C: | null | file: |  |  | host | host |  | /C: |  |  true
+582 "C|#" file://host/C:# | null | file: |  |  | host | host |  | /C: |  |  true
+583 "C|?" file://host/C:? | null | file: |  |  | host | host |  | /C: |  |  true
+584 "C|/" file://host/C:/ | null | file: |  |  | host | host |  | /C:/ |  |  true
+585 "C|\n/" file://host/C:/ | null | file: |  |  | host | host |  | /C:/ |  |  true
+586 "C|\\" file://host/C:/ | null | file: |  |  | host | host |  | /C:/ |  |  true
+587 "C" file://host/dir/C | null | file: |  |  | host | host |  | /dir/C |  |  true
+588 "C|a" file://host/dir/C|a | null | file: |  |  | host | host |  | /dir/C|a |  |  true
+589 "/c:/foo/bar" file:///c:/foo/bar | null | file: |  |  |  |  |  | /c:/foo/bar |  |  true
+590 "/c|/foo/bar" file:///c:/foo/bar | null | file: |  |  |  |  |  | /c:/foo/bar |  |  true
+591 "file:\\c:\\foo\\bar" file:///c:/foo/bar | null | file: |  |  |  |  |  | /c:/foo/bar |  |  true
+592 "/c:/foo/bar" file://host/c:/foo/bar | null | file: |  |  | host | host |  | /c:/foo/bar |  |  true
+593 ".." abc://x/y/z/ | null | abc: |  |  | x | x |  | /y/z/ |  |  true
+594 ".." file://x/C:/ | null | file: |  |  | x | x |  | /C:/ |  |  true
+595 "file://example.net/C:/" file://example.net/C:/ | null | file: |  |  | example.net | example.net |  | /C:/ |  |  true
+596 "file://1.2.3.4/C:/" file://1.2.3.4/C:/ | null | file: |  |  | 1.2.3.4 | 1.2.3.4 |  | /C:/ |  |  true
+597 "file://[1::8]/C:/" file://[1::8]/C:/ | null | file: |  |  | [1::8] | [1::8] |  | /C:/ |  |  true
+598 "C|/" file://host/C:/ | null | file: |  |  | host | host |  | /C:/ |  |  true
+599 "/C:/" file://host/C:/ | null | file: |  |  | host | host |  | /C:/ |  |  true
+600 "file:C:/" file://host/C:/ | null | file: |  |  | host | host |  | /C:/ |  |  true
+601 "file:/C:/" file://host/C:/ | null | file: |  |  | host | host |  | /C:/ |  |  true
+602 "//C:/" file:///C:/ | null | file: |  |  |  |  |  | /C:/ |  |  true
+603 "file://C:/" file:///C:/ | null | file: |  |  |  |  |  | /C:/ |  |  true
+604 "///C:/" file:///C:/ | null | file: |  |  |  |  |  | /C:/ |  |  true
+605 "file:///C:/" file:///C:/ | null | file: |  |  |  |  |  | /C:/ |  |  true
+606 "file:/C|/" file:///C:/ | null | file: |  |  |  |  |  | /C:/ |  |  true
+607 "file://C|/" file:///C:/ | null | file: |  |  |  |  |  | /C:/ |  |  true
+608 "file:" file:/// | null | file: |  |  |  |  |  | / |  |  true
+609 "file:?q=v" file:///?q=v | null | file: |  |  |  |  |  | / | ?q=v |  true
+610 "file:#frag" file:///#frag | null | file: |  |  |  |  |  | / |  | #frag true
+611 "file:///Y:" file:///Y: | null | file: |  |  |  |  |  | /Y: |  |  true
+612 "file:///Y:/" file:///Y:/ | null | file: |  |  |  |  |  | /Y:/ |  |  true
+613 "file:///./Y" file:///Y | null | file: |  |  |  |  |  | /Y |  |  true
+614 "file:///./Y:" file:///Y: | null | file: |  |  |  |  |  | /Y: |  |  true
+615 "\\\\\\.\\Y:" failure false
+616 "file:///y:" file:///y: | null | file: |  |  |  |  |  | /y: |  |  true
+617 "file:///y:/" file:///y:/ | null | file: |  |  |  |  |  | /y:/ |  |  true
+618 "file:///./y" file:///y | null | file: |  |  |  |  |  | /y |  |  true
+619 "file:///./y:" file:///y: | null | file: |  |  |  |  |  | /y: |  |  true
+620 "\\\\\\.\\y:" failure false
+621 "file://localhost//a//../..//foo" file://///foo | null | file: |  |  |  |  |  | ///foo |  |  true
+622 "file://localhost////foo" file://////foo | null | file: |  |  |  |  |  | ////foo |  |  true
+623 "file:////foo" file:////foo | null | file: |  |  |  |  |  | //foo |  |  true
+624 "file:///one/two" file:///one/two | null | file: |  |  |  |  |  | /one/two |  |  true
+625 "file:////one/two" file:////one/two | null | file: |  |  |  |  |  | //one/two |  |  true
+626 "//one/two" file://one/two | null | file: |  |  | one | one |  | /two |  |  true
+627 "///one/two" file:///one/two | null | file: |  |  |  |  |  | /one/two |  |  true
+628 "////one/two" file:////one/two | null | file: |  |  |  |  |  | //one/two |  |  true
+629 "file:///.//" file://// | null | file: |  |  |  |  |  | // |  |  true
+630 "file:.//p" file:////p | null | file: |  |  |  |  |  | //p |  |  true
+631 "file:/.//p" file:////p | null | file: |  |  |  |  |  | //p |  |  true
+632 "https://[0:1:2:3:4:5:192.0.02.1]/" failure false
+633 "https://[192.0.2.1::]/" failure false
+634 "http://[1:0::]" http://[1::]/ | http://[1::] | http: |  |  | [1::] | [1::] |  | / |  |  true
+635 "http://[0:1:2:3:4:5:6:7:8]" failure false
+636 "https://[0::0::0]" failure false
+637 "https://[0:.0]" failure false
+638 "https://[0:0:]" failure false
+639 "https://[0:1:2:3:4:5:6:7.0.0.0.1]" failure false
+640 "https://[0:1.00.0.0.0]" failure false
+641 "https://[0:1.290.0.0.0]" failure false
+642 "https://[0:1.23.23]" failure false
+643 "http://?" failure false
+644 "http://#" failure false
+645 "http://f:4294967377/c" failure false
+646 "http://f:18446744073709551697/c" failure false
+647 "http://f:340282366920938463463374607431768211537/c" failure false
+648 "sc://ñ" sc://%C3%B1 | null | sc: |  |  | %C3%B1 | %C3%B1 |  |  |  |  true
+649 "sc://ñ?x" sc://%C3%B1?x | null | sc: |  |  | %C3%B1 | %C3%B1 |  |  | ?x |  true
+650 "sc://ñ#x" sc://%C3%B1#x | null | sc: |  |  | %C3%B1 | %C3%B1 |  |  |  | #x true
+651 "#x" sc://%C3%B1#x | null | sc: |  |  | %C3%B1 | %C3%B1 |  |  |  | #x true
+652 "?x" sc://%C3%B1?x | null | sc: |  |  | %C3%B1 | %C3%B1 |  |  | ?x |  true
+653 "sc://?" sc://? | null | sc: |  |  |  |  |  |  |  |  true
+654 "sc://#" sc://# | null | sc: |  |  |  |  |  |  |  |  true
+655 "///" sc:/// | null | sc: |  |  |  |  |  | / |  |  true
+656 "////" sc://// | null | sc: |  |  |  |  |  | // |  |  true
+657 "////x/" sc:////x/ | null | sc: |  |  |  |  |  | //x/ |  |  true
+658 "tftp://foobar.com/someconfig;mode=netascii" tftp://foobar.com/someconfig;mode=netascii | null | tftp: |  |  | foobar.com | foobar.com |  | /someconfig;mode=netascii |  |  true
+659 "telnet://user:pass@foobar.com:23/" telnet://user:pass@foobar.com:23/ | null | telnet: | user | pass | foobar.com:23 | foobar.com | 23 | / |  |  true
+660 "ut2004://10.10.10.10:7777/Index.ut2" ut2004://10.10.10.10:7777/Index.ut2 | null | ut2004: |  |  | 10.10.10.10:7777 | 10.10.10.10 | 7777 | /Index.ut2 |  |  true
+661 "redis://foo:bar@somehost:6379/0?baz=bam&qux=baz" redis://foo:bar@somehost:6379/0?baz=bam&qux=baz | null | redis: | foo | bar | somehost:6379 | somehost | 6379 | /0 | ?baz=bam&qux=baz |  true
+662 "rsync://foo@host:911/sup" rsync://foo@host:911/sup | null | rsync: | foo |  | host:911 | host | 911 | /sup |  |  true
+663 "git://github.com/foo/bar.git" git://github.com/foo/bar.git | null | git: |  |  | github.com | github.com |  | /foo/bar.git |  |  true
+664 "irc://myserver.com:6999/channel?passwd" irc://myserver.com:6999/channel?passwd | null | irc: |  |  | myserver.com:6999 | myserver.com | 6999 | /channel | ?passwd |  true
+665 "dns://fw.example.org:9999/foo.bar.org?type=TXT" dns://fw.example.org:9999/foo.bar.org?type=TXT | null | dns: |  |  | fw.example.org:9999 | fw.example.org | 9999 | /foo.bar.org | ?type=TXT |  true
+666 "ldap://localhost:389/ou=People,o=JNDITutorial" ldap://localhost:389/ou=People,o=JNDITutorial | null | ldap: |  |  | localhost:389 | localhost | 389 | /ou=People,o=JNDITutorial |  |  true
+667 "git+https://github.com/foo/bar" git+https://github.com/foo/bar | null | git+https: |  |  | github.com | github.com |  | /foo/bar |  |  true
+668 "urn:ietf:rfc:2648" urn:ietf:rfc:2648 | null | urn: |  |  |  |  |  | ietf:rfc:2648 |  |  true
+669 "tag:joe@example.org,2001:foo/bar" tag:joe@example.org,2001:foo/bar | null | tag: |  |  |  |  |  | joe@example.org,2001:foo/bar |  |  true
+670 "non-spec:/.//" non-spec:/.// | null | non-spec: |  |  |  |  |  | // |  |  true
+671 "non-spec:/..//" non-spec:/.// | null | non-spec: |  |  |  |  |  | // |  |  true
+672 "non-spec:/a/..//" non-spec:/.// | null | non-spec: |  |  |  |  |  | // |  |  true
+673 "non-spec:/.//path" non-spec:/.//path | null | non-spec: |  |  |  |  |  | //path |  |  true
+674 "non-spec:/..//path" non-spec:/.//path | null | non-spec: |  |  |  |  |  | //path |  |  true
+675 "non-spec:/a/..//path" non-spec:/.//path | null | non-spec: |  |  |  |  |  | //path |  |  true
+676 "/.//path" non-spec:/.//path | null | non-spec: |  |  |  |  |  | //path |  |  true
+677 "/..//path" non-spec:/.//path | null | non-spec: |  |  |  |  |  | //path |  |  true
+678 "..//path" non-spec:/.//path | null | non-spec: |  |  |  |  |  | //path |  |  true
+679 "a/..//path" non-spec:/.//path | null | non-spec: |  |  |  |  |  | //path |  |  true
+680 "" non-spec:/.//p | null | non-spec: |  |  |  |  |  | //p |  |  true
+681 "path" non-spec:/.//path | null | non-spec: |  |  |  |  |  | //path |  |  true
+682 "../path" non-spec:/path | null | non-spec: |  |  |  |  |  | /path |  |  true
+683 "non-special://%E2%80%A0/" non-special://%E2%80%A0/ | null | non-special: |  |  | %E2%80%A0 | %E2%80%A0 |  | / |  |  true
+684 "non-special://H%4fSt/path" non-special://H%4fSt/path | null | non-special: |  |  | H%4fSt | H%4fSt |  | /path |  |  true
+685 "non-special://[1:2:0:0:5:0:0:0]/" non-special://[1:2:0:0:5::]/ | null | non-special: |  |  | [1:2:0:0:5::] | [1:2:0:0:5::] |  | / |  |  true
+686 "non-special://[1:2:0:0:0:0:0:3]/" non-special://[1:2::3]/ | null | non-special: |  |  | [1:2::3] | [1:2::3] |  | / |  |  true
+687 "non-special://[1:2::3]:80/" non-special://[1:2::3]:80/ | null | non-special: |  |  | [1:2::3]:80 | [1:2::3] | 80 | / |  |  true
+688 "non-special://[:80/" failure false
+689 "blob:https://example.com:443/" blob:https://example.com:443/ | https://example.com | blob: |  |  |  |  |  | https://example.com:443/ |  |  true
+690 "blob:http://example.org:88/" blob:http://example.org:88/ | http://example.org:88 | blob: |  |  |  |  |  | http://example.org:88/ |  |  true
+691 "blob:d3958f5c-0777-0845-9dcf-2cb28783acaf" blob:d3958f5c-0777-0845-9dcf-2cb28783acaf | null | blob: |  |  |  |  |  | d3958f5c-0777-0845-9dcf-2cb28783acaf |  |  true
+692 "blob:" blob: | null | blob: |  |  |  |  |  |  |  |  true
+693 "blob:blob:" blob:blob: | null | blob: |  |  |  |  |  | blob: |  |  true
+694 "blob:blob:https://example.org/" blob:blob:https://example.org/ | null | blob: |  |  |  |  |  | blob:https://example.org/ |  |  true
+695 "blob:about:blank" blob:about:blank | null | blob: |  |  |  |  |  | about:blank |  |  true
+696 "blob:file://host/path" blob:file://host/path | null | blob: |  |  |  |  |  | file://host/path |  |  true
+697 "blob:ftp://host/path" blob:ftp://host/path | null | blob: |  |  |  |  |  | ftp://host/path |  |  true
+698 "blob:ws://example.org/" blob:ws://example.org/ | null | blob: |  |  |  |  |  | ws://example.org/ |  |  true
+699 "blob:wss://example.org/" blob:wss://example.org/ | null | blob: |  |  |  |  |  | wss://example.org/ |  |  true
+700 "blob:http%3a//example.org/" blob:http%3a//example.org/ | null | blob: |  |  |  |  |  | http%3a//example.org/ |  |  true
+701 "http://0x7f.0.0.0x7g" http://0x7f.0.0.0x7g/ | http://0x7f.0.0.0x7g | http: |  |  | 0x7f.0.0.0x7g | 0x7f.0.0.0x7g |  | / |  |  true
+702 "http://0X7F.0.0.0X7G" http://0x7f.0.0.0x7g/ | http://0x7f.0.0.0x7g | http: |  |  | 0x7f.0.0.0x7g | 0x7f.0.0.0x7g |  | / |  |  true
+703 "http://[::127.0.0.0.1]" failure false
+704 "http://[0:1:0:1:0:1:0:1]" http://[0:1:0:1:0:1:0:1]/ | http://[0:1:0:1:0:1:0:1] | http: |  |  | [0:1:0:1:0:1:0:1] | [0:1:0:1:0:1:0:1] |  | / |  |  true
+705 "http://[1:0:1:0:1:0:1:0]" http://[1:0:1:0:1:0:1:0]/ | http://[1:0:1:0:1:0:1:0] | http: |  |  | [1:0:1:0:1:0:1:0] | [1:0:1:0:1:0:1:0] |  | / |  |  true
+706 "http://example.org/test?\"" http://example.org/test?%22 | http://example.org | http: |  |  | example.org | example.org |  | /test | ?%22 |  true
+707 "http://example.org/test?#" http://example.org/test?# | http://example.org | http: |  |  | example.org | example.org |  | /test |  |  true
+708 "http://example.org/test?<" http://example.org/test?%3C | http://example.org | http: |  |  | example.org | example.org |  | /test | ?%3C |  true
+709 "http://example.org/test?>" http://example.org/test?%3E | http://example.org | http: |  |  | example.org | example.org |  | /test | ?%3E |  true
+710 "http://example.org/test?⌣" http://example.org/test?%E2%8C%A3 | http://example.org | http: |  |  | example.org | example.org |  | /test | ?%E2%8C%A3 |  true
+711 "http://example.org/test?%23%23" http://example.org/test?%23%23 | http://example.org | http: |  |  | example.org | example.org |  | /test | ?%23%23 |  true
+712 "http://example.org/test?%GH" http://example.org/test?%GH | http://example.org | http: |  |  | example.org | example.org |  | /test | ?%GH |  true
+713 "http://example.org/test?a#%EF" http://example.org/test?a#%EF | http://example.org | http: |  |  | example.org | example.org |  | /test | ?a | #%EF true
+714 "http://example.org/test?a#%GH" http://example.org/test?a#%GH | http://example.org | http: |  |  | example.org | example.org |  | /test | ?a | #%GH true
+715 "a" failure false
+716 "a/" failure false
+717 "a//" failure false
+718 "test-a-colon.html" failure false
+719 "test-a-colon-b.html" failure false
+720 "test-a-colon-slash.html" a:/test-a-colon-slash.html | null | a: |  |  |  |  |  | /test-a-colon-slash.html |  |  true
+721 "test-a-colon-slash-slash.html" a:///test-a-colon-slash-slash.html | null | a: |  |  |  |  |  | /test-a-colon-slash-slash.html |  |  true
+722 "test-a-colon-slash-b.html" a:/test-a-colon-slash-b.html | null | a: |  |  |  |  |  | /test-a-colon-slash-b.html |  |  true
+723 "test-a-colon-slash-slash-b.html" a://b/test-a-colon-slash-slash-b.html | null | a: |  |  | b | b |  | /test-a-colon-slash-slash-b.html |  |  true
+724 "http://example.org/test?a#b\u0000c" http://example.org/test?a#b%00c | http://example.org | http: |  |  | example.org | example.org |  | /test | ?a | #b%00c true
+725 "non-spec://example.org/test?a#b\u0000c" non-spec://example.org/test?a#b%00c | null | non-spec: |  |  | example.org | example.org |  | /test | ?a | #b%00c true
+726 "non-spec:/test?a#b\u0000c" non-spec:/test?a#b%00c | null | non-spec: |  |  |  |  |  | /test | ?a | #b%00c true
+727 "10.0.0.7:8080/foo.html" file:///some/dir/10.0.0.7:8080/foo.html | null | file: |  |  |  |  |  | /some/dir/10.0.0.7:8080/foo.html |  |  true
+728 "a!@$*=/foo.html" file:///some/dir/a!@$*=/foo.html | null | file: |  |  |  |  |  | /some/dir/a!@$*=/foo.html |  |  true
+729 "a1234567890-+.:foo/bar" a1234567890-+.:foo/bar | null | a1234567890-+.: |  |  |  |  |  | foo/bar |  |  true
+730 "file://a­b/p" file://ab/p | null | file: |  |  | ab | ab |  | /p |  |  true
+731 "file://a%C2%ADb/p" file://ab/p | null | file: |  |  | ab | ab |  | /p |  |  true
+732 "file://loC𝐀𝐋𝐇𝐨𝐬𝐭/usr/bin" file:///usr/bin | null | file: |  |  |  |  |  | /usr/bin |  |  true
+733 "file://­/p" failure false
+734 "file://%C2%AD/p" failure false
+735 "file://xn--/p" failure false
+736 "#link" https://example.org/#link | https://example.org | https: |  |  | example.org | example.org |  | / |  | #link true
+737 "non-special:cannot-be-a-base-url-\u0000\u0001\u001f\u001e~" non-special:cannot-be-a-base-url-%00%01%1F%1E~%7F%C2%80 | null | non-special: |  |  |  |  |  | cannot-be-a-base-url-%00%01%1F%1E~%7F%C2%80 |  |  true
+738 "non-special:cannot-be-a-base-url-!\"$%&'()*+,-.;<=>@[\\]^_`{|}~@/" non-special:cannot-be-a-base-url-!"$%&'()*+,-.;<=>@[\]^_`{|}~@/ | null | non-special: |  |  |  |  |  | cannot-be-a-base-url-!"$%&'()*+,-.;<=>@[\]^_`{|}~@/ |  |  true
+739 "https://www.example.com/path{path.html?query'=query#fragment<fragment" https://www.example.com/path%7B%7Fpath.html?query%27%7F=query#fragment%3C%7Ffragment | https://www.example.com | https: |  |  | www.example.com | www.example.com |  | /path%7B%7Fpath.html | ?query%27%7F=query | #fragment%3C%7Ffragment true
+740 "https://user:pass[@foo/bar" https://user:pass%5B%7F@foo/bar | https://foo | https: | user | pass%5B%7F | foo | foo |  | /bar |  |  true
+741 "foo:// !\"$%&'()*+,-.;<=>@[\\]^_`{|}~@host/" foo://%20!%22$%&'()*+,-.%3B%3C%3D%3E%40%5B%5C%5D%5E_%60%7B%7C%7D~@host/ | null | foo: | %20!%22$%&'()*+,-.%3B%3C%3D%3E%40%5B%5C%5D%5E_%60%7B%7C%7D~ |  | host | host |  | / |  |  true
+742 "wss:// !\"$%&'()*+,-.;<=>@[]^_`{|}~@host/" wss://%20!%22$%&'()*+,-.%3B%3C%3D%3E%40%5B%5D%5E_%60%7B%7C%7D~@host/ | wss://host | wss: | %20!%22$%&'()*+,-.%3B%3C%3D%3E%40%5B%5D%5E_%60%7B%7C%7D~ |  | host | host |  | / |  |  true
+743 "foo://joe: !\"$%&'()*+,-.:;<=>@[\\]^_`{|}~@host/" foo://joe:%20!%22$%&'()*+,-.%3A%3B%3C%3D%3E%40%5B%5C%5D%5E_%60%7B%7C%7D~@host/ | null | foo: | joe | %20!%22$%&'()*+,-.%3A%3B%3C%3D%3E%40%5B%5C%5D%5E_%60%7B%7C%7D~ | host | host |  | / |  |  true
+744 "wss://joe: !\"$%&'()*+,-.:;<=>@[]^_`{|}~@host/" wss://joe:%20!%22$%&'()*+,-.%3A%3B%3C%3D%3E%40%5B%5D%5E_%60%7B%7C%7D~@host/ | wss://host | wss: | joe | %20!%22$%&'()*+,-.%3A%3B%3C%3D%3E%40%5B%5D%5E_%60%7B%7C%7D~ | host | host |  | / |  |  true
+745 "foo://!\"$%&'()*+,-.;=_`{}~/" foo://!"$%&'()*+,-.;=_`{}~/ | null | foo: |  |  | !"$%&'()*+,-.;=_`{}~ | !"$%&'()*+,-.;=_`{}~ |  | / |  |  true
+746 "wss://!\"$&'()*+,-.;=_`{}~/" wss://!"$&'()*+,-.;=_`{}~/ | wss://!"$&'()*+,-.;=_`{}~ | wss: |  |  | !"$&'()*+,-.;=_`{}~ | !"$&'()*+,-.;=_`{}~ |  | / |  |  true
+747 "foo://host/ !\"$%&'()*+,-./:;<=>@[\\]^_`{|}~" foo://host/%20!%22$%&'()*+,-./:;%3C=%3E@[\]^_%60%7B|%7D~ | null | foo: |  |  | host | host |  | /%20!%22$%&'()*+,-./:;%3C=%3E@[\]^_%60%7B|%7D~ |  |  true
+748 "wss://host/ !\"$%&'()*+,-./:;<=>@[\\]^_`{|}~" wss://host/%20!%22$%&'()*+,-./:;%3C=%3E@[/]^_%60%7B|%7D~ | wss://host | wss: |  |  | host | host |  | /%20!%22$%&'()*+,-./:;%3C=%3E@[/]^_%60%7B|%7D~ |  |  true
+749 "foo://host/dir/? !\"$%&'()*+,-./:;<=>?@[\\]^_`{|}~" foo://host/dir/?%20!%22$%&'()*+,-./:;%3C=%3E?@[\]^_`{|}~ | null | foo: |  |  | host | host |  | /dir/ | ?%20!%22$%&'()*+,-./:;%3C=%3E?@[\]^_`{|}~ |  true
+750 "wss://host/dir/? !\"$%&'()*+,-./:;<=>?@[\\]^_`{|}~" wss://host/dir/?%20!%22$%&%27()*+,-./:;%3C=%3E?@[\]^_`{|}~ | wss://host | wss: |  |  | host | host |  | /dir/ | ?%20!%22$%&%27()*+,-./:;%3C=%3E?@[\]^_`{|}~ |  true
+751 "foo://host/dir/# !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~" foo://host/dir/#%20!%22#$%&'()*+,-./:;%3C=%3E?@[\]^_%60{|}~ | null | foo: |  |  | host | host |  | /dir/ |  | #%20!%22#$%&'()*+,-./:;%3C=%3E?@[\]^_%60{|}~ true
+752 "wss://host/dir/# !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~" wss://host/dir/#%20!%22#$%&'()*+,-./:;%3C=%3E?@[\]^_%60{|}~ | wss://host | wss: |  |  | host | host |  | /dir/ |  | #%20!%22#$%&'()*+,-./:;%3C=%3E?@[\]^_%60{|}~ true
+753 "abc:rootless" abc:rootless | null | abc: |  |  |  |  |  | rootless |  |  true
+754 "abc:rootless" abc:rootless | null | abc: |  |  |  |  |  | rootless |  |  true
+755 "abc:rootless" abc:rootless | null | abc: |  |  |  |  |  | rootless |  |  true
+756 "abc:/rooted" abc:/rooted | null | abc: |  |  |  |  |  | /rooted |  |  true
+757 "#" failure false
+758 "?" failure false
+759 "http://1.2.3.4.5" failure false
+760 "http://1.2.3.4.5." failure false
+761 "http://0..0x300/" failure false
+762 "http://0..0x300./" failure false
+763 "http://256.256.256.256.256" failure false
+764 "http://256.256.256.256.256." failure false
+765 "http://1.2.3.08" failure false
+766 "http://1.2.3.08." failure false
+767 "http://1.2.3.09" failure false
+768 "http://09.2.3.4" failure false
+769 "http://09.2.3.4." failure false
+770 "http://01.2.3.4.5" failure false
+771 "http://01.2.3.4.5." failure false
+772 "http://0x100.2.3.4" failure false
+773 "http://0x100.2.3.4." failure false
+774 "http://0x1.2.3.4.5" failure false
+775 "http://0x1.2.3.4.5." failure false
+776 "http://foo.1.2.3.4" failure false
+777 "http://foo.1.2.3.4." failure false
+778 "http://foo.2.3.4" failure false
+779 "http://foo.2.3.4." failure false
+780 "http://foo.09" failure false
+781 "http://foo.09." failure false
+782 "http://foo.0x4" failure false
+783 "http://foo.0x4." failure false
+784 "http://foo.09.." http://foo.09../ | http://foo.09.. | http: |  |  | foo.09.. | foo.09.. |  | / |  |  true
+785 "http://0999999999999999999/" failure false
+786 "http://foo.0x" failure false
+787 "http://foo.0XFfFfFfFfFfFfFfFfFfAcE123" failure false
+788 "http://💩.123/" failure false
+789 "https://\u0000y" failure false
+790 "https://x/\u0000y" https://x/%00y | https://x | https: |  |  | x | x |  | /%00y |  |  true
+791 "https://x/?\u0000y" https://x/?%00y | https://x | https: |  |  | x | x |  | / | ?%00y |  true
+792 "https://x/?#\u0000y" https://x/?#%00y | https://x | https: |  |  | x | x |  | / |  | #%00y true
+793 "https://￿y" failure false
+794 "https://x/￿y" https://x/%EF%BF%BFy | https://x | https: |  |  | x | x |  | /%EF%BF%BFy |  |  true
+795 "https://x/?￿y" https://x/?%EF%BF%BFy | https://x | https: |  |  | x | x |  | / | ?%EF%BF%BFy |  true
+796 "https://x/?#￿y" https://x/?#%EF%BF%BFy | https://x | https: |  |  | x | x |  | / |  | #%EF%BF%BFy true
+797 "non-special:\u0000y" non-special:%00y | null | non-special: |  |  |  |  |  | %00y |  |  true
+798 "non-special:x/\u0000y" non-special:x/%00y | null | non-special: |  |  |  |  |  | x/%00y |  |  true
+799 "non-special:x/?\u0000y" non-special:x/?%00y | null | non-special: |  |  |  |  |  | x/ | ?%00y |  true
+800 "non-special:x/?#\u0000y" non-special:x/?#%00y | null | non-special: |  |  |  |  |  | x/ |  | #%00y true
+801 "non-special:￿y" non-special:%EF%BF%BFy | null | non-special: |  |  |  |  |  | %EF%BF%BFy |  |  true
+802 "non-special:x/￿y" non-special:x/%EF%BF%BFy | null | non-special: |  |  |  |  |  | x/%EF%BF%BFy |  |  true
+803 "non-special:x/?￿y" non-special:x/?%EF%BF%BFy | null | non-special: |  |  |  |  |  | x/ | ?%EF%BF%BFy |  true
+804 "non-special:x/?#￿y" non-special:x/?#%EF%BF%BFy | null | non-special: |  |  |  |  |  | x/ |  | #%EF%BF%BFy true
+805 "" failure false
+806 "https://example.com/\"quoted\"" https://example.com/%22quoted%22 | https://example.com | https: |  |  | example.com | example.com |  | /%22quoted%22 |  |  true
+807 "https://a%C2%ADb/" https://ab/ | https://ab | https: |  |  | ab | ab |  | / |  |  true
+808 "https://­/" failure false
+809 "https://%C2%AD/" failure false
+810 "https://xn--/" failure false
+811 "constructor:example" constructor:example | null | constructor: |  |  |  |  |  | example |  |  true
+812 "constructor:/example" constructor:/example | null | constructor: |  |  |  |  |  | /example |  |  true
+813 "constructor://HOST:80" constructor://HOST:80 | null | constructor: |  |  | HOST:80 | HOST | 80 |  |  |  true
+814 "data://example.com:8080/pathname?search#hash" data://example.com:8080/pathname?search#hash | null | data: |  |  | example.com:8080 | example.com | 8080 | /pathname | ?search | #hash true
+815 "data:///test" data:///test | null | data: |  |  |  |  |  | /test |  |  true
+816 "data://test/a/../b" data://test/b | null | data: |  |  | test | test |  | /b |  |  true
+817 "data://:443" failure false
+818 "data://test:test" failure false
+819 "data://[:1]" failure false
+820 "javascript://example.com:8080/pathname?search#hash" javascript://example.com:8080/pathname?search#hash | null | javascript: |  |  | example.com:8080 | example.com | 8080 | /pathname | ?search | #hash true
+821 "javascript:///test" javascript:///test | null | javascript: |  |  |  |  |  | /test |  |  true
+822 "javascript://test/a/../b" javascript://test/b | null | javascript: |  |  | test | test |  | /b |  |  true
+823 "javascript://:443" failure false
+824 "javascript://test:test" failure false
+825 "javascript://[:1]" failure false
+826 "mailto://example.com:8080/pathname?search#hash" mailto://example.com:8080/pathname?search#hash | null | mailto: |  |  | example.com:8080 | example.com | 8080 | /pathname | ?search | #hash true
+827 "mailto:///test" mailto:///test | null | mailto: |  |  |  |  |  | /test |  |  true
+828 "mailto://test/a/../b" mailto://test/b | null | mailto: |  |  | test | test |  | /b |  |  true
+829 "mailto://:443" failure false
+830 "mailto://test:test" failure false
+831 "mailto://[:1]" failure false
+832 "intent://example.com:8080/pathname?search#hash" intent://example.com:8080/pathname?search#hash | null | intent: |  |  | example.com:8080 | example.com | 8080 | /pathname | ?search | #hash true
+833 "intent:///test" intent:///test | null | intent: |  |  |  |  |  | /test |  |  true
+834 "intent://test/a/../b" intent://test/b | null | intent: |  |  | test | test |  | /b |  |  true
+835 "intent://:443" failure false
+836 "intent://test:test" failure false
+837 "intent://[:1]" failure false
+838 "urn://example.com:8080/pathname?search#hash" urn://example.com:8080/pathname?search#hash | null | urn: |  |  | example.com:8080 | example.com | 8080 | /pathname | ?search | #hash true
+839 "urn:///test" urn:///test | null | urn: |  |  |  |  |  | /test |  |  true
+840 "urn://test/a/../b" urn://test/b | null | urn: |  |  | test | test |  | /b |  |  true
+841 "urn://:443" failure false
+842 "urn://test:test" failure false
+843 "urn://[:1]" failure false
+844 "turn://example.com:8080/pathname?search#hash" turn://example.com:8080/pathname?search#hash | null | turn: |  |  | example.com:8080 | example.com | 8080 | /pathname | ?search | #hash true
+845 "turn:///test" turn:///test | null | turn: |  |  |  |  |  | /test |  |  true
+846 "turn://test/a/../b" turn://test/b | null | turn: |  |  | test | test |  | /b |  |  true
+847 "turn://:443" failure false
+848 "turn://test:test" failure false
+849 "turn://[:1]" failure false
+850 "stun://example.com:8080/pathname?search#hash" stun://example.com:8080/pathname?search#hash | null | stun: |  |  | example.com:8080 | example.com | 8080 | /pathname | ?search | #hash true
+851 "stun:///test" stun:///test | null | stun: |  |  |  |  |  | /test |  |  true
+852 "stun://test/a/../b" stun://test/b | null | stun: |  |  | test | test |  | /b |  |  true
+853 "stun://:443" failure false
+854 "stun://test:test" failure false
+855 "stun://[:1]" failure false
+856 "w://x:0" w://x:0 | null | w: |  |  | x:0 | x | 0 |  |  |  true
+857 "west://x:0" west://x:0 | null | west: |  |  | x:0 | x | 0 |  |  |  true
+858 "android://x:0/a" android://x:0/a | null | android: |  |  | x:0 | x | 0 | /a |  |  true
+859 "drivefs://x:0/a" drivefs://x:0/a | null | drivefs: |  |  | x:0 | x | 0 | /a |  |  true
+860 "chromeos-steam://x:0/a" chromeos-steam://x:0/a | null | chromeos-steam: |  |  | x:0 | x | 0 | /a |  |  true
+861 "steam://x:0/a" steam://x:0/a | null | steam: |  |  | x:0 | x | 0 | /a |  |  true
+862 "materialized-view://x:0/a" materialized-view://x:0/a | null | materialized-view: |  |  | x:0 | x | 0 | /a |  |  true
+863 "android-app://x:0" android-app://x:0 | null | android-app: |  |  | x:0 | x | 0 |  |  |  true
+864 "chrome-distiller://x:0" chrome-distiller://x:0 | null | chrome-distiller: |  |  | x:0 | x | 0 |  |  |  true
+865 "chrome-extension://x:0" chrome-extension://x:0 | null | chrome-extension: |  |  | x:0 | x | 0 |  |  |  true
+866 "chrome-native://x:0" chrome-native://x:0 | null | chrome-native: |  |  | x:0 | x | 0 |  |  |  true
+867 "chrome-resource://x:0" chrome-resource://x:0 | null | chrome-resource: |  |  | x:0 | x | 0 |  |  |  true
+868 "chrome-search://x:0" chrome-search://x:0 | null | chrome-search: |  |  | x:0 | x | 0 |  |  |  true
+869 "fuchsia-dir://x:0" fuchsia-dir://x:0 | null | fuchsia-dir: |  |  | x:0 | x | 0 |  |  |  true
+870 "isolated-app://x:0" isolated-app://x:0 | null | isolated-app: |  |  | x:0 | x | 0 |  |  |  true
+871 "///test" http://test/ | http://test | http: |  |  | test | test |  | / |  |  true
+872 "///\\//\\//test" http://test/ | http://test | http: |  |  | test | test |  | / |  |  true
+873 "///example.org/path" http://example.org/path | http://example.org | http: |  |  | example.org | example.org |  | /path |  |  true
+874 "///example.org/../path" http://example.org/path | http://example.org | http: |  |  | example.org | example.org |  | /path |  |  true
+875 "///example.org/../../" http://example.org/ | http://example.org | http: |  |  | example.org | example.org |  | / |  |  true
+876 "///example.org/../path/../../" http://example.org/ | http://example.org | http: |  |  | example.org | example.org |  | / |  |  true
+877 "///example.org/../path/../../path" http://example.org/path | http://example.org | http: |  |  | example.org | example.org |  | /path |  |  true
+878 "/\\/\\//example.org/../path" http://example.org/path | http://example.org | http: |  |  | example.org | example.org |  | /path |  |  true
+879 "///abcdef/../" file:/// | null | file: |  |  |  |  |  | / |  |  true
+880 "/\\//\\/a/../" file:////// | null | file: |  |  |  |  |  | //// |  |  true
+881 "//a/../" file://a/ | null | file: |  |  | a | a |  | / |  |  true
+882 "non-special:\\\\opaque" non-special:\\opaque | null | non-special: |  |  |  |  |  | \\opaque |  |  true
+883 "non-special:\\\\opaque/path" non-special:\\opaque/path | null | non-special: |  |  |  |  |  | \\opaque/path |  |  true
+884 "non-special:\\\\opaque\\path" non-special:\\opaque\path | null | non-special: |  |  |  |  |  | \\opaque\path |  |  true
+885 "non-special:\\/opaque" non-special:\/opaque | null | non-special: |  |  |  |  |  | \/opaque |  |  true
+886 "non-special:/\\path" non-special:/\path | null | non-special: |  |  |  |  |  | /\path |  |  true
+887 "non-special://host\\a" failure false
+888 "non-special://host/a\\b" non-special://host/a\b | null | non-special: |  |  | host | host |  | /a\b |  |  true
+889 "\\a" foo://foo/\a | null | foo: |  |  | foo | foo |  | /\a |  |  true
+890 "\\/a" foo://foo/\/a | null | foo: |  |  | foo | foo |  | /\/a |  |  true
+891 "\\\\a" foo://foo/\\a | null | foo: |  |  | foo | foo |  | /\\a |  |  true
+892 "data:text/plain,test#<foo> <bar>" data:text/plain,test#%3Cfoo%3E%20%3Cbar%3E | null | data: |  |  |  |  |  | text/plain,test |  | #%3Cfoo%3E%20%3Cbar%3E true
+893 "about:blank#<foo> <bar>" about:blank#%3Cfoo%3E%20%3Cbar%3E | null | about: |  |  |  |  |  | blank |  | #%3Cfoo%3E%20%3Cbar%3E true
+894 "data:text/plain,test#\u0000\u0001\t\n\r\u001f !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~Éé" data:text/plain,test#%00%01%1F%20!%22#$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9 | null | data: |  |  |  |  |  | text/plain,test |  | #%00%01%1F%20!%22#$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9 true
+895 "about:blank#\u0000\u0001\t\n\r\u001f !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~Éé" about:blank#%00%01%1F%20!%22#$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9 | null | about: |  |  |  |  |  | blank |  | #%00%01%1F%20!%22#$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9 true
+protocol "a://example.net" "" a://example.net | null | a: |  |  | example.net | example.net |  |  |  | 
+protocol "a://example.net" "b" b://example.net | null | b: |  |  | example.net | example.net |  |  |  | 
+protocol "javascript:alert(1)" "defuse" defuse:alert(1) | null | defuse: |  |  |  |  |  | alert(1) |  | 
+protocol "a://example.net" "B" b://example.net | null | b: |  |  | example.net | example.net |  |  |  | 
+protocol "a://example.net" "é" a://example.net | null | a: |  |  | example.net | example.net |  |  |  | 
+protocol "a://example.net" "0b" a://example.net | null | a: |  |  | example.net | example.net |  |  |  | 
+protocol "a://example.net" "+b" a://example.net | null | a: |  |  | example.net | example.net |  |  |  | 
+protocol "a://example.net" "bC0+-." bc0+-.://example.net | null | bc0+-.: |  |  | example.net | example.net |  |  |  | 
+protocol "a://example.net" "b,c" a://example.net | null | a: |  |  | example.net | example.net |  |  |  | 
+protocol "a://example.net" "bé" a://example.net | null | a: |  |  | example.net | example.net |  |  |  | 
+protocol "http://test@example.net" "file" http://test@example.net/ | http://example.net | http: | test |  | example.net | example.net |  | / |  | 
+protocol "https://example.net:1234" "file" https://example.net:1234/ | https://example.net:1234 | https: |  |  | example.net:1234 | example.net | 1234 | / |  | 
+protocol "wss://x:x@example.net:1234" "file" wss://x:x@example.net:1234/ | wss://example.net:1234 | wss: | x | x | example.net:1234 | example.net | 1234 | / |  | 
+protocol "file://localhost/" "http" file:/// | null | file: |  |  |  |  |  | / |  | 
+protocol "file:///test" "https" file:///test | null | file: |  |  |  |  |  | /test |  | 
+protocol "file:" "wss" file:/// | null | file: |  |  |  |  |  | / |  | 
+protocol "http://example.net" "b" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+protocol "file://hi/path" "s" file://hi/path | null | file: |  |  | hi | hi |  | /path |  | 
+protocol "https://example.net" "s" https://example.net/ | https://example.net | https: |  |  | example.net | example.net |  | / |  | 
+protocol "ftp://example.net" "test" ftp://example.net/ | ftp://example.net | ftp: |  |  | example.net | example.net |  | / |  | 
+protocol "mailto:me@example.net" "http" mailto:me@example.net | null | mailto: |  |  |  |  |  | me@example.net |  | 
+protocol "ssh://me@example.net" "http" ssh://me@example.net | null | ssh: | me |  | example.net | example.net |  |  |  | 
+protocol "ssh://me@example.net" "https" ssh://me@example.net | null | ssh: | me |  | example.net | example.net |  |  |  | 
+protocol "ssh://me@example.net" "file" ssh://me@example.net | null | ssh: | me |  | example.net | example.net |  |  |  | 
+protocol "ssh://example.net" "file" ssh://example.net | null | ssh: |  |  | example.net | example.net |  |  |  | 
+protocol "nonsense:///test" "https" nonsense:///test | null | nonsense: |  |  |  |  |  | /test |  | 
+protocol "http://example.net" "https:foo : bar" https://example.net/ | https://example.net | https: |  |  | example.net | example.net |  | / |  | 
+protocol "data:text/html,<p>Test" "view-source+data:foo : bar" view-source+data:text/html,<p>Test | null | view-source+data: |  |  |  |  |  | text/html,<p>Test |  | 
+protocol "http://foo.com:443/" "https" https://foo.com/ | https://foo.com | https: |  |  | foo.com | foo.com |  | / |  | 
+protocol "http://test/" "h\r\ntt\tps" https://test/ | https://test | https: |  |  | test | test |  | / |  | 
+protocol "http://test/" "https\r" https://test/ | https://test | https: |  |  | test | test |  | / |  | 
+protocol "http://test/" "https\u0000" http://test/ | http://test | http: |  |  | test | test |  | / |  | 
+protocol "http://test/" "https\f" http://test/ | http://test | http: |  |  | test | test |  | / |  | 
+protocol "http://test/" "https\u000e" http://test/ | http://test | http: |  |  | test | test |  | / |  | 
+protocol "http://test/" "https " http://test/ | http://test | http: |  |  | test | test |  | / |  | 
+username "file:///home/you/index.html" "me" file:///home/you/index.html | null | file: |  |  |  |  |  | /home/you/index.html |  | 
+username "unix:/run/foo.socket" "me" unix:/run/foo.socket | null | unix: |  |  |  |  |  | /run/foo.socket |  | 
+username "mailto:you@example.net" "me" mailto:you@example.net | null | mailto: |  |  |  |  |  | you@example.net |  | 
+username "javascript:alert(1)" "wario" javascript:alert(1) | null | javascript: |  |  |  |  |  | alert(1) |  | 
+username "http://example.net" "me" http://me@example.net/ | http://example.net | http: | me |  | example.net | example.net |  | / |  | 
+username "http://:secret@example.net" "me" http://me:secret@example.net/ | http://example.net | http: | me | secret | example.net | example.net |  | / |  | 
+username "http://me@example.net" "" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+username "http://me:secret@example.net" "" http://:secret@example.net/ | http://example.net | http: |  | secret | example.net | example.net |  | / |  | 
+username "http://example.net" "\u0000\u0001\t\n\r\u001f !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~Éé" http://%00%01%09%0A%0D%1F%20!%22%23$%&'()*+,-.%2F09%3A%3B%3C%3D%3E%3F%40AZ%5B%5C%5D%5E_%60az%7B%7C%7D~%7F%C2%80%C2%81%C3%89%C3%A9@example.net/ | http://example.net | http: | %00%01%09%0A%0D%1F%20!%22%23$%&'()*+,-.%2F09%3A%3B%3C%3D%3E%3F%40AZ%5B%5C%5D%5E_%60az%7B%7C%7D~%7F%C2%80%C2%81%C3%89%C3%A9 |  | example.net | example.net |  | / |  | 
+username "http://example.net" "%c3%89té" http://%c3%89t%C3%A9@example.net/ | http://example.net | http: | %c3%89t%C3%A9 |  | example.net | example.net |  | / |  | 
+username "sc:///" "x" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+username "javascript://x/" "wario" javascript://wario@x/ | null | javascript: | wario |  | x | x |  | / |  | 
+username "file://test/" "test" file://test/ | null | file: |  |  | test | test |  | / |  | 
+password "file:///home/me/index.html" "secret" file:///home/me/index.html | null | file: |  |  |  |  |  | /home/me/index.html |  | 
+password "unix:/run/foo.socket" "secret" unix:/run/foo.socket | null | unix: |  |  |  |  |  | /run/foo.socket |  | 
+password "mailto:me@example.net" "secret" mailto:me@example.net | null | mailto: |  |  |  |  |  | me@example.net |  | 
+password "http://example.net" "secret" http://:secret@example.net/ | http://example.net | http: |  | secret | example.net | example.net |  | / |  | 
+password "http://me@example.net" "secret" http://me:secret@example.net/ | http://example.net | http: | me | secret | example.net | example.net |  | / |  | 
+password "http://:secret@example.net" "" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+password "http://me:secret@example.net" "" http://me@example.net/ | http://example.net | http: | me |  | example.net | example.net |  | / |  | 
+password "http://example.net" "\u0000\u0001\t\n\r\u001f !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~Éé" http://:%00%01%09%0A%0D%1F%20!%22%23$%&'()*+,-.%2F09%3A%3B%3C%3D%3E%3F%40AZ%5B%5C%5D%5E_%60az%7B%7C%7D~%7F%C2%80%C2%81%C3%89%C3%A9@example.net/ | http://example.net | http: |  | %00%01%09%0A%0D%1F%20!%22%23$%&'()*+,-.%2F09%3A%3B%3C%3D%3E%3F%40AZ%5B%5C%5D%5E_%60az%7B%7C%7D~%7F%C2%80%C2%81%C3%89%C3%A9 | example.net | example.net |  | / |  | 
+password "http://example.net" "%c3%89té" http://:%c3%89t%C3%A9@example.net/ | http://example.net | http: |  | %c3%89t%C3%A9 | example.net | example.net |  | / |  | 
+password "sc:///" "x" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+password "javascript://x/" "bowser" javascript://:bowser@x/ | null | javascript: |  | bowser | x | x |  | / |  | 
+password "file://test/" "test" file://test/ | null | file: |  |  | test | test |  | / |  | 
+host "sc://x/" "\u0000" sc://x/ | null | sc: |  |  | x | x |  | / |  | 
+host "sc://x/" "\t" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+host "sc://x/" "\n" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+host "sc://x/" "\r" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+host "sc://x/" " " sc://x/ | null | sc: |  |  | x | x |  | / |  | 
+host "sc://x/" "#" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+host "sc://x/" "/" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+host "sc://x/" "?" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+host "sc://x/" "@" sc://x/ | null | sc: |  |  | x | x |  | / |  | 
+host "sc://x/" "ß" sc://%C3%9F/ | null | sc: |  |  | %C3%9F | %C3%9F |  | / |  | 
+host "https://x/" "ß" https://xn--zca/ | https://xn--zca | https: |  |  | xn--zca | xn--zca |  | / |  | 
+host "mailto:me@example.net" "example.com" mailto:me@example.net | null | mailto: |  |  |  |  |  | me@example.net |  | 
+host "data:text/plain,Stuff" "example.net" data:text/plain,Stuff | null | data: |  |  |  |  |  | text/plain,Stuff |  | 
+host "http://example.net" "example.com:8080" http://example.com:8080/ | http://example.com:8080 | http: |  |  | example.com:8080 | example.com | 8080 | / |  | 
+host "http://example.net:8080" "example.com" http://example.com:8080/ | http://example.com:8080 | http: |  |  | example.com:8080 | example.com | 8080 | / |  | 
+host "http://example.net:8080" "example.com:" http://example.com:8080/ | http://example.com:8080 | http: |  |  | example.com:8080 | example.com | 8080 | / |  | 
+host "http://example.net" "" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+host "view-source+http://example.net/foo" "" view-source+http:///foo | null | view-source+http: |  |  |  |  |  | /foo |  | 
+host "a:/foo" "example.net" a://example.net/foo | null | a: |  |  | example.net | example.net |  | /foo |  | 
+host "http://example.net" "0x7F000001:8080" http://127.0.0.1:8080/ | http://127.0.0.1:8080 | http: |  |  | 127.0.0.1:8080 | 127.0.0.1 | 8080 | / |  | 
+host "http://example.net" "[::0:01]:2" http://[::1]:2/ | http://[::1]:2 | http: |  |  | [::1]:2 | [::1] | 2 | / |  | 
+host "http://example.net" "[2001:db8::2]:4002" http://[2001:db8::2]:4002/ | http://[2001:db8::2]:4002 | http: |  |  | [2001:db8::2]:4002 | [2001:db8::2] | 4002 | / |  | 
+host "http://example.net" "example.com:80" http://example.com/ | http://example.com | http: |  |  | example.com | example.com |  | / |  | 
+host "https://example.net" "example.com:443" https://example.com/ | https://example.com | https: |  |  | example.com | example.com |  | / |  | 
+host "https://example.net" "example.com:80" https://example.com:80/ | https://example.com:80 | https: |  |  | example.com:80 | example.com | 80 | / |  | 
+host "http://example.net:8080" "example.com:80" http://example.com/ | http://example.com | http: |  |  | example.com | example.com |  | / |  | 
+host "http://example.net/path" "example.com/stuff" http://example.com/path | http://example.com | http: |  |  | example.com | example.com |  | /path |  | 
+host "http://example.net/path" "example.com:8080/stuff" http://example.com:8080/path | http://example.com:8080 | http: |  |  | example.com:8080 | example.com | 8080 | /path |  | 
+host "http://example.net/path" "example.com?stuff" http://example.com/path | http://example.com | http: |  |  | example.com | example.com |  | /path |  | 
+host "http://example.net/path" "example.com?stuff:8080" http://example.com/path | http://example.com | http: |  |  | example.com | example.com |  | /path |  | 
+host "http://example.net/path" "example.com:8080?stuff" http://example.com:8080/path | http://example.com:8080 | http: |  |  | example.com:8080 | example.com | 8080 | /path |  | 
+host "http://example.net/path" "example.com#stuff" http://example.com/path | http://example.com | http: |  |  | example.com | example.com |  | /path |  | 
+host "http://example.net/path" "example.com:8080#stuff" http://example.com:8080/path | http://example.com:8080 | http: |  |  | example.com:8080 | example.com | 8080 | /path |  | 
+host "http://example.net/path" "example.com\\stuff" http://example.com/path | http://example.com | http: |  |  | example.com | example.com |  | /path |  | 
+host "http://example.net/path" "example.com:8080\\stuff" http://example.com:8080/path | http://example.com:8080 | http: |  |  | example.com:8080 | example.com | 8080 | /path |  | 
+host "view-source+http://example.net/path" "example.com\\stuff" view-source+http://example.net/path | null | view-source+http: |  |  | example.net | example.net |  | /path |  | 
+host "view-source+http://example.net/path" "example.com:8080stuff2" view-source+http://example.com:8080/path | null | view-source+http: |  |  | example.com:8080 | example.com | 8080 | /path |  | 
+host "http://example.net/path" "example.com:8080stuff2" http://example.com:8080/path | http://example.com:8080 | http: |  |  | example.com:8080 | example.com | 8080 | /path |  | 
+host "http://example.net/path" "example.com:8080+2" http://example.com:8080/path | http://example.com:8080 | http: |  |  | example.com:8080 | example.com | 8080 | /path |  | 
+host "http://example.net:8080" "example.com:invalid" http://example.com:8080/ | http://example.com:8080 | http: |  |  | example.com:8080 | example.com | 8080 | / |  | 
+host "http://example.net:8080/test" "[::1]:invalid" http://[::1]:8080/test | http://[::1]:8080 | http: |  |  | [::1]:8080 | [::1] | 8080 | /test |  | 
+host "http://example.net:8080/test" "[::1]" http://[::1]:8080/test | http://[::1]:8080 | http: |  |  | [::1]:8080 | [::1] | 8080 | /test |  | 
+host "http://example.net/path" "example.com:65535" http://example.com:65535/path | http://example.com:65535 | http: |  |  | example.com:65535 | example.com | 65535 | /path |  | 
+host "http://example.net/path" "example.com:65536" http://example.com/path | http://example.com | http: |  |  | example.com | example.com |  | /path |  | 
+host "http://example.net/" "[google.com]" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+host "http://example.net/" "[::1.2.3.4x]" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+host "http://example.net/" "[::1.2.3.]" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+host "http://example.net/" "[::1.2.]" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+host "http://example.net/" "[::1.]" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+host "file://y/" "x:123" file://y/ | null | file: |  |  | y | y |  | / |  | 
+host "file://y/" "loc%41lhost" file:/// | null | file: |  |  |  |  |  | / |  | 
+host "file://hi/x" "" file:///x | null | file: |  |  |  |  |  | /x |  | 
+host "sc://test@test/" "" sc://test@test/ | null | sc: | test |  | test | test |  | / |  | 
+host "sc://test:12/" "" sc://test:12/ | null | sc: |  |  | test:12 | test | 12 | / |  | 
+host "http://example.com/" "///bad.com" http://example.com/ | http://example.com | http: |  |  | example.com | example.com |  | / |  | 
+host "sc://example.com/" "///bad.com" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+host "https://example.com/" "a%C2%ADb" https://ab/ | https://ab | https: |  |  | ab | ab |  | / |  | 
+host "https://example.com/" "­" https://example.com/ | https://example.com | https: |  |  | example.com | example.com |  | / |  | 
+host "https://example.com/" "%C2%AD" https://example.com/ | https://example.com | https: |  |  | example.com | example.com |  | / |  | 
+host "https://example.com/" "xn--" https://example.com/ | https://example.com | https: |  |  | example.com | example.com |  | / |  | 
+host "https://test.invalid/" "*" https://*/ | https://* | https: |  |  | * | * |  | / |  | 
+host "https://test.invalid/" "x@x" https://test.invalid/ | https://test.invalid | https: |  |  | test.invalid | test.invalid |  | / |  | 
+host "https://test.invalid/" "foo\t\r\nbar" https://foobar/ | https://foobar | https: |  |  | foobar | foobar |  | / |  | 
+host "https://test.invalid/" "><" https://test.invalid/ | https://test.invalid | https: |  |  | test.invalid | test.invalid |  | / |  | 
+host "https://test.invalid/" "test/@aaa" https://test/ | https://test | https: |  |  | test | test |  | / |  | 
+host "https://test.invalid/" "test/:aaa" https://test/ | https://test | https: |  |  | test | test |  | / |  | 
+host "foo://path/to" ":80" foo://:80/to | null | foo: |  |  |  |  | 80 | /to |  | 
+hostname "sc://x/" "\u0000" sc://x/ | null | sc: |  |  | x | x |  | / |  | 
+hostname "sc://x/" "\t" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+hostname "sc://x/" "\n" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+hostname "sc://x/" "\r" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+hostname "sc://x/" " " sc://x/ | null | sc: |  |  | x | x |  | / |  | 
+hostname "sc://x/" "#" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+hostname "sc://x/" "/" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+hostname "sc://x/" "?" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+hostname "sc://x/" "@" sc://x/ | null | sc: |  |  | x | x |  | / |  | 
+hostname "mailto:me@example.net" "example.com" mailto:me@example.net | null | mailto: |  |  |  |  |  | me@example.net |  | 
+hostname "data:text/plain,Stuff" "example.net" data:text/plain,Stuff | null | data: |  |  |  |  |  | text/plain,Stuff |  | 
+hostname "http://example.net:8080" "example.com" http://example.com:8080/ | http://example.com:8080 | http: |  |  | example.com:8080 | example.com | 8080 | / |  | 
+hostname "http://example.net" "" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+hostname "view-source+http://example.net/foo" "" view-source+http:///foo | null | view-source+http: |  |  |  |  |  | /foo |  | 
+hostname "a:/foo" "example.net" a://example.net/foo | null | a: |  |  | example.net | example.net |  | /foo |  | 
+hostname "http://example.net:8080" "0x7F000001" http://127.0.0.1:8080/ | http://127.0.0.1:8080 | http: |  |  | 127.0.0.1:8080 | 127.0.0.1 | 8080 | / |  | 
+hostname "http://example.net" "[::0:01]" http://[::1]/ | http://[::1] | http: |  |  | [::1] | [::1] |  | / |  | 
+hostname "http://example.net/path" "example.com:8080" http://example.net/path | http://example.net | http: |  |  | example.net | example.net |  | /path |  | 
+hostname "http://example.net:8080/path" "example.com:" http://example.net:8080/path | http://example.net:8080 | http: |  |  | example.net:8080 | example.net | 8080 | /path |  | 
+hostname "http://example.net/path" "example.com/stuff" http://example.com/path | http://example.com | http: |  |  | example.com | example.com |  | /path |  | 
+hostname "http://example.net/path" "example.com?stuff" http://example.com/path | http://example.com | http: |  |  | example.com | example.com |  | /path |  | 
+hostname "http://example.net/path" "example.com#stuff" http://example.com/path | http://example.com | http: |  |  | example.com | example.com |  | /path |  | 
+hostname "http://example.net/path" "example.com\\stuff" http://example.com/path | http://example.com | http: |  |  | example.com | example.com |  | /path |  | 
+hostname "view-source+http://example.net/path" "example.com\\stuff" view-source+http://example.net/path | null | view-source+http: |  |  | example.net | example.net |  | /path |  | 
+hostname "http://example.net/" "[google.com]" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+hostname "http://example.net/" "[::1.2.3.4x]" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+hostname "http://example.net/" "[::1.2.3.]" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+hostname "http://example.net/" "[::1.2.]" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+hostname "http://example.net/" "[::1.]" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+hostname "file://y/" "x:123" file://y/ | null | file: |  |  | y | y |  | / |  | 
+hostname "file://y/" "loc%41lhost" file:/// | null | file: |  |  |  |  |  | / |  | 
+hostname "file://hi/x" "" file:///x | null | file: |  |  |  |  |  | /x |  | 
+hostname "sc://test@test/" "" sc://test@test/ | null | sc: | test |  | test | test |  | / |  | 
+hostname "sc://test:12/" "" sc://test:12/ | null | sc: |  |  | test:12 | test | 12 | / |  | 
+hostname "non-spec:/.//p" "h" non-spec://h//p | null | non-spec: |  |  | h | h |  | //p |  | 
+hostname "non-spec:/.//p" "" non-spec:////p | null | non-spec: |  |  |  |  |  | //p |  | 
+hostname "http://example.com/" "///bad.com" http://example.com/ | http://example.com | http: |  |  | example.com | example.com |  | / |  | 
+hostname "sc://example.com/" "///bad.com" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+hostname "https://example.com/" "a%C2%ADb" https://ab/ | https://ab | https: |  |  | ab | ab |  | / |  | 
+hostname "https://example.com/" "­" https://example.com/ | https://example.com | https: |  |  | example.com | example.com |  | / |  | 
+hostname "https://example.com/" "%C2%AD" https://example.com/ | https://example.com | https: |  |  | example.com | example.com |  | / |  | 
+hostname "https://example.com/" "xn--" https://example.com/ | https://example.com | https: |  |  | example.com | example.com |  | / |  | 
+hostname "https://test.invalid/" "*" https://*/ | https://* | https: |  |  | * | * |  | / |  | 
+hostname "https://test.invalid/" "x@x" https://test.invalid/ | https://test.invalid | https: |  |  | test.invalid | test.invalid |  | / |  | 
+hostname "https://test.invalid/" "foo\t\r\nbar" https://foobar/ | https://foobar | https: |  |  | foobar | foobar |  | / |  | 
+hostname "https://test.invalid/" "><" https://test.invalid/ | https://test.invalid | https: |  |  | test.invalid | test.invalid |  | / |  | 
+hostname "https://test.invalid/" "test/@aaa" https://test/ | https://test | https: |  |  | test | test |  | / |  | 
+hostname "https://test.invalid/" "test/:aaa" https://test/ | https://test | https: |  |  | test | test |  | / |  | 
+port "http://example.net" "8080" http://example.net:8080/ | http://example.net:8080 | http: |  |  | example.net:8080 | example.net | 8080 | / |  | 
+port "http://example.net:8080" "" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+port "http://example.net:8080" "80" http://example.net/ | http://example.net | http: |  |  | example.net | example.net |  | / |  | 
+port "https://example.net:4433" "443" https://example.net/ | https://example.net | https: |  |  | example.net | example.net |  | / |  | 
+port "https://example.net" "80" https://example.net:80/ | https://example.net:80 | https: |  |  | example.net:80 | example.net | 80 | / |  | 
+port "http://example.net/path" "8080/stuff" http://example.net:8080/path | http://example.net:8080 | http: |  |  | example.net:8080 | example.net | 8080 | /path |  | 
+port "http://example.net/path" "8080?stuff" http://example.net:8080/path | http://example.net:8080 | http: |  |  | example.net:8080 | example.net | 8080 | /path |  | 
+port "http://example.net/path" "8080#stuff" http://example.net:8080/path | http://example.net:8080 | http: |  |  | example.net:8080 | example.net | 8080 | /path |  | 
+port "http://example.net/path" "8080\\stuff" http://example.net:8080/path | http://example.net:8080 | http: |  |  | example.net:8080 | example.net | 8080 | /path |  | 
+port "view-source+http://example.net/path" "8080stuff2" view-source+http://example.net:8080/path | null | view-source+http: |  |  | example.net:8080 | example.net | 8080 | /path |  | 
+port "http://example.net/path" "8080stuff2" http://example.net:8080/path | http://example.net:8080 | http: |  |  | example.net:8080 | example.net | 8080 | /path |  | 
+port "http://example.net/path" "8080+2" http://example.net:8080/path | http://example.net:8080 | http: |  |  | example.net:8080 | example.net | 8080 | /path |  | 
+port "http://example.net/path" "65535" http://example.net:65535/path | http://example.net:65535 | http: |  |  | example.net:65535 | example.net | 65535 | /path |  | 
+port "http://example.net:8080/path" "65536" http://example.net:8080/path | http://example.net:8080 | http: |  |  | example.net:8080 | example.net | 8080 | /path |  | 
+port "http://example.net:8080/path" "randomstring" http://example.net:8080/path | http://example.net:8080 | http: |  |  | example.net:8080 | example.net | 8080 | /path |  | 
+port "non-special://example.net:8080/path" "65536" non-special://example.net:8080/path | null | non-special: |  |  | example.net:8080 | example.net | 8080 | /path |  | 
+port "file://test/" "12" file://test/ | null | file: |  |  | test | test |  | / |  | 
+port "file://localhost/" "12" file:/// | null | file: |  |  |  |  |  | / |  | 
+port "non-base:value" "12" non-base:value | null | non-base: |  |  |  |  |  | value |  | 
+port "sc:///" "12" sc:/// | null | sc: |  |  |  |  |  | / |  | 
+port "sc://x/" "12" sc://x:12/ | null | sc: |  |  | x:12 | x | 12 | / |  | 
+port "javascript://x/" "12" javascript://x:12/ | null | javascript: |  |  | x:12 | x | 12 | / |  | 
+port "https://domain.com:443" "\t8080" https://domain.com:8080/ | https://domain.com:8080 | https: |  |  | domain.com:8080 | domain.com | 8080 | / |  | 
+port "wpt++://domain.com:443" "\t8080" wpt++://domain.com:8080 | null | wpt++: |  |  | domain.com:8080 | domain.com | 8080 |  |  | 
+port "https://www.google.com:4343" "4wpt" https://www.google.com:4/ | https://www.google.com:4 | https: |  |  | www.google.com:4 | www.google.com | 4 | / |  | 
+port "https://domain.com:3000" "\n\t80\n\t80\n\t" https://domain.com:8080/ | https://domain.com:8080 | https: |  |  | domain.com:8080 | domain.com | 8080 | / |  | 
+port "https://domain.com:3000" "\n\n\t\t" https://domain.com/ | https://domain.com | https: |  |  | domain.com | domain.com |  | / |  | 
+pathname "mailto:me@example.net" "/foo" mailto:me@example.net | null | mailto: |  |  |  |  |  | me@example.net |  | 
+pathname "data:original" "new value" data:original | null | data: |  |  |  |  |  | original |  | 
+pathname "sc:original" "new value" sc:original | null | sc: |  |  |  |  |  | original |  | 
+pathname "file:///some/path" "" file:/// | null | file: |  |  |  |  |  | / |  | 
+pathname "foo://somehost/some/path" "" foo://somehost | null | foo: |  |  | somehost | somehost |  |  |  | 
+pathname "foo:///some/path" "" foo:// | null | foo: |  |  |  |  |  |  |  | 
+pathname "foo:/some/path" "" foo:/ | null | foo: |  |  |  |  |  | / |  | 
+pathname "foo:/some/path" "test" foo:/test | null | foo: |  |  |  |  |  | /test |  | 
+pathname "unix:/run/foo.socket?timeout=10" "/var/log/../run/bar.socket" unix:/var/run/bar.socket?timeout=10 | null | unix: |  |  |  |  |  | /var/run/bar.socket | ?timeout=10 | 
+pathname "https://example.net#nav" "home" https://example.net/home#nav | https://example.net | https: |  |  | example.net | example.net |  | /home |  | #nav
+pathname "https://example.net#nav" "../home" https://example.net/home#nav | https://example.net | https: |  |  | example.net | example.net |  | /home |  | #nav
+pathname "http://example.net/home?lang=fr#nav" "\\a\\%2E\\b\\%2e.\\c" http://example.net/a/c?lang=fr#nav | http://example.net | http: |  |  | example.net | example.net |  | /a/c | ?lang=fr | #nav
+pathname "view-source+http://example.net/home?lang=fr#nav" "\\a\\%2E\\b\\%2e.\\c" view-source+http://example.net/\a\%2E\b\%2e.\c?lang=fr#nav | null | view-source+http: |  |  | example.net | example.net |  | /\a\%2E\b\%2e.\c | ?lang=fr | #nav
+pathname "a:/" "\u0000\u0001\t\n\r\u001f !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~Éé" a:/%00%01%1F%20!%22%23$%&'()*+,-./09:;%3C=%3E%3F@AZ[\]^_%60az%7B|%7D~%7F%C2%80%C2%81%C3%89%C3%A9 | null | a: |  |  |  |  |  | /%00%01%1F%20!%22%23$%&'()*+,-./09:;%3C=%3E%3F@AZ[\]^_%60az%7B|%7D~%7F%C2%80%C2%81%C3%89%C3%A9 |  | 
+pathname "http://example.net" "%2e%2E%c3%89té" http://example.net/%2e%2E%c3%89t%C3%A9 | http://example.net | http: |  |  | example.net | example.net |  | /%2e%2E%c3%89t%C3%A9 |  | 
+pathname "http://example.net" "?" http://example.net/%3F | http://example.net | http: |  |  | example.net | example.net |  | /%3F |  | 
+pathname "http://example.net" "#" http://example.net/%23 | http://example.net | http: |  |  | example.net | example.net |  | /%23 |  | 
+pathname "sc://example.net" "?" sc://example.net/%3F | null | sc: |  |  | example.net | example.net |  | /%3F |  | 
+pathname "sc://example.net" "#" sc://example.net/%23 | null | sc: |  |  | example.net | example.net |  | /%23 |  | 
+pathname "http://example.net" "/?é" http://example.net/%3F%C3%A9 | http://example.net | http: |  |  | example.net | example.net |  | /%3F%C3%A9 |  | 
+pathname "http://example.net" "/#é" http://example.net/%23%C3%A9 | http://example.net | http: |  |  | example.net | example.net |  | /%23%C3%A9 |  | 
+pathname "file://monkey/" "\\\\" file://monkey// | null | file: |  |  | monkey | monkey |  | // |  | 
+pathname "file:///unicorn" "//\\/" file:////// | null | file: |  |  |  |  |  | //// |  | 
+pathname "file:///unicorn" "//monkey/..//" file:///// | null | file: |  |  |  |  |  | /// |  | 
+pathname "non-spec:/" "/.//p" non-spec:/.//p | null | non-spec: |  |  |  |  |  | //p |  | 
+pathname "non-spec:/" "/..//p" non-spec:/.//p | null | non-spec: |  |  |  |  |  | //p |  | 
+pathname "non-spec:/" "//p" non-spec:/.//p | null | non-spec: |  |  |  |  |  | //p |  | 
+pathname "non-spec:/.//" "p" non-spec:/p | null | non-spec: |  |  |  |  |  | /p |  | 
+pathname "data:/nospace" "space " data:/space%20 | null | data: |  |  |  |  |  | /space%20 |  | 
+pathname "sc:/nospace" "space " sc:/space%20 | null | sc: |  |  |  |  |  | /space%20 |  | 
+pathname "http://example.net" " " http://example.net/%20 | http://example.net | http: |  |  | example.net | example.net |  | /%20 |  | 
+pathname "http://example.net" "\u0000" http://example.net/%00 | http://example.net | http: |  |  | example.net | example.net |  | /%00 |  | 
+pathname "foo://path/to" "/.." foo://path | null | foo: |  |  | path | path |  |  |  | 
+search "https://example.net#nav" "lang=fr" https://example.net/?lang=fr#nav | https://example.net | https: |  |  | example.net | example.net |  | / | ?lang=fr | #nav
+search "https://example.net?lang=en-US#nav" "lang=fr" https://example.net/?lang=fr#nav | https://example.net | https: |  |  | example.net | example.net |  | / | ?lang=fr | #nav
+search "https://example.net?lang=en-US#nav" "?lang=fr" https://example.net/?lang=fr#nav | https://example.net | https: |  |  | example.net | example.net |  | / | ?lang=fr | #nav
+search "https://example.net?lang=en-US#nav" "??lang=fr" https://example.net/??lang=fr#nav | https://example.net | https: |  |  | example.net | example.net |  | / | ??lang=fr | #nav
+search "https://example.net?lang=en-US#nav" "?" https://example.net/?#nav | https://example.net | https: |  |  | example.net | example.net |  | / |  | #nav
+search "https://example.net?lang=en-US#nav" "" https://example.net/#nav | https://example.net | https: |  |  | example.net | example.net |  | / |  | #nav
+search "https://example.net?lang=en-US" "" https://example.net/ | https://example.net | https: |  |  | example.net | example.net |  | / |  | 
+search "https://example.net" "" https://example.net/ | https://example.net | https: |  |  | example.net | example.net |  | / |  | 
+search "a:/" "\u0000\u0001\t\n\r\u001f !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~Éé" a:/?%00%01%1F%20!%22%23$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_`az{|}~%7F%C2%80%C2%81%C3%89%C3%A9 | null | a: |  |  |  |  |  | / | ?%00%01%1F%20!%22%23$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_`az{|}~%7F%C2%80%C2%81%C3%89%C3%A9 | 
+search "http://example.net" "%c3%89té" http://example.net/?%c3%89t%C3%A9 | http://example.net | http: |  |  | example.net | example.net |  | / | ?%c3%89t%C3%A9 | 
+search "data:space ?query" "" data:space | null | data: |  |  |  |  |  | space |  | 
+search "sc:space ?query" "" sc:space | null | sc: |  |  |  |  |  | space |  | 
+search "data:space  ?query#fragment" "" data:space  #fragment | null | data: |  |  |  |  |  | space   |  | #fragment
+search "sc:space  ?query#fragment" "" sc:space  #fragment | null | sc: |  |  |  |  |  | space   |  | #fragment
+search "http://example.net" " " http://example.net/?%20 | http://example.net | http: |  |  | example.net | example.net |  | / | ?%20 | 
+search "http://example.net" "\u0000" http://example.net/?%00 | http://example.net | http: |  |  | example.net | example.net |  | / | ?%00 | 
+hash "https://example.net" "main" https://example.net/#main | https://example.net | https: |  |  | example.net | example.net |  | / |  | #main
+hash "https://example.net#nav" "main" https://example.net/#main | https://example.net | https: |  |  | example.net | example.net |  | / |  | #main
+hash "https://example.net?lang=en-US" "##nav" https://example.net/?lang=en-US##nav | https://example.net | https: |  |  | example.net | example.net |  | / | ?lang=en-US | ##nav
+hash "https://example.net?lang=en-US#nav" "#main" https://example.net/?lang=en-US#main | https://example.net | https: |  |  | example.net | example.net |  | / | ?lang=en-US | #main
+hash "https://example.net?lang=en-US#nav" "#" https://example.net/?lang=en-US# | https://example.net | https: |  |  | example.net | example.net |  | / | ?lang=en-US | 
+hash "https://example.net?lang=en-US#nav" "" https://example.net/?lang=en-US | https://example.net | https: |  |  | example.net | example.net |  | / | ?lang=en-US | 
+hash "http://example.net" "#foo bar" http://example.net/#foo%20bar | http://example.net | http: |  |  | example.net | example.net |  | / |  | #foo%20bar
+hash "http://example.net" "#foo\"bar" http://example.net/#foo%22bar | http://example.net | http: |  |  | example.net | example.net |  | / |  | #foo%22bar
+hash "http://example.net" "#foo<bar" http://example.net/#foo%3Cbar | http://example.net | http: |  |  | example.net | example.net |  | / |  | #foo%3Cbar
+hash "http://example.net" "#foo>bar" http://example.net/#foo%3Ebar | http://example.net | http: |  |  | example.net | example.net |  | / |  | #foo%3Ebar
+hash "http://example.net" "#foo`bar" http://example.net/#foo%60bar | http://example.net | http: |  |  | example.net | example.net |  | / |  | #foo%60bar
+hash "a:/" "\u0000\u0001\t\n\r\u001f !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~Éé" a:/#%00%01%1F%20!%22#$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9 | null | a: |  |  |  |  |  | / |  | #%00%01%1F%20!%22#$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9
+hash "http://example.net" "a\u0000b" http://example.net/#a%00b | http://example.net | http: |  |  | example.net | example.net |  | / |  | #a%00b
+hash "non-spec:/" "a\u0000b" non-spec:/#a%00b | null | non-spec: |  |  |  |  |  | / |  | #a%00b
+hash "http://example.net" "%c3%89té" http://example.net/#%c3%89t%C3%A9 | http://example.net | http: |  |  | example.net | example.net |  | / |  | #%c3%89t%C3%A9
+hash "javascript:alert(1)" "castle" javascript:alert(1)#castle | null | javascript: |  |  |  |  |  | alert(1) |  | #castle
+hash "data:space                                                                                                                                  #fragment" "" data:space | null | data: |  |  |  |  |  | space |  | 
+hash "sc:space    #fragment" "" sc:space | null | sc: |  |  |  |  |  | space |  | 
+hash "data:space  ?query#fragment" "" data:space  ?query | null | data: |  |  |  |  |  | space   | ?query | 
+hash "sc:space  ?query#fragment" "" sc:space  ?query | null | sc: |  |  |  |  |  | space   | ?query | 
+hash "http://example.net" " " http://example.net/#%20 | http://example.net | http: |  |  | example.net | example.net |  | / |  | #%20
+hash "http://example.net" "\u0000" http://example.net/#%00 | http://example.net | http: |  |  | example.net | example.net |  | / |  | #%00
+hash "data:text/plain,test" "#<foo> <bar>" data:text/plain,test#%3Cfoo%3E%20%3Cbar%3E | null | data: |  |  |  |  |  | text/plain,test |  | #%3Cfoo%3E%20%3Cbar%3E
+hash "about:blank" "#<foo> <bar>" about:blank#%3Cfoo%3E%20%3Cbar%3E | null | about: |  |  |  |  |  | blank |  | #%3Cfoo%3E%20%3Cbar%3E
+hash "data:text/plain,test" "#\u0000\u0001\t\n\r\u001f !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~Éé" data:text/plain,test#%00%01%1F%20!%22#$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9 | null | data: |  |  |  |  |  | text/plain,test |  | #%00%01%1F%20!%22#$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9
+hash "about:blank" "#\u0000\u0001\t\n\r\u001f !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~Éé" about:blank#%00%01%1F%20!%22#$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9 | null | about: |  |  |  |  |  | blank |  | #%00%01%1F%20!%22#$%&'()*+,-./09:;%3C=%3E?@AZ[\]^_%60az{|}~%7F%C2%80%C2%81%C3%89%C3%A9
+href "file:///var/log/system.log" "http://0300.168.0xF0" http://192.168.0.240/ | http://192.168.0.240 | http: |  |  | 192.168.0.240 | 192.168.0.240 |  | / |  | 
+toascii "aa--" aa-- aa--
+toascii "a†--" xn--a---kp0a xn--a---kp0a
+toascii "ab--c" ab--c ab--c
+toascii "-x" -x -x
+toascii "-†" xn----xhn xn----xhn
+toascii "-x.xn--zca" -x.xn--zca -x.xn--zca
+toascii "-x.ß" -x.xn--zca -x.xn--zca
+toascii "x-.xn--zca" x-.xn--zca x-.xn--zca
+toascii "x-.ß" x-.xn--zca x-.xn--zca
+toascii "x..xn--zca" x..xn--zca x..xn--zca
+toascii "x..ß" x..xn--zca x..xn--zca
+toascii "xn--a" failure example
+toascii "xn--a.xn--zca" failure example
+toascii "xn--a.ß" failure example
+toascii "xn--ls8h=" failure example
+toascii "xn--tešla" failure example
+toascii "xn--zca.xn--zca" xn--zca.xn--zca xn--zca.xn--zca
+toascii "xn--zca.ß" xn--zca.xn--zca xn--zca.xn--zca
+toascii "ab--c.xn--zca" ab--c.xn--zca ab--c.xn--zca
+toascii "ab--c.ß" ab--c.xn--zca ab--c.xn--zca
+toascii "‍.example" failure example
+toascii "xn--1ug.example" failure example
+toascii "يa" failure example
+toascii "xn--a-yoc" failure example
+toascii "ශ්‍රී" xn--10cl1a0b660p xn--10cl1a0b660p
+toascii "نامه‌ای" xn--mgba3gch31f060k xn--mgba3gch31f060k
+toascii "�.com" failure example
+toascii "xn--zn7c.com" failure example
+toascii "x01234567890123456789012345678901234567890123456789012345678901x" x01234567890123456789012345678901234567890123456789012345678901x x01234567890123456789012345678901234567890123456789012345678901x
+toascii "x01234567890123456789012345678901234567890123456789012345678901†" xn--x01234567890123456789012345678901234567890123456789012345678901-6963b xn--x01234567890123456789012345678901234567890123456789012345678901-6963b
+toascii "x01234567890123456789012345678901234567890123456789012345678901x.xn--zca" x01234567890123456789012345678901234567890123456789012345678901x.xn--zca x01234567890123456789012345678901234567890123456789012345678901x.xn--zca
+toascii "x01234567890123456789012345678901234567890123456789012345678901x.ß" x01234567890123456789012345678901234567890123456789012345678901x.xn--zca x01234567890123456789012345678901234567890123456789012345678901x.xn--zca
+toascii "01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.0123456789012345678901234567890123456789012345678.x" 01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.0123456789012345678901234567890123456789012345678.x 01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.0123456789012345678901234567890123456789012345678.x
+toascii "01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.0123456789012345678901234567890123456789012345678.xn--zca" 01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.0123456789012345678901234567890123456789012345678.xn--zca 01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.0123456789012345678901234567890123456789012345678.xn--zca
+toascii "01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.0123456789012345678901234567890123456789012345678.ß" 01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.0123456789012345678901234567890123456789012345678.xn--zca 01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.0123456789012345678901234567890123456789012345678.xn--zca
+toascii "a­b" ab ab
+toascii "≠" xn--1ch xn--1ch
+toascii "≮" xn--gdh xn--gdh
+toascii "≯" xn--hdh xn--hdh
+toascii "≠" xn--1ch xn--1ch
+toascii "≮" xn--gdh xn--gdh
+toascii "≯" xn--hdh xn--hdh
+toascii "=­̸" xn--1ch xn--1ch
+toascii "<­̸" xn--gdh xn--gdh
+toascii ">­̸" xn--hdh xn--hdh
+toascii "faß.de" xn--fa-hia.de xn--fa-hia.de
+toascii "βόλος.com" xn--nxasmm1c.com xn--nxasmm1c.com
+toascii "ශ්‍රී.com" xn--10cl1a0b660p.com xn--10cl1a0b660p.com
+toascii "نامه‌ای.com" xn--mgba3gch31f060k.com xn--mgba3gch31f060k.com
+toascii "www.looĸout.net" www.xn--looout-5bb.net www.xn--looout-5bb.net
+toascii "ᗯᗯᗯ.lookout.net" xn--1qeaa.lookout.net xn--1qeaa.lookout.net
+toascii "www.lookout.сом" www.lookout.xn--l1adi www.lookout.xn--l1adi
+toascii "www‥lookout.net" failure example
+toascii "www.lookout‧net" www.xn--lookoutnet-406e www.xn--lookoutnet-406e
+toascii "www.lookout.net⩴80" failure example
+toascii "www .lookout.net" failure example
+toascii " lookout.net" failure example
+toascii "\u001flookout.net" failure example
+toascii "look۝out.net" failure example
+toascii "look᠎out.net" failure example
+toascii "look⁠out.net" lookout.net lookout.net
+toascii "look﻿out.net" lookout.net lookout.net
+toascii "look🿾out.net" failure example
+toascii "look￺out.net" failure example
+toascii "look⿰out.net" failure example
+toascii "looḱout.net" xn--looout-kp7b.net xn--looout-kp7b.net
+toascii "look‮out.net" failure example
+toascii "look⁫out.net" failure example
+toascii "look󠀁out.net" failure example
+toascii "look󠀠out.net" failure example
+toascii "look־out.net" failure example
+toascii "Bücher.de" xn--bcher-kva.de xn--bcher-kva.de
+toascii "♥.net" xn--g6h.net xn--g6h.net
+toascii "͸.net" failure example
+toascii "Ӏ.com" failure example
+toascii "㛼.com" failure example
+toascii "Ↄ.com" failure example
+toascii "look͏out.net" lookout.net lookout.net
+toascii "gOoGle.com" google.com google.com
+toascii "ড়.com" xn--15b8c.com xn--15b8c.com
+toascii "ẞ.com" ss.com ss.com
+toascii "ẞ.foo.com" ss.foo.com ss.foo.com
+toascii "-foo.bar.com" -foo.bar.com -foo.bar.com
+toascii "foo-.bar.com" foo-.bar.com foo-.bar.com
+toascii "ab--cd.com" ab--cd.com ab--cd.com
+toascii "xn--0.com" failure example
+toascii "foò.bar.com" xn--fo-3ja.bar.com xn--fo-3ja.bar.com

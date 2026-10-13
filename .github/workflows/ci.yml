@@ -1,0 +1,227 @@
+# Every pull request commit: lint + typecheck, the compiler's, CLI's and differential tests, the
+# runtime's unit tests in all six configurations, the programs, Node's tests and the full test262,
+# the long ones in shards. Nightly (nightly.yml): the programs under GC stress and the benchmarks.
+# Every job runs on GitHub's runners.
+name: CI
+
+# Pull requests only: a merge to main brings commits their pull request already tested, and a
+# run for it would share the runners with the next pull request's. Run it by hand from the
+# Actions tab (workflow_dispatch) when main needs checking.
+on:
+  pull_request:
+  workflow_dispatch:
+
+# A push to a pull request cancels its run for the commit before: only the newest one counts.
+concurrency:
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    # test262 and the programs only matter when the runtime or the C we generate can change
+    # (CLAUDE.md); the runtime's unit tests, when the runtime does.
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      runtime: ${{ steps.diff.outputs.runtime }}
+      programs: ${{ steps.diff.outputs.programs }}
+      ctest: ${{ steps.diff.outputs.ctest }}
+      nodejs: ${{ steps.diff.outputs.nodejs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            # a run by hand (workflow_dispatch): no base to diff against, run everything
+            echo "runtime=true" >> "$GITHUB_OUTPUT"
+            echo "programs=true" >> "$GITHUB_OUTPUT"
+            echo "ctest=true" >> "$GITHUB_OUTPUT"
+            echo "nodejs=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$BASE" HEAD)
+          echo "$files"
+          code='^(runtime|node|compiler|ir|optimizer)/|^package-lock\.json$|^\.github/workflows/ci\.yml$'
+          echo "runtime=$(echo "$files" | grep -qE "$code|^tests/runner/|^tests/test262" && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "programs=$(echo "$files" | grep -qE "$code|^cli/|^tests/programs/|^vitest\.config\.ts$" && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "ctest=$(echo "$files" | grep -qE '^runtime/|^\.github/workflows/ci\.yml$' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "nodejs=$(echo "$files" | grep -qE "$code|^cli/|^tests/nodejs/" && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  compiler:
+    name: Lint, typecheck, compiler tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # the apps (tests/apps) aren't workspaces: each has its own lockfile (the HTTP differential tests run them)
+      - run: npm run apps:install
+      - run: npm run lint
+      - run: npm run typecheck
+      # the runtime's and the host's libraries, compiled once before the tests build programs in
+      # parallel: after a change to them, the first test to build would pay for it, and time out
+      - run: node cli/src/cli.ts build tests/programs/host-modules.js -o warm-up --quiet
+      # tests/programs (compiled programs against Node's output) runs in the programs jobs; here,
+      # the rest: unit, CLI and differential tests
+      - run: npm run test:compiler -- --exclude "tests/programs/**"
+
+  runtime:
+    # gcc and clang; plain, ASan + UBSan, and GC stress (a collection at every allocation).
+    name: Runtime tests (${{ matrix.cc }}, ${{ matrix.mode }})
+    needs: changes
+    if: needs.changes.outputs.ctest == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+        mode: [plain, sanitize, gc-stress]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+        run: >
+          cmake -S runtime -B build/runtime
+          -DCMAKE_BUILD_TYPE=Debug
+          -DJSRT_SANITIZE=${{ matrix.mode == 'sanitize' && 'ON' || 'OFF' }}
+          -DJSRT_GC_STRESS=${{ matrix.mode == 'gc-stress' && 'ON' || 'OFF' }}
+      - run: cmake --build build/runtime
+      - run: ctest --test-dir build/runtime --output-on-failure
+
+  test262:
+    # The suite in shards, one job each, so it spreads over every runner: adding one is adding a
+    # number to the list (the count is the matrix's size). Each shard is checked against its part
+    # of tests/test262.results and fails on a regression; with --update it saves its Summary
+    # (build/test262-shard-I.json) for test262-snapshot. Locally, only a part:
+    # npm run test262 -- language/statements/debugger
+    name: test262 (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+          # the branch itself, not the merge with main: the snapshot is committed to it
+          ref: ${{ github.head_ref || github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test262 -- --update --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: test262-shard-${{ matrix.shard }}
+          path: build/test262-shard-${{ matrix.shard }}.json
+
+  test262-snapshot:
+    # Every shard passed: their Summaries merged are the full suite's, written as one --update
+    # would (tests/test262.results, build/test262-summary.json). On a pull request, newly passing
+    # units are committed to its branch as the new snapshot (a push with GITHUB_TOKEN starts no
+    # new run), and the counts are uploaded as an artifact.
+    name: test262 snapshot
+    needs: test262
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: test262-shard-*
+          path: build/shards
+          merge-multiple: true
+      - run: npm run test262 -- --merge build/shards/*.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: test262-summary
+          path: build/test262-summary.json
+      - name: Commit the snapshot
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          if git diff --quiet tests/test262.results; then
+            echo "The snapshot is unchanged." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          added=$(git diff --numstat tests/test262.results | cut -f1)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "test262: snapshot, $added newly passing" tests/test262.results
+          git push origin "HEAD:${{ github.head_ref }}"
+          echo "Committed the snapshot: $added newly passing units." >> "$GITHUB_STEP_SUMMARY"
+
+  nodejs:
+    # Node's own tests (tests/nodejs/test/parallel, copied by tests/nodejs/sync.ts), compiled by
+    # visaljs: a test that passes in tests/nodejs/node.results and fails now is a regression.
+    # Newly passing tests are recorded locally: npm run nodejs -- --update. In shards, one job
+    # each, as test262's: adding one is adding a number to the list.
+    name: Node's tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: changes
+    if: needs.changes.outputs.nodejs == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # one build at a time, two C files at once: a test that runs away on memory stops at its heap
+      # limit, and the builds stay well within the runner's memory
+      - run: npm run nodejs -- --jobs=1 --build-jobs=2 --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+
+  programs:
+    # The end-to-end programs (tests/programs): each compiled, run, and its output compared with
+    # Node's, in shards (VISALJS_PROGRAMS_SHARD), one job each: adding one is adding a number to
+    # the list. Shard 1 also builds hello world with the driver's defaults and runs it, and runs
+    # the file's other tests. Linux only, for now.
+    name: Programs (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: changes
+    if: needs.changes.outputs.programs == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # the runtime's and the host's libraries, compiled once before the tests build programs in
+      # parallel, and hello world with the driver's defaults
+      - run: node cli/src/cli.ts build tests/programs/hello.js -o hello
+      - name: Check output
+        if: matrix.shard == 1
+        run: |
+          ./hello > out.txt
+          diff -u tests/programs/hello.expected out.txt
+      - run: npx vitest run tests/programs
+        env:
+          VISALJS_PROGRAMS_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}

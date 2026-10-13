@@ -1,0 +1,51 @@
+globals are the module's: true true true
+exports: _unrefActive, active, clearImmediate, clearInterval, clearTimeout, enroll, promises, setImmediate, setInterval, setTimeout, unenroll
+Timeout: Timeout true true false true true
+fields: 1 null [ 'A', 'B' ] false function
+primitive: number true true
+delay -5 -> 1
+delay 20 -> 20
+delay 1.5 -> 1.5
+delay NaN -> 1
+delay undefined -> 1
+TypeError ERR_INVALID_ARG_TYPE The "callback" argument must be of type function. Received type number (5)
+TypeError ERR_INVALID_ARG_TYPE The "callback" argument must be of type function. Received type string ('x')
+TypeError ERR_INVALID_ARG_TYPE The "callback" argument must be of type function. Received null
+timeout this: true Timeout A B destroyed while running: false
+cleared: true -1 null
+close returns it: true
+kept fires
+interval 1 true 2
+interval 2 true 2
+interval 3 true 2
+once fired 1 destroyed in callback: false
+after firing, destroyed: true
+refreshed, destroyed: false
+once fired 2 destroyed in callback: false
+refreshed pending fired once, late: true
+unref then ref fires
+Immediate: true true false true true [ 'X' ]
+cleared immediate: true null
+immediate this: true Immediate X destroyed: true
+promisify.custom: true true
+enrolled: 3
+unenrolled: -1 true
+ERR_OUT_OF_RANGE The value of "msecs" is out of range. It must be a non-negative finite number. Received -1
+ERR_INVALID_ARG_TYPE The "msecs" argument must be of type number. Received type string ('x')
+enrolled item fired true
+sleep: slept tick: ticked
+scheduler: undefined undefined constructor,yield,wait
+signal: 1 -> TypeError ERR_INVALID_ARG_TYPE The "options.signal" property must be an instance of AbortSignal. Received type number (1)
+options: 5 -> TypeError ERR_INVALID_ARG_TYPE The "options" argument must be of type object. Received type number (5)
+ref: 1 -> TypeError ERR_INVALID_ARG_TYPE The "options.ref" property must be of type boolean. Received type number (1)
+delay: 'x' -> TypeError ERR_INVALID_ARG_TYPE The "delay" argument must be of type number. Received type string ('x')
+immediate signal: {} -> TypeError ERR_INVALID_ARG_TYPE The "options.signal" property must be an instance of AbortSignal. Received an instance of Object
+interval options: null -> TypeError ERR_INVALID_ARG_TYPE The "options" argument must be of type object. Received null
+aborted: AbortError ABORT_ERR The operation was aborted AbortError
+already aborted: AbortError ABORT_ERR why
+interval yields every
+interval yields every
+interval yields every
+{ value: 'it', done: false } { value: undefined, done: true } { value: undefined, done: true }
+{ value: 'x', done: false }
+interval aborted: AbortError ABORT_ERR

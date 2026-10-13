@@ -1,0 +1,18 @@
+spawnSync: 3 null "out\n" "err\n" null
+input: piped in
+execSync: HELLO
+execFileSync: a b
+execSync error: 2 Command failed: exit 2
+missing: ENOENT spawnSync /nonexistent/definitely-not-a-command spawnSync /nonexistent/definitely-not-a-command ENOENT null
+timeout: ETIMEDOUT SIGTERM null
+maxBuffer: ENOBUFS
+pid: number
+failed spawn result: error,status,signal,output,pid,stdout,stderr null 0
+ok result: status,signal,output,pid,stdout,stderr
+event: spawn
+exit: 0 null
+close: 0 "got world\n" "to-err\n"
+exec: null "bar\n" ""
+execFile error: 7 false null sh -c exit 7
+spawn error: ENOENT spawn /nonexistent/no-such-binary-xyz /nonexistent/no-such-binary-xyz []
+killed: null SIGTERM true

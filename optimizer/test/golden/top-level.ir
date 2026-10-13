@@ -1,0 +1,68 @@
+globals @0 sum, @1 shared, @2 readShared
+
+function main() strict
+bb0:
+  %0 = empty
+  store_global @1, %0
+  %1 = const 0
+  %2 = const 1
+  store_global @1, %2
+  %i0 = const 0
+  jump bb2
+bb1:
+  store_global @1, %sum0
+  jump bb10
+bb2:  ; preds bb0, bb4
+  %i1: Int32 (i32) = phi [bb0: %i0], [bb4: %i2]
+  %sum0: Number (f64) = phi [bb0: %1], [bb4: %sum1]
+  %3 = const 1000
+  %4: Boolean (bool) = num_lt %i1, %3
+  branch %4, bb3, bb1
+bb3:
+  %5 = const 3
+  %6: Number (f64) = num_mod %i1, %5
+  %7 = const 0
+  %8: Boolean (bool) = num_eq %6, %7
+  branch %8, bb5, bb6
+bb4:
+  %i2: Int32 (i32) = num_inc %i1
+  jump bb2
+bb5:
+  %9: Number (f64) = num_add %sum0, %i1
+  jump bb7
+bb6:
+  %10 = const 1
+  %11: Number (f64) = num_sub %sum0, %10
+  jump bb7
+bb7:  ; preds bb5, bb6
+  %sum1: Number (f64) = phi [bb5: %9], [bb6: %11]
+  jump bb4
+bb8:  ; preds bb11, bb9
+  %sum2 = phi [bb11: %17], [bb9: %16]
+  %12 = global_name "console"  !mayThrow
+  %13 = get_prop %12, ."log"  !mayThrow
+  jump bb13
+bb9:
+  %14 = take_exception
+  %15 = const 1
+  %16: Number = num_neg %15
+  jump bb8
+bb10:  ; handler bb9
+  %17 = call_direct readShared()  !mayThrow
+  jump bb11
+bb11:  ; handler bb9
+  jump bb8
+bb12:
+  %18 = call %13, %12, %sum2, %shared1  !mayThrow
+  %19 = const undefined
+  return %19
+bb13:
+  %shared0 = load_global @1
+  %shared1 = check_tdz %shared0  !mayThrow
+  jump bb12
+
+function readShared() strict
+bb0:
+  %shared0 = load_global @1
+  %shared1 = check_tdz %shared0  !mayThrow
+  return %shared1

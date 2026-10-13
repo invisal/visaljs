@@ -1,0 +1,10 @@
+events: function true function
+stream: function true function function
+fs: object function true
+buffer: true
+util/types: true false true
+Buffer statics: poolSize,from,copyBytesFrom,of,alloc,allocUnsafe,allocUnsafeSlow,isBuffer,compare,isEncoding,concat,byteLength
+inherits: true true
+process: true false function
+legacy pipe: a|b
+beforeExit

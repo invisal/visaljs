@@ -1,0 +1,61 @@
+get a
+set c
+getOwnPropertyDescriptor c
+defineProperty c
+has a
+deleteProperty c
+ownKeys
+getOwnPropertyDescriptor a
+getOwnPropertyDescriptor nested
+getOwnPropertyDescriptor a
+defineProperty d
+getPrototypeOf
+setPrototypeOf
+isExtensible
+ownKeys
+getPrototypeOf
+getOwnPropertyDescriptor a
+for-in a
+getOwnPropertyDescriptor nested
+for-in nested
+getOwnPropertyDescriptor d
+get toJSON
+ownKeys
+getOwnPropertyDescriptor a
+getOwnPropertyDescriptor nested
+getOwnPropertyDescriptor d
+get a
+get nested
+1 2 [ 'x', 'y' ] true true undefined
+real default missing default 1
+false true [ 'shown' ] {"shown":2}
+TypeError: s must be a number
+5 [ 'n' ]
+10 from proto: inherited (receiver has own: own)
+20 true false
+called with 1,2: 3 function 2 add
+{ built: Point { x: 7 }, sameNewTarget: true } true true
+true [object Array] [ 1, 2 ]
+1
+TypeError: Cannot perform 'get' on a proxy that has been revoked
+TypeError: Cannot perform 'IsArray' on a proxy that has been revoked
+<Revoked Proxy> object
+{ shown: true, list: [ 1, 2 ] } [ { shown: true, list: [ 1, 2 ] } ] [Function: named] Map(1) { 1 => 2 }
+TypeError: 'get' on proxy: property 'x' is a read-only and non-configurable data property on the proxy target but the proxy did not return its actual value (expected '1' but got '2')
+TypeError: 'set' on proxy: trap returned truish for property 'x' which exists in the proxy target as a non-configurable and non-writable data property with a different value
+TypeError: 'has' on proxy: trap returned falsish for property 'x' which exists in the proxy target as non-configurable
+TypeError: 'deleteProperty' on proxy: trap returned truish for property 'x' which is non-configurable in the proxy target
+TypeError: 'ownKeys' on proxy: trap result did not include 'x'
+TypeError: 'ownKeys' on proxy: trap returned duplicate entries
+TypeError: 'getOwnPropertyDescriptor' on proxy: trap returned undefined for property 'x' which is non-configurable in the proxy target
+TypeError: 'defineProperty' on proxy: trap returned truish for defining non-configurable property 'z' which is either non-existent or configurable in the proxy target
+TypeError: 'getPrototypeOf' on proxy: proxy target is non-extensible but the trap did not return its actual prototype
+TypeError: 'isExtensible' on proxy: trap result does not reflect extensibility of proxy target (which is 'true')
+TypeError: 'preventExtensions' on proxy: trap returned truish but the proxy target is extensible
+TypeError: 'construct' on proxy: trap returned non-object ('1')
+false
+TypeError: 'set' on proxy: trap returned falsish for property 'x'
+TypeError: '1' returned for property 'get' of object '#<Object>' is not a function
+TypeError: Constructor Proxy requires 'new'
+TypeError: Cannot create proxy with a non-object as target or handler
+2 Proxy false [ 'length', 'name', 'revocable' ]

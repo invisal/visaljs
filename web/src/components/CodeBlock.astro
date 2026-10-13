@@ -1,0 +1,29 @@
+---
+// A labelled code block, highlighted at build time. `marks` are 0-based lines to emphasize.
+import { highlight, langOf, type Lang } from "../lib/highlight.ts";
+
+interface Props {
+  label: string;
+  code: string;
+  marks?: number[];
+  lang?: Lang;
+}
+
+const { label, code, marks = [], lang = langOf(label) } = Astro.props;
+const marked = new Set(marks);
+const lines = highlight(code, lang);
+---
+
+<figure class="flex min-w-0 flex-col overflow-hidden rounded-lg border border-kumo-hairline bg-kumo-base">
+  <figcaption class="px-3 py-1.5 text-xs tracking-wide text-kumo-subtle">{label}</figcaption>
+  <!-- not a <pre>: it would keep this template's own newlines and indentation; each line keeps its spaces instead -->
+  <code class="block overflow-x-auto py-2 font-mono leading-5">
+    {
+      lines.map((tokens, i) => (
+        <div class:list={["w-max min-w-full border-l-2 pr-3 pl-[10px] whitespace-pre", marked.has(i) ? "border-kumo-brand bg-kumo-brand/10" : marks.length ? "border-transparent opacity-60" : "border-transparent"]}>
+          {tokens.some((t) => t.content) ? tokens.map((t) => <span style={t.color ? `color:${t.color}` : undefined}>{t.content}</span>) : " "}
+        </div>
+      ))
+    }
+  </code>
+</figure>

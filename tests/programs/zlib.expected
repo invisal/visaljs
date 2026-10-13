@@ -1,0 +1,67 @@
+deflateSync 789ced98416ec2400c45f73e45ae365551418512a95971fa…e3c9f1e478723c798d239e1c4faef7e37ff0e45f9fd72c59 (574) true 22800
+gzipSync 1f8b0800000000000003ed98416ec2400c45f73e45ae3655…78723c798d239e1c4faef7e37ff0e45f248d851710590000 (586) true 22800
+deflateRawSync ed98416ec2400c45f73e45ae365551418512a95971fa2a45…8e27c793e3c9f1e478723c798d239e1c4faef7e37ff0e45f (568) true 22800
+noise 1f8b0800000000000003edd883421d6c0300e0b8ec961797…743de87ad0f5a0eb41d7ffdf75fdff00770eefc270110100 (7949) true
+strings 789ccb48cdc9c957c8402701680308b1 héllo
+empty 1f8b080000000000000303000000000000000000 0
+views 6 12
+level 0 7801011059efa6616c7068610a746865746120657073696c…65746120696f7461207a6574612067616d6d61209fd72c59 (22811)
+level 1 7801ed9c4b8ee4460c44f7758aba5a191e78069ef134e05e…1c233f8a3d8f79000f481d8f205a30cef9aef73f9fd72c59 (2078)
+level 6 789ced98416ec2400c45f73e45ae365551418512a95971fa…e3c9f1e478723c798d239e1c4faef7e37ff0e45f9fd72c59 (574)
+level 9 78daed98416ec2401004effd0a7f6da3a08002c1527cf2eb…93e3c9f1e478723c399e1c4f8e27c793873cf90f9fd72c59 (561)
+strategy 1 789ced98416ec3300c04ef7c85bea6a2461dd4690d54a7bc…e478723c399e7c8c239e1c4faeefc7ffe0c9bf019fd72c59 (576)
+strategy 2 780104c1410e84301003c1fbbec25f6b8445222664247ce2…a81e28c341ee77d67e743868eea0cf41176ba13f9fd72c59 (10361)
+strategy 3 780104c1410e84301003c1fbbec25f6b8445222664247ce2…a81e28c341ee77d67e743868eea0cf41176ba13f9fd72c59 (10361)
+strategy 4 78014bcc29c848e42ac9482d4954482d28ceccc9cf534802…a3e3e4e4c5e3e838f9e83839f1f5e348182707009fd72c59 (717)
+windowBits 18958dcf41ae25b71144d1f95dc5dfda37dcb004b7ac06d4…78513d381c3541b6300e3306c3b5665c7827ff1f9fd72c59 (2075) 8dcf41ae25b71144d1f95dc5dfda37dcb004b7ac06d4a35a…95522bc678513d381c3541b6300e3306c3b5665c7827ff1f (2069)
+memLevel 1f8b0800000000000003a4954b0ac3300c44f7730a5f4da5…cec9393927ef3a72724efeffe382931f248d851710590000 (590) 1f8b0800000000000003ed98416ec2400c45f73e45ae3655…78723c798d239e1c4faef7e37ff0e45f248d851710590000 (586)
+chunkSize true
+info 789c4b4c4a0600024d0127 Deflate 3
+dictionary 78bba9c80b2aed98316ec3400c047bbec25f531120410abb…f1e478723c399ebcc7114f8e27d7fbf13f78f21f9fd72c59 (559) true
+error Error Z_NEED_DICT 2 Missing dictionary
+error Error Z_NEED_DICT 2 Bad dictionary
+raw dictionary 4b44c8829900 alpha beta alpha
+members one two one two
+padding pad
+error Error Z_DATA_ERROR -3 incorrect header check
+inflate stops at the end end
+error Error Z_DATA_ERROR -3 incorrect header check
+error Error Z_BUF_ERROR -5 unexpected end of file
+error Error Z_BUF_ERROR -5 unexpected end of file
+error Error Z_DATA_ERROR -3 invalid block type
+error Error Z_BUF_ERROR -5 unexpected end of file
+error TypeError ERR_INVALID_ARG_TYPE undefined The "buffer" argument must be of type string or an instance of Buffer, TypedArray, DataView, or ArrayBuffer. Received type number (123)
+error RangeError ERR_OUT_OF_RANGE undefined The value of "options.level" is out of range. It must be >= -1 and <= 9. Received 10
+error RangeError ERR_OUT_OF_RANGE undefined The value of "options.chunkSize" is out of range. It must be >= 64. Received 10
+error RangeError ERR_OUT_OF_RANGE undefined The value of "options.windowBits" is out of range. It must be >= 9 and <= 15. Received 8
+error TypeError ERR_INVALID_ARG_TYPE undefined The "options.strategy" property must be of type number. Received type string ('fast')
+error TypeError ERR_INVALID_ARG_TYPE undefined The "options.dictionary" property must be an instance of Buffer, TypedArray, DataView, or ArrayBuffer. Received type string ('d')
+error TypeError ERR_INVALID_ARG_TYPE undefined The "callback" argument must be of type function. Received undefined
+error TypeError ERR_INVALID_ARG_TYPE undefined The "data" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (1)
+error RangeError ERR_OUT_OF_RANGE undefined The value of "value" is out of range. It must be >= 0 && <= 4294967295. Received -1
+error RangeError ERR_BUFFER_TOO_LARGE undefined Cannot create a Buffer larger than 1000 bytes
+crc32 907060870 907060870 222957957 2654700086 394628388
+gzip callback null 1f8b0800000000000003ed98416ec2400c45f73e45ae3655…78723c798d239e1c4faef7e37ff0e45f248d851710590000 (586)
+gunzip callback null true
+inflate callback Z_DATA_ERROR incorrect header check undefined
+maxOutputLength callback ERR_BUFFER_TOO_LARGE Cannot create a Buffer larger than 5000 bytes
+promised 10 p
+stream finish end close 2 1f8b0800000000000003ed98416ec2400c45f73e45ae3655…78723c798d239e1c4faef7e37ff0e45f248d851710590000 (586) true 22800 true
+pipeline undefined true
+flush first part 
+flushed sync
+flush data second part
+flush end
+params 780100881377ec616c7068610a746865746120657073696c…9c9c9373724ecec9393927e7e49c9c93ffeee41f9fd72c59 (5198) true
+reset kept
+stream error Z_DATA_ERROR -3 incorrect header check true
+stream close
+truncated Z_BUF_ERROR unexpected end of file
+garbage TypeError ERR_TRAILING_JUNK_AFTER_STREAM_END Trailing junk found after the end of the compressed stream
+finishFlush true true
+unzip bytes byte by byte
+closed true true
+constants null false Infinity 170
+codes -3 Z_DATA_ERROR true
+deprecated constants 9 false undefined
+instances true true function

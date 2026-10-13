@@ -1,0 +1,52 @@
+function main()
+bb0:
+  %describe0 = make_function describe
+  declare_global function ."describe", %describe0  !mayThrow
+  %0 = const 1
+  %1 = call_direct describe(%0)  !mayThrow
+  %2 = const 3
+  %3 = call_direct describe(%2)  !mayThrow
+  %4 = const 9
+  %5 = call_direct describe(%4)  !mayThrow
+  %6 = call_runtime print(%1, %3, %5)  !mayThrow
+  %7 = const undefined
+  return %7
+
+function describe(%x0)
+bb0:
+  %out0 = empty
+  %out1 = const ""
+  %0 = const 1
+  %1 = strict_eq %x0, %0
+  branch %1, bb2, bb6
+bb1:  ; preds bb3, bb5
+  %out2 = phi [bb3: %out5], [bb5: %out8]
+  return %out2
+bb2:
+  %2 = const "one "
+  %out3 = add %out1, %2  !mayThrow
+  jump bb3
+bb3:  ; preds bb6, bb2
+  %out4 = phi [bb6: %out1], [bb2: %out3]
+  %3 = const "two-or-fallthrough "
+  %out5 = add %out4, %3  !mayThrow
+  jump bb1
+bb4:
+  %4 = const "other "
+  %out6 = add %out1, %4  !mayThrow
+  jump bb5
+bb5:  ; preds bb7, bb4
+  %out7 = phi [bb7: %out1], [bb4: %out6]
+  %5 = const "three "
+  %out8 = add %out7, %5  !mayThrow
+  jump bb1
+bb6:
+  %6 = const 2
+  %7 = strict_eq %x0, %6
+  branch %7, bb3, bb7
+bb7:
+  %8 = const 3
+  %9 = strict_eq %x0, %8
+  branch %9, bb5, bb8
+bb8:
+  jump bb4

@@ -1,0 +1,420 @@
+SecretKeyObject { [Symbol(kKeyType)]: 'secret' } secret 16 undefined undefined
+<Buffer 30 31 32 33 34 35 36 37 38 39 61 62 63 64 65 66>
+{ kty: 'oct', k: 'MDEyMzQ1Njc4OWFiY2RlZg' }
+<Buffer 30 31 32 33 34 35 36 37 38 39 61 62 63 64 65 66>
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.format' must be one of: undefined, 'buffer', 'jwk'. Received 'pem'
+true
+false
+TypeError [ERR_INVALID_ARG_TYPE]: The "otherKeyObject" argument must be an instance of KeyObject. Received type number (1)
+abc
+abc
+TypeError [ERR_INVALID_ARG_TYPE]: The "key" argument must be an instance of ArrayBuffer, Buffer, TypedArray, or DataView. Received type number (1)
+[ 'constructor', 'type', 'equals' ]
+[ 'constructor', 'symmetricKeySize', 'export', 'toCryptoKey' ]
+[ 'SecretKeyObject', true ]
+TypeError [ERR_INVALID_ARG_TYPE]: The "handle" argument must be of type object. Received an instance of Object
+TypeError [ERR_INVALID_ARG_TYPE]: The "key" argument must be an instance of CryptoKey. Received type number (1)
+68f4d9c04881bab754f229e82dee00ccf8d9f6a7cf98125ac5e8254d6cd3cc3f
+377222e061a924c591cd9c27ea163ed4
+ArrayBuffer 8620fa3b1d772261
+rsa private rsa { modulusLength: 1024, publicExponent: 65537n } public rsa undefined
+PrivateKeyObject {
+  [Symbol(kKeyType)]: 'private',
+  [Symbol(kAsymmetricKeyType)]: 'rsa',
+  [Symbol(kAsymmetricKeyDetails)]: { modulusLength: 1024, publicExponent: 65537n }
+}
+-----BEGIN PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDzcwgppEbBV4oVOt4JfFhFGmJr
+0BZgQy/lTRO8CBPyalOkcluPm6jAjs5a2d+R08hToVrsHH9QXPs9ZKgap1pQsirH
+OEwp2iHx5s0mMNE2MLj+QSU5civgAEjKsTEzqSQ8kpc8k7lZIJ8KwtTUTUouJdYO
+l5FVxgmfIJKum5j1jQIDAQAB
+-----END PUBLIC KEY-----
+
+true
+30819f300d06092a864886f70d010101050003818d0030818902818100f3730829a446c1578a153ade097c58451a626bd01660432fe54d13bc0813f26a53a4725b8f9ba8c08ece5ad9df91d3c853a15aec1c7f505cfb3d64a81aa75a50b22ac7384c29da21f1e6cd2630d13630b8fe412539722be00048cab13133a9243c92973c93b959209f0ac2d4d44d4a2e25d60e979155c6099f2092ae9b98f58d0203010001
+30820278020100300d06092a864886f70d0101010500048202623082025e02010002818100f3730829a446c1578a153ade097c58451a626bd01660432fe54d13bc0813f26a53a4725b8f9ba8c08ece5ad9df91d3c853a15aec1c7f505cfb3d64a81aa75a50b22ac7384c29da21f1e6cd2630d13630b8fe412539722be00048cab13133a9243c92973c93b959209f0ac2d4d44d4a2e25d60e979155c6099f2092ae9b98f58d020301000102818100f05620b9d366d29a94442f306256f2618e1199f3fd131d611c5342673fe6494c74b484fd2541fb8fd5ab9c7f38baa3444263a9fa2c8bf78f43acb1414fc6e55d960736faa43a896610f4a5e66f7f2d875124427cc31e5e6493b75ec83771a78e73ce3e05a6a831dbe78e3b60fcab16d5237d68e68a2de9e516b5f461a4400c75024100fbeeda44f525ef0e498b04c753adb078b311fc9711680c68bad3e439032af3deb306a20dc0ffa502199d3e39161dee20c173c902a63b8082b461b97051d207bf024100f7611e8ca60e29f29cf6d06503da7ce7b62bf11c4f350d4ff8db8274981592542f127417ddfdb0e3dd3b7602cc13b421229cae28e3d2022fbe1ee734569d35b3024100a523e161984c60523e34e951fb70fc1f724a1507b57a3dc01ccf2e678cc3080e6fcda6465bbf779b53ccf5ef97a6d0e419cadaf5689fd2525b093ff3f73e34a3024100a3b6d66ce68881225ad6ccdbcd4d0f5499af430625354af61e0fc7aa39ec2cc721cfe89cd3014dcbbf61d69bcb4b4eee8ee57a2cfd78c291ae14ed9629ac2919024026092c894f7d33a0682228c0f1d4dd2552af58a6b433ae4c3d45929c98ed025d0b55db9c1d9e6d2fef4f4e49dfb44dabdd0f022eae0a11bfbdebb68b46b5a5f3
+-----BEGIN RSA PRIVATE KEY-----
+MIICXgIBAAKBgQDzcwgppEbBV4oVOt4JfFhFGmJr0BZgQy/lTRO8CBPyalOkcluP
+m6jAjs5a2d+R08hToVrsHH9QXPs9ZKgap1pQsirHOEwp2iHx5s0mMNE2MLj+QSU5
+civgAEjKsTEzqSQ8kpc8k7lZIJ8KwtTUTUouJdYOl5FVxgmfIJKum5j1jQIDAQAB
+AoGBAPBWILnTZtKalEQvMGJW8mGOEZnz/RMdYRxTQmc/5klMdLSE/SVB+4/Vq5x/
+OLqjREJjqfosi/ePQ6yxQU/G5V2WBzb6pDqJZhD0peZvfy2HUSRCfMMeXmSTt17I
+N3GnjnPOPgWmqDHb5447YPyrFtUjfWjmii3p5Ra19GGkQAx1AkEA++7aRPUl7w5J
+iwTHU62weLMR/JcRaAxoutPkOQMq896zBqINwP+lAhmdPjkWHe4gwXPJAqY7gIK0
+YblwUdIHvwJBAPdhHoymDinynPbQZQPafOe2K/EcTzUNT/jbgnSYFZJULxJ0F939
+sOPdO3YCzBO0ISKcrijj0gIvvh7nNFadNbMCQQClI+FhmExgUj406VH7cPwfckoV
+B7V6PcAczy5njMMIDm/NpkZbv3ebU8z175em0OQZytr1aJ/SUlsJP/P3PjSjAkEA
+o7bWbOaIgSJa1szbzU0PVJmvQwYlNUr2Hg/HqjnsLMchz+ic0wFNy79h1pvLS07u
+juV6LP14wpGuFO2WKawpGQJAJgksiU99M6BoIijA8dTdJVKvWKa0M65MPUWSnJjt
+Al0LVducHZ5tL+9PTknftE2r3Q8CLq4KEb+967aLRrWl8w==
+-----END RSA PRIVATE KEY-----
+
+-----BEGIN RSA PUBLIC KEY-----
+MIGJAoGBAPNzCCmkRsFXihU63gl8WEUaYmvQFmBDL+VNE7wIE/JqU6RyW4+bqMCO
+zlrZ35HTyFOhWuwcf1Bc+z1kqBqnWlCyKsc4TCnaIfHmzSYw0TYwuP5BJTlyK+AA
+SMqxMTOpJDySlzyTuVkgnwrC1NRNSi4l1g6XkVXGCZ8gkq6bmPWNAgMBAAE=
+-----END RSA PUBLIC KEY-----
+
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding sec1 can only be used for EC keys.
+{
+  kty: 'RSA',
+  n: '83MIKaRGwVeKFTreCXxYRRpia9AWYEMv5U0TvAgT8mpTpHJbj5uowI7OWtnfkdPIU6Fa7Bx_UFz7PWSoGqdaULIqxzhMKdoh8ebNJjDRNjC4_kElOXIr4ABIyrExM6kkPJKXPJO5WSCfCsLU1E1KLiXWDpeRVcYJnyCSrpuY9Y0',
+  e: 'AQAB',
+  d: '8FYgudNm0pqURC8wYlbyYY4RmfP9Ex1hHFNCZz_mSUx0tIT9JUH7j9WrnH84uqNEQmOp-iyL949DrLFBT8blXZYHNvqkOolmEPSl5m9_LYdRJEJ8wx5eZJO3Xsg3caeOc84-BaaoMdvnjjtg_KsW1SN9aOaKLenlFrX0YaRADHU',
+  p: '--7aRPUl7w5JiwTHU62weLMR_JcRaAxoutPkOQMq896zBqINwP-lAhmdPjkWHe4gwXPJAqY7gIK0YblwUdIHvw',
+  q: '92EejKYOKfKc9tBlA9p857Yr8RxPNQ1P-NuCdJgVklQvEnQX3f2w4907dgLME7QhIpyuKOPSAi--Huc0Vp01sw',
+  dp: 'pSPhYZhMYFI-NOlR-3D8H3JKFQe1ej3AHM8uZ4zDCA5vzaZGW793m1PM9e-XptDkGcra9Wif0lJbCT_z9z40ow',
+  dq: 'o7bWbOaIgSJa1szbzU0PVJmvQwYlNUr2Hg_HqjnsLMchz-ic0wFNy79h1pvLS07ujuV6LP14wpGuFO2WKawpGQ',
+  qi: 'JgksiU99M6BoIijA8dTdJVKvWKa0M65MPUWSnJjtAl0LVducHZ5tL-9PTknftE2r3Q8CLq4KEb-967aLRrWl8w'
+}
+{
+  kty: 'RSA',
+  n: '83MIKaRGwVeKFTreCXxYRRpia9AWYEMv5U0TvAgT8mpTpHJbj5uowI7OWtnfkdPIU6Fa7Bx_UFz7PWSoGqdaULIqxzhMKdoh8ebNJjDRNjC4_kElOXIr4ABIyrExM6kkPJKXPJO5WSCfCsLU1E1KLiXWDpeRVcYJnyCSrpuY9Y0',
+  e: 'AQAB'
+}
+TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'spki'
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'pkcs8'
+[ 'private', true ]
+[ 'private', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+false
+TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
+pss private rsa-pss {
+  modulusLength: 1024,
+  publicExponent: 65537n,
+  hashAlgorithm: 'sha256',
+  mgf1HashAlgorithm: 'sha256',
+  saltLength: 16
+} public rsa-pss undefined
+PrivateKeyObject {
+  [Symbol(kKeyType)]: 'private',
+  [Symbol(kAsymmetricKeyType)]: 'rsa-pss',
+  [Symbol(kAsymmetricKeyDetails)]: {
+    modulusLength: 1024,
+    publicExponent: 65537n,
+    hashAlgorithm: 'sha256',
+    mgf1HashAlgorithm: 'sha256',
+    saltLength: 16
+  }
+}
+-----BEGIN PUBLIC KEY-----
+MIHTMEEGCSqGSIb3DQEBCjA0oA8wDQYJYIZIAWUDBAIBBQChHDAaBgkqhkiG9w0B
+AQgwDQYJYIZIAWUDBAIBBQCiAwIBEAOBjQAwgYkCgYEAzoufjdrOR12WpU477NS7
+99qN/N893/9rcBQYifgGupMZqWfg2i35iBxGlmr0MIgNQRC1qhhE4avDGZCcS9l8
+b+WNDSCUwSdvvdxxz5CiQYOjRbVjLUHzvNvhoD52+0zo4PcSsSTKsy+66Zglmjdl
+C5H8Ne21+eJwvzOBPR/K+cMCAwEAAQ==
+-----END PUBLIC KEY-----
+
+true
+3081d3304106092a864886f70d01010a3034a00f300d06096086480165030402010500a11c301a06092a864886f70d010108300d06096086480165030402010500a20302011003818d0030818902818100ce8b9f8ddace475d96a54e3becd4bbf7da8dfcdf3ddfff6b70141889f806ba9319a967e0da2df9881c46966af430880d4110b5aa1844e1abc319909c4bd97c6fe58d0d2094c1276fbddc71cf90a24183a345b5632d41f3bcdbe1a03e76fb4ce8e0f712b124cab32fbae998259a37650b91fc35edb5f9e270bf33813d1fcaf9c30203010001
+308202a9020100304106092a864886f70d01010a3034a00f300d06096086480165030402010500a11c301a06092a864886f70d010108300d06096086480165030402010500a2030201100482025f3082025b02010002818100ce8b9f8ddace475d96a54e3becd4bbf7da8dfcdf3ddfff6b70141889f806ba9319a967e0da2df9881c46966af430880d4110b5aa1844e1abc319909c4bd97c6fe58d0d2094c1276fbddc71cf90a24183a345b5632d41f3bcdbe1a03e76fb4ce8e0f712b124cab32fbae998259a37650b91fc35edb5f9e270bf33813d1fcaf9c30203010001028181008d1d87dd7b690409452b9bd0057733159c14f677efe662b41cd71e0ce59073589d67c8b92f57c9ecdca4bd904556031e4b1e0780372498aaa99985dbc356cc54cbdcd53c3e73420e8f51ca4b2d241e8e50d7882064c070d2a0268f711565503051a91d0227ba239007bd6fb8eac3bfedb337420829c7e37a44120c58c60e4101024100f9449977054bfdc2333f31ba75721780b478da31ec3f706ce80ead984d4648bcc14e5403c0114f09e06c4e1a22ecd627b519c8d70ddd9afd9cbcca817053e853024100d41fa582ef8ec60c6555cc0f7bcae09637146e902e0600c19b964cf081ac05025a844c72e9866b5cb89c882adfd2cc723acdb8e1883af09457f414d8f1cabad1024002e114f8b7f9f1bb6d861c57f0055a5a253b8421b17de6198bf0a776abe5d4ef41385b6613b0df7dd8b6c78c2bbd1a9828d25c6c877f78cbd724a31e2da2fa7b023f5e75b93e956efec2865dae81369f2163c3235618de65cdf0695884ea94d4056706e7e32348da92f4b740fd621a49c4c1196e82e5ebc4535dbbccf57ba630a1024020fe132308a3653513cc8713f69bb8f7ce34bf87534dfc244b7da03af17e916845bc751881dad20a19ccc773452023ebe6c6d935332afe1308421ece616f0c41
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding sec1 can only be used for EC keys.
+Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
+Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
+TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'spki'
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'pkcs8'
+[ 'private', true ]
+Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
+[ 'public', true ]
+Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+false
+TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
+pss0 private rsa-pss { modulusLength: 1024, publicExponent: 65537n } public rsa-pss undefined
+PrivateKeyObject {
+  [Symbol(kKeyType)]: 'private',
+  [Symbol(kAsymmetricKeyType)]: 'rsa-pss',
+  [Symbol(kAsymmetricKeyDetails)]: { modulusLength: 1024, publicExponent: 65537n }
+}
+-----BEGIN PUBLIC KEY-----
+MIGdMAsGCSqGSIb3DQEBCgOBjQAwgYkCgYEAuvONzGPB5Uq0i0IAHgzvKHaMyRSa
+ug64xphpblKjE4E8ahcofWKhGwIWpAVKHpQiRsWWlj12wGy+pXSeo0p8OUH4Q+mu
+w1MEK/tQVJteQiUhwa7gHPt5r+Ml0b0SL79apfTgor2IuMYKeILp3uiaEZibW1jc
+h2WnBzKbpECMeYsCAwEAAQ==
+-----END PUBLIC KEY-----
+
+true
+30819d300b06092a864886f70d01010a03818d0030818902818100baf38dcc63c1e54ab48b42001e0cef28768cc9149aba0eb8c698696e52a313813c6a17287d62a11b0216a4054a1e942246c596963d76c06cbea5749ea34a7c3941f843e9aec353042bfb50549b5e422521c1aee01cfb79afe325d1bd122fbf5aa5f4e0a2bd88b8c60a7882e9dee89a11989b5b58dc8765a707329ba4408c798b0203010001
+30820274020100300b06092a864886f70d01010a048202603082025c02010002818100baf38dcc63c1e54ab48b42001e0cef28768cc9149aba0eb8c698696e52a313813c6a17287d62a11b0216a4054a1e942246c596963d76c06cbea5749ea34a7c3941f843e9aec353042bfb50549b5e422521c1aee01cfb79afe325d1bd122fbf5aa5f4e0a2bd88b8c60a7882e9dee89a11989b5b58dc8765a707329ba4408c798b020301000102818063f3d9894080a735c4c77b971279f9d7d9623613e511bad341a2b523bddce08dc51e379977482738886a50715f8a6fcacfa9ce742f127198f26905abd743f89bbded30cff4a580e8de5df2ac2c1921e169e9bb8807bd87b29d3ee6fbb5220c9477753f1e5a8d114c10fb36e4d69d95f9bf86b6f7a90a10c039e2b99554474a19024100e8e5b8304d59335d85f2796cd5d3be44a2bd36f6bcdffcd6800a33fb354fef1618ff1edbc577e6c0010c549fcc59187761dae1b7565d66f32272ca61d53045e7024100cd7f10dcea0cfb1879edbd9e2f92ab40c90caf4006391c6473e4c47058e7b88c5aea3cfdafe83a83dc7740234b89c0835f06f9cea5933dd1802e397593f872bd02404e27082fed44c99fd09b1574182cfde43a581461a7efe20078e6f39a90c14a11b841a4314b8a78bc659da5a81a02abdb23d3377b3658117bf54b5fee8483b6710241009fcecf385db3d699c448848bbe075bb2b8276b2a692c84ce01eac8716e52560ca0af44db2caf76c210f394275e9933e376452083f9f3b5c174e37dbfd8610029024053144887a807824d930ec1fd6823a1d93756a8843138517320947ed71d21d3b07e49d134055727f4140e9a3d4d6eac2a2c951eb9da282656158f27e70a7e0e14
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding sec1 can only be used for EC keys.
+Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
+Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
+TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'spki'
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'pkcs8'
+[ 'private', true ]
+Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
+[ 'public', true ]
+Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+false
+TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
+prime256v1 private ec { namedCurve: 'prime256v1' } public ec undefined
+PrivateKeyObject {
+  [Symbol(kKeyType)]: 'private',
+  [Symbol(kAsymmetricKeyType)]: 'ec',
+  [Symbol(kAsymmetricKeyDetails)]: { namedCurve: 'prime256v1' }
+}
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEqJS/jqjjOZhu/S6URkaOUPdEEeUP
+dpN3CQPul60TX5/jMnsYSuB8GjCYi+SX4Jbm9CMbj+OAZ4O7x1ExNP1YzQ==
+-----END PUBLIC KEY-----
+
+true
+3059301306072a8648ce3d020106082a8648ce3d03010703420004a894bf8ea8e339986efd2e9446468e50f74411e50f7693770903ee97ad135f9fe3327b184ae07c1a30988be497e096e6f4231b8fe3806783bbc7513134fd58cd
+308187020100301306072a8648ce3d020106082a8648ce3d030107046d306b0201010420653cf0cd1dbf185d8089b7c6b1d1f7e70ed8318bea69de75742b59c44f65bca0a14403420004a894bf8ea8e339986efd2e9446468e50f74411e50f7693770903ee97ad135f9fe3327b184ae07c1a30988be497e096e6f4231b8fe3806783bbc7513134fd58cd
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIGU88M0dvxhdgIm3xrHR9+cO2DGL6mnedXQrWcRPZbygoAoGCCqGSM49
+AwEHoUQDQgAEqJS/jqjjOZhu/S6URkaOUPdEEeUPdpN3CQPul60TX5/jMnsYSuB8
+GjCYi+SX4Jbm9CMbj+OAZ4O7x1ExNP1YzQ==
+-----END EC PRIVATE KEY-----
+
+{
+  kty: 'EC',
+  x: 'qJS_jqjjOZhu_S6URkaOUPdEEeUPdpN3CQPul60TX58',
+  y: '4zJ7GErgfBowmIvkl-CW5vQjG4_jgGeDu8dRMTT9WM0',
+  crv: 'P-256',
+  d: 'ZTzwzR2_GF2AibfGsdH35w7YMYvqad51dCtZxE9lvKA'
+}
+{
+  kty: 'EC',
+  x: 'qJS_jqjjOZhu_S6URkaOUPdEEeUPdpN3CQPul60TX58',
+  y: '4zJ7GErgfBowmIvkl-CW5vQjG4_jgGeDu8dRMTT9WM0',
+  crv: 'P-256'
+}
+TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'spki'
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'pkcs8'
+[ 'private', true ]
+[ 'private', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+false
+TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
+secp384r1 private ec { namedCurve: 'secp384r1' } public ec undefined
+PrivateKeyObject {
+  [Symbol(kKeyType)]: 'private',
+  [Symbol(kAsymmetricKeyType)]: 'ec',
+  [Symbol(kAsymmetricKeyDetails)]: { namedCurve: 'secp384r1' }
+}
+-----BEGIN PUBLIC KEY-----
+MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEq84T5YlCQn0hnDV43XjmeCyNK7y9+xwO
+y4nBI5wpG7bVd3PyjxZjeDHBcgH0Z+ZTNbtnA0zBozC7ejOVdlwbEuHsGOFidbQ0
+E8RpBEiZylY66c6WdTUep6I/as1eylCH
+-----END PUBLIC KEY-----
+
+true
+3076301006072a8648ce3d020106052b8104002203620004abce13e58942427d219c3578dd78e6782c8d2bbcbdfb1c0ecb89c1239c291bb6d57773f28f16637831c17201f467e65335bb67034cc1a330bb7a3395765c1b12e1ec18e16275b43413c469044899ca563ae9ce9675351ea7a23f6acd5eca5087
+3081b6020100301006072a8648ce3d020106052b8104002204819e30819b0201010430321c61cd34fc429f3ba42e3184ad5aabc6748e6207081d19d6b610062d9875015c07ef44e89ab8824d85a87e248f8071a16403620004abce13e58942427d219c3578dd78e6782c8d2bbcbdfb1c0ecb89c1239c291bb6d57773f28f16637831c17201f467e65335bb67034cc1a330bb7a3395765c1b12e1ec18e16275b43413c469044899ca563ae9ce9675351ea7a23f6acd5eca5087
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+-----BEGIN EC PRIVATE KEY-----
+MIGkAgEBBDAyHGHNNPxCnzukLjGErVqrxnSOYgcIHRnWthAGLZh1AVwH70TomriC
+TYWofiSPgHGgBwYFK4EEACKhZANiAASrzhPliUJCfSGcNXjdeOZ4LI0rvL37HA7L
+icEjnCkbttV3c/KPFmN4McFyAfRn5lM1u2cDTMGjMLt6M5V2XBsS4ewY4WJ1tDQT
+xGkESJnKVjrpzpZ1NR6noj9qzV7KUIc=
+-----END EC PRIVATE KEY-----
+
+{
+  kty: 'EC',
+  x: 'q84T5YlCQn0hnDV43XjmeCyNK7y9-xwOy4nBI5wpG7bVd3PyjxZjeDHBcgH0Z-ZT',
+  y: 'NbtnA0zBozC7ejOVdlwbEuHsGOFidbQ0E8RpBEiZylY66c6WdTUep6I_as1eylCH',
+  crv: 'P-384',
+  d: 'MhxhzTT8Qp87pC4xhK1aq8Z0jmIHCB0Z1rYQBi2YdQFcB-9E6Jq4gk2FqH4kj4Bx'
+}
+{
+  kty: 'EC',
+  x: 'q84T5YlCQn0hnDV43XjmeCyNK7y9-xwOy4nBI5wpG7bVd3PyjxZjeDHBcgH0Z-ZT',
+  y: 'NbtnA0zBozC7ejOVdlwbEuHsGOFidbQ0E8RpBEiZylY66c6WdTUep6I_as1eylCH',
+  crv: 'P-384'
+}
+TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'spki'
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'pkcs8'
+[ 'private', true ]
+[ 'private', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+false
+TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
+secp521r1 private ec { namedCurve: 'secp521r1' } public ec undefined
+PrivateKeyObject {
+  [Symbol(kKeyType)]: 'private',
+  [Symbol(kAsymmetricKeyType)]: 'ec',
+  [Symbol(kAsymmetricKeyDetails)]: { namedCurve: 'secp521r1' }
+}
+-----BEGIN PUBLIC KEY-----
+MIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQACqiSiyEh9VvojwWJizU/zxB9qOzU
+1I0dnWrhuAeMUwjmPhf0VykSZfwk718bgOQ7qdVvnS+dqWSHqSbEIL42Q8sBwwci
+9x2HWuptHZejbtuLWy/2v585tTtAt+Cg8mDO59DRu5+ZDraw7pO88Cs3qie0OAnY
+EVPdABRXP3gzbogj0qM=
+-----END PUBLIC KEY-----
+
+true
+30819b301006072a8648ce3d020106052b810400230381860004000aa8928b2121f55be88f05898b353fcf107da8ecd4d48d1d9d6ae1b8078c5308e63e17f457291265fc24ef5f1b80e43ba9d56f9d2f9da96487a926c420be3643cb01c30722f71d875aea6d1d97a36edb8b5b2ff6bf9f39b53b40b7e0a0f260cee7d0d1bb9f990eb6b0ee93bcf02b37aa27b43809d81153dd0014573f78336e8823d2a3
+3081ee020100301006072a8648ce3d020106052b810400230481d63081d3020101044200233a70648f5fec99184c6793d19f87d6c142baec719483318c5d3648e029de63229cf830a31396533030264cea850e54043146fbe6dc311e336686862e556adc67a181890381860004000aa8928b2121f55be88f05898b353fcf107da8ecd4d48d1d9d6ae1b8078c5308e63e17f457291265fc24ef5f1b80e43ba9d56f9d2f9da96487a926c420be3643cb01c30722f71d875aea6d1d97a36edb8b5b2ff6bf9f39b53b40b7e0a0f260cee7d0d1bb9f990eb6b0ee93bcf02b37aa27b43809d81153dd0014573f78336e8823d2a3
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+-----BEGIN EC PRIVATE KEY-----
+MIHcAgEBBEIAIzpwZI9f7JkYTGeT0Z+H1sFCuuxxlIMxjF02SOAp3mMinPgwoxOW
+UzAwJkzqhQ5UBDFG++bcMR4zZoaGLlVq3GegBwYFK4EEACOhgYkDgYYABAAKqJKL
+ISH1W+iPBYmLNT/PEH2o7NTUjR2dauG4B4xTCOY+F/RXKRJl/CTvXxuA5Dup1W+d
+L52pZIepJsQgvjZDywHDByL3HYda6m0dl6Nu24tbL/a/nzm1O0C34KDyYM7n0NG7
+n5kOtrDuk7zwKzeqJ7Q4CdgRU90AFFc/eDNuiCPSow==
+-----END EC PRIVATE KEY-----
+
+{
+  kty: 'EC',
+  x: 'AAqokoshIfVb6I8FiYs1P88Qfajs1NSNHZ1q4bgHjFMI5j4X9FcpEmX8JO9fG4DkO6nVb50vnalkh6kmxCC-NkPL',
+  y: 'AcMHIvcdh1rqbR2Xo27bi1sv9r-fObU7QLfgoPJgzufQ0bufmQ62sO6TvPArN6ontDgJ2BFT3QAUVz94M26II9Kj',
+  crv: 'P-521',
+  d: 'ACM6cGSPX-yZGExnk9Gfh9bBQrrscZSDMYxdNkjgKd5jIpz4MKMTllMwMCZM6oUOVAQxRvvm3DEeM2aGhi5Vatxn'
+}
+{
+  kty: 'EC',
+  x: 'AAqokoshIfVb6I8FiYs1P88Qfajs1NSNHZ1q4bgHjFMI5j4X9FcpEmX8JO9fG4DkO6nVb50vnalkh6kmxCC-NkPL',
+  y: 'AcMHIvcdh1rqbR2Xo27bi1sv9r-fObU7QLfgoPJgzufQ0bufmQ62sO6TvPArN6ontDgJ2BFT3QAUVz94M26II9Kj',
+  crv: 'P-521'
+}
+TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'spki'
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'pkcs8'
+[ 'private', true ]
+[ 'private', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+false
+TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
+x25519 private x25519 {} public x25519 undefined
+PrivateKeyObject {
+  [Symbol(kKeyType)]: 'private',
+  [Symbol(kAsymmetricKeyType)]: 'x25519'
+}
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VuAyEA5sONUE8wY2BNCd9MJdnEuJn7bWy12nW3M7ZJUQdv6HU=
+-----END PUBLIC KEY-----
+
+true
+302a300506032b656e032100e6c38d504f3063604d09df4c25d9c4b899fb6d6cb5da75b733b64951076fe875
+302e020100300506032b656e0422042000aed251530f6129b200183bc7c2a6496ef0c9f517dc226659e02ee1dbf9146c
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding sec1 can only be used for EC keys.
+{
+  crv: 'X25519',
+  d: 'AK7SUVMPYSmyABg7x8KmSW7wyfUX3CJmWeAu4dv5FGw',
+  x: '5sONUE8wY2BNCd9MJdnEuJn7bWy12nW3M7ZJUQdv6HU',
+  kty: 'OKP'
+}
+{
+  crv: 'X25519',
+  x: '5sONUE8wY2BNCd9MJdnEuJn7bWy12nW3M7ZJUQdv6HU',
+  kty: 'OKP'
+}
+TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'spki'
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'pkcs8'
+[ 'private', true ]
+[ 'private', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+[ 'public', true ]
+false
+TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
+true
+true
+true
+rsa
+-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIGU88M0dvxhdgIm3xrHR9+cO2DGL6mnedXQrWcRPZbygoAoGCCqGSM49
+AwEHoUQDQgAEqJS/jqjjOZhu/S6URkaOUPdEEeUPdpN3CQPul60TX5/jMnsYSuB8
+GjCYi+SX4Jbm9CMbj+OAZ4O7x1ExNP1YzQ==
+-----END EC PRIVATE KEY-----
+
+true
+true
+true
+Error [ERR_OSSL_UNSUPPORTED]: error:1E08010C:DECODER routines::unsupported
+Error [ERR_OSSL_ASN1_WRONG_TAG]: error:068000A8:asn1 encoding routines::wrong tag
+Error [ERR_OSSL_UNSUPPORTED]: error:1E08010C:DECODER routines::unsupported
+Error [ERR_OSSL_ASN1_WRONG_TAG]: error:068000A8:asn1 encoding routines::wrong tag
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.format' is invalid. Received 'foo'
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'key.kty' must be one of: 'RSA', 'EC', 'OKP'. Received undefined
+TypeError [ERR_INVALID_ARG_TYPE]: The "key.d" property must be of type string. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'key.crv' must be one of: 'P-256', 'secp256k1', 'P-384', 'P-521'. Received 'P-999'
+TypeError [ERR_INVALID_ARG_TYPE]: The "key" argument must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, DataView, KeyObject, or CryptoKey. Received type number (1)
+TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type secret, expected private.
+TypeError [ERR_INVALID_ARG_TYPE]: The "key" argument must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView. Received an instance of PublicKeyObject
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.format' is invalid. Received 'foo'
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'foo'
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received undefined
+[ 'secret', 16, '01010101010101010101010101010101' ]
+CryptoKey {
+  type: 'secret',
+  extractable: true,
+  algorithm: { name: 'HMAC', hash: [Object], length: 128 },
+  usages: [ 'sign' ]
+}
+{ name: 'AES-GCM', length: 128 }
+8
+16
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.length' must be one of: 128, 192, 256. Received 100
+RangeError [ERR_OUT_OF_RANGE]: The value of "options.length" is out of range. It must be >= 8 && <= 2147483647. Received 7
+TypeError [ERR_INVALID_ARG_VALUE]: The argument 'type' must be a supported key type. Received 'foo'
+TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received undefined
+rsa rsa { modulusLength: 512, publicExponent: 65537n } private true
+rsa rsa { modulusLength: 1024, publicExponent: 3n } private true
+rsa-pss rsa-pss {
+  modulusLength: 512,
+  publicExponent: 65537n,
+  hashAlgorithm: 'sha256',
+  mgf1HashAlgorithm: 'sha1',
+  saltLength: 20
+} private true
+ec ec { namedCurve: 'prime256v1' } private true
+ec ec { namedCurve: 'secp521r1' } private true
+x25519 x25519 {} private true
+[ 'string', '-----BEGIN PUBLIC KEY-----', true ]
+RSA
+TypeError [ERR_INVALID_ARG_TYPE]: The "options.modulusLength" property must be of type number. Received undefined
+Error [undefined]: error:1C8000AB:Provider routines::key size too small
+TypeError [ERR_CRYPTO_INVALID_CURVE]: Invalid EC curve name
+TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The argument 'type' must be a supported key type. Received 'foo'
+generateKeyPair callback null { namedCurve: 'secp384r1' } private
+generateKey callback null 32

@@ -1,0 +1,19 @@
+point 1001 1002 true true x,y
+node false replaced undefined true
+node primitive prototype true 1
+setter got 2
+watched 1 from getter other
+setter got 5
+Object.prototype setter 6
+watched 3 
+returns {"b":2} {"a":1} [3]
+fields 10 true 1 z,target,a
+few 1,undefined,undefined 1,2,3
+derived 4 5 true 6
+call TypeError
+reassigned first second
+caught ctor 1
+caught argument
+ok true
+wide 21 19 end
+after true 5 {"x":7,"y":8}

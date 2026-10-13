@@ -1,0 +1,12 @@
+{
+  "name": "@visaljs-apps/http-hello",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A bare node:http server, compiled by visaljs",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build server.js -o server",
+    "start": "node server.js"
+  }
+}

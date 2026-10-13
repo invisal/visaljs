@@ -1,0 +1,54 @@
+utf-8 Uint8Array(14) [
+  104, 195, 169, 108,
+  108, 111,  32, 226,
+  130, 172, 240, 159,
+  152, 128
+] Uint8Array(0) [] Uint8Array(4) [ 239, 191, 189, 120 ] Uint8Array(2) [ 49, 50 ]
+{ read: 4, written: 5 } { read: 2, written: 4 }
+{ read: 4, written: 8 } Uint8Array(8) [
+  240, 159, 152,
+  128, 240, 159,
+  152, 128
+]
+utf-8 false false héllo €😀 ""
+hi hi hi
+"��A�������"
+"A" "﻿A"
+"a😀b€" "|�"
+A😀 A😀
+"A�" "�A"
+windows-1252 €ŸéA windows-1252 utf-16le
+{ encoding: 'utf-8' } TextDecoder { encoding: 'utf-8', fatal: false, ignoreBOM: false } [ TextDecoder { encoding: 'utf-16be', fatal: true, ignoreBOM: false } ] [object TextDecoder]
+MyDecoder { encoding: 'utf-8', fatal: false, ignoreBOM: false } true
+TypeError ERR_ENCODING_INVALID_ENCODED_DATA The encoded data was not valid for encoding utf-8
+TypeError ERR_ENCODING_INVALID_ENCODED_DATA The encoded data was not valid for encoding utf-16le
+RangeError ERR_ENCODING_NOT_SUPPORTED The "foo" encoding is not supported
+RangeError ERR_ENCODING_NOT_SUPPORTED The "null" encoding is not supported
+TypeError ERR_INVALID_ARG_TYPE The "options" argument must be of type object. Received type number (5)
+TypeError ERR_INVALID_ARG_TYPE The "list" argument must be an instance of SharedArrayBuffer, ArrayBuffer or ArrayBufferView.
+TypeError ERR_INVALID_ARG_TYPE The "src" argument must be of type string. Received type number (5)
+TypeError ERR_INVALID_ARG_TYPE The "dest" argument must be an instance of Uint8Array. Received an instance of Array
+TypeError ERR_INVALID_ARG_TYPE The "dest" argument must be an instance of Uint8Array. Received an instance of Uint16Array
+TypeError ERR_INVALID_THIS Value of "this" must be of type TextEncoder
+TypeError ERR_INVALID_THIS Value of "this" must be of type TextDecoder
+TypeError undefined Class constructor TextDecoder cannot be invoked without 'new'
+YWJj YWI= YQ==  //4= bnVsbA== 1 1
+abc ab a "ÿþý" héllo
+InvalidCharacterError 5 Invalid character
+InvalidCharacterError 5 The string to be decoded is not correctly encoded.
+InvalidCharacterError 5 Invalid character
+InvalidCharacterError 5 Invalid character
+InvalidCharacterError 5 Invalid character
+InvalidCharacterError 5 Invalid character
+TypeError ERR_MISSING_ARGS The "input" argument must be specified
+AbortError m 20 AbortError: m AbortError: m [] [ 'stack' ]
+true true [object DOMException] 20 25
+Error "" 25 5 0
+1 true 0
+[DOMException [AbortError]: m] [ [DOMException [AbortError]: m] ] { e: [DOMException [Error]: gone] }
+TypeError undefined Class constructor DOMException cannot be invoked without 'new'
+TypeError ERR_INVALID_THIS Value of "this" must be of DOMException
+true InvalidCharacterError 5 Invalid character
+false false false true true
+true true true true
+ü€

@@ -1,0 +1,100 @@
+function main()
+bb0:
+  %counter0 = make_function counter
+  declare_global function ."counter", %counter0  !mayThrow
+  %outer0 = make_function outer
+  declare_global function ."outer", %outer0  !mayThrow
+  declare_global var ."fns"  !mayThrow
+  %0 = new_array
+  %1 = global_this
+  set_prop %1, %0, ."fns"  !mayThrow
+  %2 = const undefined
+  %env0 = env_new %2, 1 slots
+  %3 = const 0
+  env_store %env0, %3, 0:0
+  %env1 = env_copy %env0
+  jump bb2
+bb1:
+  %4 = const 1
+  %5 = call_direct counter(%4)  !mayThrow
+  %6 = const undefined
+  %7 = call %5, %6  !mayThrow
+  %8 = global_this
+  %fns0 = get_prop %8, ."fns"  !mayThrow
+  %9 = get_prop %fns0, [1]  !mayThrow
+  %10 = call %9, %fns0  !mayThrow
+  %11 = add %7, %10  !mayThrow
+  %12 = const 5
+  %13 = call_direct outer(%12)  !mayThrow
+  %14 = const undefined
+  %15 = call %13, %14  !mayThrow
+  %16 = const undefined
+  %17 = call %15, %16  !mayThrow
+  %18 = add %11, %17  !mayThrow
+  %19 = call_runtime print(%18)  !mayThrow
+  %20 = const undefined
+  return %20
+bb2:  ; preds bb0, bb4
+  %env2 = phi [bb0: %env1], [bb4: %env3]
+  %i0 = env_load %env2, 0:0
+  %21 = const 2
+  %22 = lt %i0, %21  !mayThrow
+  branch %22, bb3, bb1
+bb3:
+  %23 = global_this
+  %fns1 = get_prop %23, ."fns"  !mayThrow
+  %24 = get_prop %fns1, ."push"  !mayThrow
+  %25 = make_function anonymous_2, %env2
+  %26 = call %24, %fns1, %25  !mayThrow
+  jump bb4
+bb4:
+  %env3 = env_copy %env2
+  %i1 = env_load %env3, 0:0
+  %27 = to_numeric %i1  !mayThrow
+  %28 = inc %27  !mayThrow
+  env_store %env3, %28, 0:0
+  jump bb2
+
+function counter(%n0)
+bb0:
+  %0 = const undefined
+  %env0 = env_new %0, 2 slots
+  env_store %env0, %n0, 0:0
+  %1 = const 1
+  env_store %env0, %1, 0:1
+  %2 = make_function anonymous, %env0
+  return %2
+
+function outer(%a0)
+bb0:
+  %0 = const undefined
+  %env0 = env_new %0, 1 slots
+  env_store %env0, %a0, 0:0
+  %1 = make_function anonymous_3, %env0
+  return %1
+
+function anonymous(%env0)
+bb0:
+  %n0 = env_load %env0, 0:0
+  %step0 = env_load %env0, 0:1
+  %step1 = check_tdz %step0  !mayThrow
+  %0 = add %n0, %step1  !mayThrow
+  env_store %env0, %0, 0:0
+  %n1 = env_load %env0, 0:0
+  return %n1
+
+function anonymous_2(%env0)
+bb0:
+  %i0 = env_load %env0, 0:0
+  %i1 = check_tdz %i0  !mayThrow
+  return %i1
+
+function anonymous_3(%env0)
+bb0:
+  %0 = make_function anonymous_4, %env0
+  return %0
+
+function anonymous_4(%env0)
+bb0:
+  %a0 = env_load %env0, 0:0
+  return %a0

@@ -1,0 +1,71 @@
+-- windows: false
+file:///home/me/dist/server/index.js
+"/home/me/dist/server/index.js"
+file:///a%20b/%23x%3Fy%25z/
+"/a b/#x?y%z/"
+file:///back%5Cslash
+"/back\\slash"
+file:///tab%09here
+"/tab\there"
+file:///%C3%9Cn%C3%AFcode/%F0%9F%98%80
+"/Ünïcode/😀"
+"/C:/Users/me/x.js"
+<Buffer 2f433a2f55736572732f6d652f782e6a73>
+"/c:/encoded/colon"
+<Buffer 2f633a2f656e636f6465642f636f6c6f6e>
+ERR_INVALID_FILE_URL_HOST: File URL host must be "localhost" or empty on linux
+ERR_INVALID_FILE_URL_HOST: File URL host must be "localhost" or empty on linux
+ERR_INVALID_FILE_URL_HOST: File URL host must be "localhost" or empty on linux
+ERR_INVALID_FILE_URL_HOST: File URL host must be "localhost" or empty on linux
+ERR_INVALID_FILE_URL_PATH: File URL path must not include encoded / characters
+<Buffer 2f612f62>
+"/C:/a\\b"
+<Buffer 2f433a2f615c62>
+"/no/drive"
+<Buffer 2f6e6f2f6472697665>
+"/C:/sp ace/€"
+<Buffer 2f433a2f7370206163652fe282ac>
+undefined: URI malformed
+<Buffer 2f433a2f626164ff>
+-- windows: true
+file:///C:/Users/me/dist/server/index.js
+"C:\\Users\\me\\dist\\server\\index.js"
+file:///c:/a%20b/%23x%3Fy%25z/
+"c:\\a b\\#x?y%z\\"
+file:///C:/mixed/slashes
+"C:\\mixed\\slashes"
+file:///D:/tab%09here
+"D:\\tab\there"
+file://server/share/file.txt
+"\\\\server\\share\\file.txt"
+file://server/share/x
+"\\\\server\\share\\x"
+ERR_INVALID_ARG_VALUE: The argument 'path' Missing UNC resource path. Received '\\\\server'
+ERR_INVALID_ARG_VALUE: The argument 'path' Missing UNC resource path. Received '\\\\server'
+ERR_INVALID_ARG_VALUE: The argument 'path' Empty UNC servername. Received '\\\\\\x'
+ERR_INVALID_ARG_VALUE: The argument 'path' Empty UNC servername. Received '\\\\\\x'
+file:///C:/%C3%9Cn%C3%AFcode/%F0%9F%98%80
+"C:\\Ünïcode\\😀"
+"C:\\Users\\me\\x.js"
+<Buffer 433a5c55736572735c6d655c782e6a73>
+"c:\\encoded\\colon"
+<Buffer 633a5c656e636f6465645c636f6c6f6e>
+"\\\\server\\share\\f"
+<Buffer 5c5c7365727665725c73686172655c66>
+"\\\\βόλοσ\\s\\f"
+<Buffer 5c5cceb2cf8ccebbcebfcf835c735c66>
+ERR_INVALID_FILE_URL_PATH: File URL path must not include encoded \ or / characters
+ERR_INVALID_FILE_URL_PATH: File URL path must be absolute
+ERR_INVALID_FILE_URL_PATH: File URL path must not include encoded \ or / characters
+<Buffer 433a5c615c62>
+ERR_INVALID_FILE_URL_PATH: File URL path must be absolute
+ERR_INVALID_FILE_URL_PATH: File URL path must be absolute
+"C:\\sp ace\\€"
+<Buffer 433a5c7370206163655ce282ac>
+undefined: URI malformed
+<Buffer 433a5c626164ff>
+-- errors
+ERR_INVALID_URL_SCHEME: The URL must be of scheme file
+ERR_INVALID_ARG_TYPE: The "path" argument must be of type string or an instance of URL. Received type number (42)
+ERR_INVALID_ARG_TYPE: The "path" argument must be of type string. Received type number (42)
+"/x/y"

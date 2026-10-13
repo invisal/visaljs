@@ -1,0 +1,19 @@
+dsa { modulusLength: 2048, divisorLength: 256 } { modulusLength: 2048, divisorLength: 256 } true
+true true
+true 842
+Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS]: The selected key encoding pkcs1 can only be used for RSA keys.
+true true true false false
+48 64 true true false true
+true false
+false false
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.dsaEncoding' is invalid. Received 'raw'
+Error [ERR_OSSL_EVP_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE]: error:03000096:digital envelope routines::operation not supported for this keytype
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY]: Incompatible key types for Diffie-Hellman: dsa and dsa
+{ modulusLength: 1024 } { modulusLength: 1024, divisorLength: 224 } true false
+{ modulusLength: 2048 } { modulusLength: 2048, divisorLength: 224 } true false
+{ modulusLength: 2048, divisorLength: 256 } { modulusLength: 2048, divisorLength: 256 } true false
+true true
+TypeError [ERR_INVALID_ARG_TYPE]: The "options.modulusLength" property must be of type number. Received undefined
+TypeError [ERR_INVALID_ARG_TYPE]: The "options.divisorLength" property must be of type number. Received type string ('160')
+async null { modulusLength: 1024, divisorLength: 224 } private

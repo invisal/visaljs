@@ -1,0 +1,15 @@
+{
+  "name": "@visaljs-apps/zod",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Validating JSON with the zod npm package, compiled by visaljs",
+  "type": "module",
+  "main": "validate.js",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build validate.js -o validate",
+    "start": "node validate.js orders.json"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  }
+}

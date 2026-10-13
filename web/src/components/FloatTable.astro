@@ -1,0 +1,51 @@
+---
+// A table of doubles and their bits (guide, JSValue chapter): sign, exponent and fraction,
+// worked out at build time so the bits can't be mistyped. `bare` leaves out the number column,
+// for a table of the three fields alone.
+interface Props {
+  values: number[];
+  bare?: boolean;
+}
+
+const { values, bare = false } = Astro.props;
+const f64 = new Float64Array(1);
+const u64 = new BigUint64Array(f64.buffer);
+const rows = values.map((d) => {
+  f64[0] = d;
+  const bin = u64[0]!.toString(2).padStart(64, "0");
+  // any fraction but all zeros makes a NaN, so NaN's row names the rule, not one of its patterns
+  const fraction = Number.isNaN(d) ? "anything except all zeros" : bin.slice(12);
+  return { number: Object.is(d, -0) ? "-0" : String(d), sign: bin.slice(0, 1), exponent: bin.slice(1, 12), fraction };
+});
+const head = "border-r border-b border-kumo-line px-3 py-1.5 text-left text-xs font-normal tracking-wide whitespace-nowrap";
+/** each field's colours, the same in every row: a tint behind the bits, the text in full */
+const FIELDS = [
+  ["sign", "text-kumo-info", "bg-kumo-info-tint"],
+  ["exponent", "text-kumo-warning", "bg-kumo-warning-tint"],
+  ["fraction", "text-kumo-success", "bg-kumo-success-tint"],
+] as const;
+---
+
+<!-- rounded like the guide's Markdown tables: separate borders, each cell drawing its right and bottom one -->
+<figure class="w-fit max-w-full min-w-0 overflow-x-auto rounded border border-kumo-line">
+  <table class="border-separate border-spacing-0 bg-kumo-base font-mono leading-5 [&_tbody_tr:last-child>*]:border-b-0 [&_tr>:last-child]:border-r-0">
+    <thead>
+      <tr>
+        {!bare && <th class:list={[head, "text-kumo-subtle"]}>number</th>}
+        {FIELDS.map(([name, text]) => <th class:list={[head, text]}>{name}</th>)}
+      </tr>
+    </thead>
+    <tbody>
+      {
+        rows.map((r) => (
+          <tr>
+            {!bare && <td class="border-r border-b border-kumo-line px-3 py-1 text-kumo-strong">{r.number}</td>}
+            {FIELDS.map(([name, text, tint]) => (
+              <td class:list={["border-r border-b border-kumo-line px-3 py-1", text, tint]}>{r[name]}</td>
+            ))}
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</figure>

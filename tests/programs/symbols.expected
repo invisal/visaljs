@@ -1,0 +1,40 @@
+symbol
+true
+false
+false
+Symbol(a)
+Symbol(a)
+a
+undefined
+Symbol()
+Symbol()
+4
+x,y
+x,y
+2 true true
+true
+false
+computed
+TypeError: Cannot convert a Symbol value to a string
+TypeError: Cannot convert a Symbol value to a number
+TypeError
+TypeError
+true
+true
+app
+undefined
+app
+symbol
+Symbol(Symbol.iterator)
+Symbol.iterator
+true
+false false false
+42
+forty-two (string)
+forty-two (default)
+TypeError
+Symbol(a)
+true
+true
+true
+TypeError

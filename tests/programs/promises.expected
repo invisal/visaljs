@@ -1,0 +1,25 @@
+[object Promise] function
+sync
+executor
+subclass:true
+a:1
+micro
+caught:no
+c1:x
+once:first
+with-resolvers:done
+c2:x
+all-rejected:r
+any-failed:AggregateError:e1,e2
+settled:fulfilled=1,rejected=2
+cycle:TypeError
+thenable:thenable
+my:10
+late
+c3:x
+finally
+race:fast
+adopted:inner
+any:ok
+all:1,2,3
+after-finally:TypeError

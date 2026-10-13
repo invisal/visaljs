@@ -1,0 +1,17 @@
+listening 127.0.0.1 IPv4 number true
+client: readyState opening pending true | connect true open | ready | data HELLO, WORLD | readyState after end() readOnly | end | close false closed destroyed true
+server: connection 127.0.0.1 IPv4 true | data "hello, world" | end | finish | close false read 12 written 12
+client wrote 1048576 bytes
+server got 1048576 bytes; bytesRead 1048576
+client got 1048576 bytes, all sevens: true bytesRead 1048576
+client: finish | server: end, writable true | client: data late reply | client: end
+listen: EADDRINUSE listen 127.0.0.1 true listen EADDRINUSE: address already in use 127.0.0.1:<port>
+connect: ECONNREFUSED connect 127.0.0.1 true true connect ECONNREFUSED 127.0.0.1:<port>
+events: error, close true destroyed true
+close again: ERR_SERVER_NOT_RUNNING Server is not running.
+RangeError ERR_SOCKET_BAD_PORT Port should be >= 0 and < 65536. Received type number (70000).
+by name: true true
+lookup ip: [ null, '127.0.0.1', 4 ]
+lookup localhost: true true
+lookup localhost v4: { address: '127.0.0.1', family: 4 }
+defaults: true function open

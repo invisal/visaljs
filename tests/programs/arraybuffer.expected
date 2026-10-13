@@ -1,0 +1,52 @@
+ArrayBuffer {
+  [Uint8Contents]: <ff ff fe fe ff de ad be ef 00 00 c0 3f 80 00 00>,
+  [byteLength]: 16
+}
+255 -1 -2 65534 -2 -257
+deadbeef -559038737 efbeadde 1.5 -128
+3.141592653589793 3.141592653589793 true 400921fb 54442d18
+-0 -0 true 80000000 0
+NaN NaN true 7ff80000 0
+Infinity Infinity true 7ff00000 0
+1e-310 1e-310 true 1268 8b70e62b
+9007199254740994 9007199254740994 true 43400000 1
+44 65535 5
+16777216 4b800000
+4 8 true de
+RangeError: Offset is outside the bounds of the DataView
+RangeError: Start offset 17 is outside the bounds of the buffer
+RangeError: Invalid DataView length 9
+ArrayBuffer { [Uint8Contents]: <00 ad be ef>, [byteLength]: 4 } 4 de ArrayBuffer { [Uint8Contents]: <00 00>, [byteLength]: 2 } ArrayBuffer { [Uint8Contents]: <>, [byteLength]: 0 }
+true 12 4 4
+10 10 7 ArrayBuffer {
+  [Uint8Contents]: <00 00 00 00 00 00 00 00 00 07>,
+  [byteLength]: 10
+}
+2 2
+TypeError: Cannot perform get DataView.prototype.byteLength on a detached ArrayBuffer
+RangeError: ArrayBuffer.prototype.resize: Invalid length parameter
+4 0
+ArrayBuffer { (detached), [byteLength]: 0 } true 0 ArrayBuffer { [Uint8Contents]: <01 02 03 04 00 00>, [byteLength]: 6 } false
+ArrayBuffer { [Uint8Contents]: <01 02>, [byteLength]: 2 } true true false
+TypeError: Cannot perform ArrayBuffer.prototype.slice on a detached ArrayBuffer
+TypeError: Cannot perform DataView constructor on a detached ArrayBuffer
+TypeError: Cannot perform ArrayBuffer.prototype.transfer on a detached ArrayBuffer
+Bytes [ArrayBuffer] { [Uint8Contents]: <00 00 00>, [byteLength]: 3 } 3 true true
+true false false [object ArrayBuffer] [object DataView]
+ArrayBuffer { [Uint8Contents]: <>, [byteLength]: 0 } DataView {
+  [byteLength]: 2,
+  [byteOffset]: 1,
+  [buffer]: ArrayBuffer { [Uint8Contents]: <00 00 00>, [byteLength]: 3 }
+} ArrayBuffer {
+  [Uint8Contents]: <00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ... 20 more bytes>,
+  [byteLength]: 120
+}
+TypeError: Constructor ArrayBuffer requires 'new'
+RangeError: Invalid array buffer length
+RangeError: Invalid array buffer length
+RangeError: Invalid array buffer max length
+TypeError: Method ArrayBuffer.prototype.resize called on incompatible receiver #<ArrayBuffer>
+TypeError: First argument to DataView constructor must be an ArrayBuffer
+TypeError: Method DataView.prototype.getInt8 called on incompatible receiver #<ArrayBuffer>
+RangeError: Offset is outside the bounds of the DataView
+RangeError: Offset is outside the bounds of the DataView

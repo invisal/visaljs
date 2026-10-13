@@ -1,0 +1,66 @@
+globals @0 Shape, @1 Square
+
+function main()
+bb0:
+  %0 = empty
+  store_global @0, %0
+  %1 = empty
+  store_global @1, %1
+  %Shape0 = empty
+  %Shape1 = make_function Shape
+  %2 = empty
+  %prototype0 = class_setup %Shape1, %2  !mayThrow
+  %3 = make_function Shape_describe
+  set_home %3, %prototype0
+  define_class_member method %prototype0, %3, ."describe"
+  store_global @0, %Shape1
+  %Square0 = empty
+  %Shape2 = load_global @0
+  %Square1 = make_function Square
+  %prototype1 = class_setup %Square1, %Shape2  !mayThrow
+  %4 = make_function Square_describe
+  set_home %4, %prototype1
+  define_class_member method %prototype1, %4, ."describe"
+  store_global @1, %Square1
+  %Square2 = load_global @1
+  %5 = const 2
+  %6 = new %Square2, %5  !mayThrow
+  %7 = get_prop %6, ."describe"  !mayThrow
+  %8 = call %7, %6  !mayThrow
+  %9 = call_runtime print(%8)  !mayThrow
+  %10 = const undefined
+  return %10
+
+function Shape(%this0, %name0) strict
+bb0:
+  set_prop %this0, %name0, ."name"  !mayThrow
+  %0 = const undefined
+  return %0
+
+function Shape_describe(%this0) strict
+bb0:
+  %0 = const "a "
+  %1 = get_prop %this0, ."name"  !mayThrow
+  %2 = add %0, %1  !mayThrow
+  return %2
+
+function Square(%callee0, %this0, %newTarget0, %side0) strict
+bb0:
+  %this1 = empty
+  %0 = const "square"
+  %1 = super_construct %callee0, %newTarget0, %0  !mayThrow
+  %this2 = bind_this %this1, %1  !mayThrow
+  %this3 = check_this %this2  !mayThrow
+  set_prop %this3, %side0, ."side"  !mayThrow
+  %this4 = check_this %this2  !mayThrow
+  return %this4
+
+function Square_describe(%callee0, %this0) strict
+bb0:
+  %0 = super_get %callee0, %this0, ."describe"  !mayThrow
+  %1 = call %0, %this0  !mayThrow
+  %2 = const " of side "
+  %3 = add %1, %2  !mayThrow
+  %4 = get_prop %this0, ."side"  !mayThrow
+  %5 = add %3, %4  !mayThrow
+  return %5

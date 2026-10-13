@@ -1,0 +1,21 @@
+sea: false
+sea asset: Error ERR_NOT_IN_SINGLE_EXECUTABLE_APPLICATION Operation cannot be invoked when not in a single-executable application
+trace:  false node.perf,v8
+enabled: true node.perf,v8
+disabled: false 
+trace no categories: TypeError ERR_INVALID_ARG_TYPE The "options.categories" property must be an instance of Array. Received undefined
+vm: true false 1 USE_MAIN_CONTEXT_DEFAULT_LOADER,DONT_CONTEXTIFY
+isContext number: TypeError ERR_INVALID_ARG_TYPE The "object" argument must be of type object. Received type number (1)
+measureMemory: function
+cluster: true true false 1 2 2 {} function
+setup: true string
+disconnected
+domain:  Domain []
+inside: true true
+domain error: thrown in run true true
+after run: undefined
+domain error: thrown in bound 1 true true
+intercepted value 42
+domain error: intercepted error true false
+no error listener: Error undefined rethrown
+repl: symbol symbol { a: [ 1, 2 ] } true

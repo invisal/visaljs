@@ -1,0 +1,16 @@
+server: true 300000 5000 60000
+200 text/plain GET /one localhost:PORT body= encrypted=true alpn=false
+200 text/plain POST /post localhost:PORT body=hello encrypted=true alpn=false
+200 - first second
+keep-alive: 200 200 same socket true port 443 https:
+session reused: false true
+get: 200 GET /url?q=1 localhost:PORT body= encrypted=true alpn=false
+200 text/plain GET /sni localhost body= encrypted=true alpn=false
+no ca: error UNABLE_TO_VERIFY_LEAF_SIGNATURE
+clientError: ECONNRESET
+wrong name: error ERR_TLS_CERT_ALTNAME_INVALID
+clientError: ECONNRESET
+rejectUnauthorized false: 200 text/plain GET /insecure localhost:PORT body= encrypted=true alpn=false
+upgrade: 101 echo: ping
+clientError: HPE_INVALID_METHOD Invalid method encountered
+closed

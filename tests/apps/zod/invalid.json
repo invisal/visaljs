@@ -1,0 +1,14 @@
+{
+  "name": "",
+  "email": "ada-at-example.com",
+  "orders": [
+    {
+      "id": 1.5,
+      "status": "lost",
+      "placed": "2026-13-40",
+      "items": [{ "sku": "book", "quantity": 0, "price": -1 }],
+      "shipping": { "method": "drone" }
+    }
+  ],
+  "extra": true
+}

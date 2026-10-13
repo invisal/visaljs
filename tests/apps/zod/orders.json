@@ -1,0 +1,22 @@
+{
+  "name": "Ada Lovelace",
+  "email": "ada@example.com",
+  "tags": ["vip"],
+  "orders": [
+    {
+      "id": 1,
+      "status": "paid",
+      "placed": "2026-09-14",
+      "items": [{ "sku": "BOK-0001", "quantity": 2, "price": 12.5 }, { "sku": "PEN-0042", "quantity": 1, "price": 3.99 }],
+      "shipping": { "method": "post", "address": "12 St James's Square, London" }
+    },
+    {
+      "id": 2,
+      "status": "pending",
+      "placed": "2026-10-01",
+      "items": [{ "sku": "LMP-0007", "quantity": 1, "price": 49 }],
+      "coupon": "AUTUMN",
+      "shipping": { "method": "pickup", "store": "Marylebone" }
+    }
+  ]
+}

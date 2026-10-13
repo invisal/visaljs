@@ -1,0 +1,12 @@
+---
+// Text with `code` spans.
+import InlineCode from "./InlineCode.astro";
+
+interface Props {
+  text: string;
+}
+
+const parts = Astro.props.text.split(/(`[^`]+`)/);
+---
+
+{parts.map((part) => (part.startsWith("`") ? <InlineCode>{part.slice(1, -1)}</InlineCode> : part))}

@@ -1,0 +1,10 @@
+try;early
+try;4;finally
+try;caught too big: 9;finally
+0ff2ff
+ReferenceError: notDefined is not defined
+TypeError: Assignment to constant variable.
+ReferenceError: Cannot access 'early' before initialization
+RangeError: Maximum call stack size exceeded
+inner finally
+outer caught 1

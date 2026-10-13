@@ -1,0 +1,9 @@
+loopback: [{"address":"127.0.0.1","netmask":"255.0.0.0","family":"IPv4","mac":"00:00:00:00:00:00","internal":true,"cidr":"127.0.0.1/8"},{"address":"::1","netmask":"ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff","family":"IPv6","mac":"00:00:00:00:00:00","internal":true,"cidr":"::1/128","scopeid":0}]
+every address: true
+priority: number true
+no such process: SystemError ERR_SYSTEM_ERROR A system error occurred: uv_os_getpriority returned ESRCH (no such process) {"errno":-3,"code":"ESRCH","message":"no such process","syscall":"uv_os_getpriority"}
+pid string: TypeError ERR_INVALID_ARG_TYPE The "pid" argument must be of type number. Received type string ('x') null
+too low: RangeError ERR_OUT_OF_RANGE The value of "priority" is out of range. It must be >= -20 && <= 19. Received -30 null
+raise (not root): SystemError ERR_SYSTEM_ERROR A system error occurred: uv_os_setpriority returned EACCES (permission denied) {"errno":-13,"code":"EACCES","message":"permission denied","syscall":"uv_os_setpriority"}
+lowered: 19
+constants: {"PRIORITY_LOW":19,"PRIORITY_BELOW_NORMAL":10,"PRIORITY_NORMAL":0,"PRIORITY_ABOVE_NORMAL":-7,"PRIORITY_HIGH":-14,"PRIORITY_HIGHEST":-20}

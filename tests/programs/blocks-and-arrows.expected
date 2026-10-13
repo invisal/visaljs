@@ -1,0 +1,13 @@
+undefined
+block fn
+function block fn
+inner 1 | undefined
+undefined
+branch
+switch
+0,1,2
+outer
+42 43 base hello via arrow private static base!
+true
+true
+ReferenceError

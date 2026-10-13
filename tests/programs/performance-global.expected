@@ -1,0 +1,8 @@
+object number true number
+function function true true true
+Performance function false true true
+PerformanceEntry function false true true
+PerformanceMark function false true true
+PerformanceMeasure function false true true
+true true true 1
+42 undefined undefined true

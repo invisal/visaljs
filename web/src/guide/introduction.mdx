@@ -1,0 +1,29 @@
+---
+title: "Introduction"
+order: 1
+icon: "lightbulb"
+---
+
+How hard can it be to compile JavaScript to native code and keep it fast and small? Today, a standalone "Hello, world!" in JavaScript, packaged as a standalone executable, carries all of Node with it. That's about 90 MB.
+
+We start with the simplest idea, a one-to-one mapping. Each piece of JavaScript becomes a matching piece of C, and a C compiler does the rest. The idea isn't new. C++ began as "C with Classes", and [its first compilers](https://en.wikipedia.org/wiki/Cfront) translated it into C. The difference is that JavaScript is a dynamic language, and that takes extra work.
+
+Take a JavaScript function:
+
+```js
+function add(a, b) {
+  return a + b;
+}
+```
+
+Could it become this?
+
+```c
+JSValue add(JSValue a, JSValue b) {
+  return js_add(a, b);
+}
+```
+
+It would be nice if it were that simple. But JavaScript and C don't agree on much, and almost every part of this translation hides a problem. We'll solve these problems one by one along the way.
+
+Buckle up. It's going to be a long ride, with ups and downs.

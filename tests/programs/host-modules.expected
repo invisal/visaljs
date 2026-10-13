@@ -1,0 +1,23 @@
+20 héllo ✓\nsecond line\n
+true false false
+Error [ENOENT] ENOENT: no such file or directory, open 'missing.txt' | errno -2 syscall open path missing.txt
+Error [EISDIR] EISDIR: illegal operation on a directory, read | errno -21 syscall read path undefined
+Error [ENOENT] ENOENT: no such file or directory, unlink 'missing.txt' | errno -2 syscall unlink path missing.txt
+Error [ENOENT] ENOENT: no such file or directory, open 'no/such/dir.txt' | errno -2 syscall open path no/such/dir.txt
+TypeError [ERR_INVALID_ARG_TYPE] The "path" argument must be of type string or an instance of Buffer or URL. Received null
+TypeError [ERR_INVALID_ARG_TYPE] The "data" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (5)
+TypeError [ERR_INVALID_ARG_TYPE] The "path" argument must be of type string. Received an instance of Object
+false
+/a/c/d.txt . . a/b/
+.. /x/y/ ./
+y y [] bbb b / /a/b . /
+.gz||.|.|.z
+../../c b/c .. []
+/root/y /b/c true false
+true
+/ : true true
+<Buffer 00 01 02 ff 07> 000102ff07 AAEC/wc=
+"hi\n" 3
+TypeError ERR_INVALID_ARG_VALUE The argument 'encoding' is invalid encoding. Received 'foo'
+TypeError ERR_INVALID_ARG_VALUE The argument 'encoding' is invalid encoding. Received 'foo'
+TypeError ERR_INVALID_ARG_TYPE The "data" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (1)

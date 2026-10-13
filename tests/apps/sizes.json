@@ -1,0 +1,56 @@
+[
+  {
+    "example": "express",
+    "visaljs": 6629720,
+    "node": 125701312,
+    "bun": 95692928
+  },
+  {
+    "example": "express-postgres",
+    "visaljs": 9104184,
+    "node": 125832384,
+    "bun": 95864960
+  },
+  {
+    "example": "hono",
+    "visaljs": 2464088,
+    "node": 124849344,
+    "bun": 94681216
+  },
+  {
+    "example": "http-hello",
+    "visaljs": 1898840,
+    "node": 124783808,
+    "bun": 94582912
+  },
+  {
+    "example": "markdown",
+    "visaljs": 1792336,
+    "node": 124783808,
+    "bun": 94640256
+  },
+  {
+    "example": "mysql",
+    "visaljs": 8096568,
+    "node": 126225600,
+    "bun": 95922304
+  },
+  {
+    "example": "typescript",
+    "visaljs": 22235472,
+    "node": 129961152,
+    "bun": 100362368
+  },
+  {
+    "example": "vinext",
+    "visaljs": 14515032,
+    "node": null,
+    "bun": null
+  },
+  {
+    "example": "zod",
+    "visaljs": 2333008,
+    "node": 124914880,
+    "bun": 95328384
+  }
+]

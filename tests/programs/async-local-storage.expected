@@ -1,0 +1,37 @@
+outside: undefined undefined
+results: [ 'A', 'B' ] then: undefined
+  a: start: A undefined
+  a: after await: A undefined
+  a: after a timer: A undefined
+  a: queueMicrotask: A undefined
+  a: nextTick: A undefined
+  a: setImmediate: A undefined
+  a: then() in a nested run, resolved with A: inner-a undefined
+  a: after the nested run: A undefined
+  a: setInterval's second tick saw A: A undefined
+  b: start: B O
+  b: after await: B O
+  b: after a timer: B O
+  b: queueMicrotask: B O
+  b: nextTick: B O
+  b: setImmediate: B O
+  b: then() in a nested run, resolved with B: inner-b O
+  b: after the nested run: B O
+  b: setInterval's second tick saw B: B O
+run returns: R 1 2
+exit: undefined nested runs: 2
+bind: bound bound
+snapshot: snapshot arg
+AsyncResource: resource undefined
+its bind(): resource
+disable: undefined run again: again
+after a throw: undefined boom
+thenable: T
+async function: F
+enterWith: entered
+a timer set after enterWith: entered
+back in the main chain: undefined
+client1: handler saw undefined handler1; the response client1
+client2: handler saw undefined handler2; the response client2
+dns.lookup: dns
+end: undefined

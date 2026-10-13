@@ -1,0 +1,13 @@
+{
+  "name": "@visaljs/node",
+  "version": "0.0.0",
+  "description": "The Node platform for visaljs: node:* modules (prelude JS), their host primitives (C), libuv and llhttp",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

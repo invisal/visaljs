@@ -1,0 +1,464 @@
+// @visaljs/node: the Node platform as a host package. It provides `node:*` modules
+// (prelude JS in prelude/, bundled only when imported), the host primitives they import from
+// "visaljs:host" (C in src/), and the C libraries those need (libuv, llhttp). The driver
+// composes host packages with the compiler and the runtime; another package can replace a
+// module by providing it.
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
+
+const DIR = import.meta.dirname;
+const UV = join(DIR, "third_party", "libuv");
+const LLHTTP = join(DIR, "third_party", "llhttp");
+const ZLIB = join(DIR, "third_party", "zlib");
+const BROTLI = join(DIR, "third_party", "brotli");
+const ZSTD = join(DIR, "third_party", "zstd");
+const INCLUDE = join(DIR, "include");
+
+const files = (dir: string, ext: string) => readdirSync(dir).filter((f) => f.endsWith(ext)).map((f) => join(dir, f));
+
+/** Prelude modules may import "visaljs:host". */
+export const preludeDir = join(DIR, "prelude");
+
+/** The Node built-in modules provided: `node:<name>` (or `<name>`) → its prelude file. */
+export const modules: Readonly<Record<string, string>> = {
+  assert: join(preludeDir, "assert.js"),
+  "assert/strict": join(preludeDir, "assert_strict.js"),
+  async_hooks: join(preludeDir, "async_hooks.js"),
+  buffer: join(preludeDir, "buffer.js"),
+  child_process: join(preludeDir, "child_process.js"),
+  cluster: join(preludeDir, "cluster.js"),
+  console: join(preludeDir, "console.js"),
+  constants: join(preludeDir, "constants.js"),
+  crypto: join(preludeDir, "crypto.js"),
+  diagnostics_channel: join(preludeDir, "diagnostics_channel.js"),
+  dns: join(preludeDir, "dns.js"),
+  "dns/promises": join(preludeDir, "dns_promises.js"),
+  domain: join(preludeDir, "domain.js"),
+  events: join(preludeDir, "events.js"),
+  fs: join(preludeDir, "fs.js"),
+  "fs/promises": join(preludeDir, "fs_promises.js"),
+  http: join(preludeDir, "http.js"),
+  http2: join(preludeDir, "http2.js"),
+  https: join(preludeDir, "https.js"),
+  inspector: join(preludeDir, "inspector.js"),
+  "inspector/promises": join(preludeDir, "inspector_promises.js"),
+  module: join(preludeDir, "module.js"),
+  net: join(preludeDir, "net.js"),
+  os: join(preludeDir, "os.js"),
+  path: join(preludeDir, "path.js"),
+  "path/posix": join(preludeDir, "path_posix.js"),
+  "path/win32": join(preludeDir, "path_win32.js"),
+  perf_hooks: join(preludeDir, "perf_hooks.js"),
+  process: join(preludeDir, "process.js"),
+  punycode: join(preludeDir, "punycode.js"),
+  querystring: join(preludeDir, "querystring.js"),
+  readline: join(preludeDir, "readline.js"),
+  "readline/promises": join(preludeDir, "readline_promises.js"),
+  repl: join(preludeDir, "repl.js"),
+  sea: join(preludeDir, "sea.js"),
+  stream: join(preludeDir, "stream.js"),
+  "stream/consumers": join(preludeDir, "stream_consumers.js"),
+  "stream/promises": join(preludeDir, "stream_promises.js"),
+  "stream/web": join(preludeDir, "stream_web.js"),
+  string_decoder: join(preludeDir, "string_decoder.js"),
+  sys: join(preludeDir, "sys.js"),
+  test: join(preludeDir, "test.js"),
+  "test/reporters": join(preludeDir, "test_reporters.js"),
+  timers: join(preludeDir, "timers.js"),
+  "timers/promises": join(preludeDir, "timers_promises.js"),
+  tls: join(preludeDir, "tls.js"),
+  trace_events: join(preludeDir, "trace_events.js"),
+  tty: join(preludeDir, "tty.js"),
+  url: join(preludeDir, "url.js"),
+  util: join(preludeDir, "util.js"),
+  "util/types": join(preludeDir, "util_types.js"),
+  v8: join(preludeDir, "v8.js"),
+  vm: join(preludeDir, "vm.js"),
+  wasi: join(preludeDir, "wasi.js"),
+  worker_threads: join(preludeDir, "worker_threads.js"),
+  zlib: join(preludeDir, "zlib.js"),
+};
+
+/** Prelude modules a program gets without importing them, run before its own code, when its
+ *  bundled code may use what they add (`reached` tests the code's text, conservatively). */
+export const implicitModules: readonly { file: string; reached: (code: string, program: string) => boolean }[] = [
+  /* process's EventEmitter methods: the runtime's process, in every binary, has none */
+  { file: join(preludeDir, "internal", "process_events.js"), reached: (code) => /\bprocess\b/.test(code) && EMITTER_METHOD.test(code) },
+  /* its signal events and kill(), apart: they link libuv */
+  { file: join(preludeDir, "internal", "process_signals.js"), reached: (code) => /\bprocess\b/.test(code) && /["'`]SIG[A-Z0-9]+["'`]|\.kill\b/.test(code) },
+  /* process.stdin, made when first read: when the program's own code, or a package's, names it */
+  { file: join(preludeDir, "internal", "process_stdin.js"), reached: (_code, program) => /\bstdin\b/.test(program) },
+  /* node:tty's ReadStream: it links node:net and libuv */
+  { file: join(preludeDir, "internal", "tty_read_stream.js"), reached: (_code, program) => /\bReadStream\b/.test(program) },
+  /* features of node:util and node:events in modules of their own (internal/features.js): each when
+   * the program's own code, or a package's, names it */
+  { file: join(preludeDir, "internal", "parse_args.js"), reached: (_code, program) => /\bparseArgs\b/.test(program) },
+  { file: join(preludeDir, "internal", "mime.js"), reached: (_code, program) => /\bMIME(?:Type|Params)\b/.test(program) },
+  { file: join(preludeDir, "internal", "dotenv.js"), reached: (_code, program) => /\bparseEnv\b/.test(program) },
+  { file: join(preludeDir, "internal", "system_errors.js"), reached: (_code, program) => /\bgetSystemError(?:Name|Message|Map)\b/.test(program) },
+  /* inspect's colors and styles as `inspect.colors`: `colors` alone is in most loggers (debug) */
+  { file: join(preludeDir, "internal", "util_styles.js"), reached: (_code, program) => /\bstyleText\b|\binspect\s*\.\s*(?:colors|styles)\b/.test(program) },
+  /* util.diff: `diff` alone is a common name */
+  { file: join(preludeDir, "internal", "util_diff.js"), reached: (_code, program) => UTIL_DIFF.test(program) },
+  /* debuglog, or util.debug */
+  { file: join(preludeDir, "internal", "util_debuglog.js"), reached: (_code, program) => /\bdebuglog\b/.test(program) || UTIL_DEBUG.test(program) },
+  /* the rarely used ones: by a distinctive name, or a common one named as node:util's */
+  { file: join(preludeDir, "internal", "util_more.js"), reached: (_code, program) => UTIL_MORE.test(program) || UTIL_MORE_MEMBERS.test(program) },
+  { file: join(preludeDir, "internal", "buffer_transcode.js"), reached: (_code, program) => /\btranscode\b/.test(program) },
+  /* events.on as a call (bare, or of events or EventEmitter): `.on(` is an emitter's method */
+  { file: join(preludeDir, "internal", "events_on.js"), reached: (_code, program) => EVENTS_ON.test(program) },
+  { file: join(preludeDir, "internal", "stream_compose.js"), reached: (_code, program) => /\bduplexPair\b|(?<![.\w$])compose\s*\(|\b(?:stream|Stream)[\w$]*\s*\.\s*compose\b/.test(program) },
+  { file: join(preludeDir, "internal", "events_extras.js"),
+    reached: (_code, program) => /\b(?:getEventListeners|[gs]etMaxListeners|addAbortListener|EventEmitterAsyncResource)\b/.test(program) },
+  /* module.SourceMap */
+  { file: join(preludeDir, "internal", "source_map.js"), reached: (_code, program) => /\bSourceMap\b/.test(program) },
+  /* perf_hooks' observers and histograms */
+  { file: join(preludeDir, "internal", "perf_observe.js"), reached: (_code, program) => /\bPerformance(?:Observer|ObserverEntryList|ResourceTiming)\b/.test(program) },
+  { file: join(preludeDir, "internal", "perf_histogram.js"), reached: (_code, program) => /\b(?:createHistogram|monitorEventLoopDelay)\b/.test(program) },
+  /* node:fs's and node:fs/promises' larger or rarer functions: named bare, or as fs's or promises' */
+  { file: join(preludeDir, "internal", "fs_statfs.js"), reached: (_code, program) => /\b(?:statfs|statfsSync|StatFs)\b/.test(program) },
+  { file: join(preludeDir, "internal", "fs_dir.js"), reached: (_code, program) => FS_DIR.test(program) },
+  { file: join(preludeDir, "internal", "fs_cp.js"), reached: (_code, program) => FS_CP.test(program) },
+  { file: join(preludeDir, "internal", "fs_glob.js"), reached: (_code, program) => FS_GLOB.test(program) || /\bmatchesGlob\b/.test(program) },
+  { file: join(preludeDir, "internal", "fs_watch.js"), reached: (_code, program) => FS_WATCH.test(program) },
+  { file: join(preludeDir, "internal", "fs_blob.js"), reached: (_code, program) => /\bopenAsBlob\b/.test(program) },
+  /* fs/promises' open: as promises', or a bare open(…) call (imported) */
+  { file: join(preludeDir, "internal", "fs_filehandle.js"), reached: (_code, program) => FS_OPEN.test(program) || /\bFileHandle\b/.test(program) },
+  /* process's other members (some link libuv): named as process's, or by a distinctive name */
+  { file: join(preludeDir, "internal", "process_more.js"), reached: (_code, program) => PROCESS_MORE.test(program) },
+  /* process.memoryUsage(): it links libuv */
+  { file: join(preludeDir, "internal", "process_memory.js"), reached: (code) => /\bprocess\b/.test(code) && /\bmemoryUsage\b/.test(code) },
+  /* Node's timer globals, returning Timeouts: when the code may use one's methods, or node:timers */
+  { file: join(preludeDir, "internal", "timers_global.js"), reached: (code) => TIMER_USE.test(code) },
+  /* the performance globals (node:perf_hooks'): when the program's own code, or a package's, names one */
+  { file: join(preludeDir, "internal", "performance_global.js"), reached: (_code, program) => /\b[Pp]erformance(?:Entry|Mark|Measure)?\b/.test(program) },
+  /* node:zlib's Brotli and zstd (their libraries are large): when the program's own code, or a
+   * package's, names them */
+  { file: join(preludeDir, "internal", "zlib_brotli.js"), reached: (_code, program) => /brotli/i.test(program) },
+  { file: join(preludeDir, "internal", "zlib_zstd.js"), reached: (_code, program) => /zstd/i.test(program) },
+];
+const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";
+const PROCESS_COMMON = "title|ppid|release|config|ref|unref|abort|report|domain|assert|binding|finalization";
+
+/** node:util's functions with common names, as the bundle names them: bare (imported by name, or
+ *  destructured), never as another object's property (Array.isArray, console.log), or as a
+ *  property of node:util (util.x, util_default.x, require_util().x). */
+const utilNamed = (names: string) =>
+  new RegExp(`(?<![.\\w$])(?:${names})\\b|\\butil[\\w$]*\\s*\\.\\s*(?:${names})\\b|\\brequire_util\\(\\)\\s*\\.\\s*(?:${names})\\b`);
+const UTIL_DIFF = utilNamed("diff");
+/** node:fs's and node:fs/promises' functions, as the bundle names them: bare, or as a property of
+ *  fs or promises (fs.x, fs_default.x, promises.x, fsPromises.x, require_fs().x). */
+const fsNamed = (names: string) =>
+  new RegExp(`(?<![.\\w$])(?:${names})\\b|\\b(?:fs|promises|fsPromises)[\\w$]*\\s*\\.\\s*(?:${names})\\b|\\brequire_(?:fs|promises)\\(\\)\\s*\\.\\s*(?:${names})\\b`);
+const FS_DIR = fsNamed("opendir|opendirSync|Dir");
+const FS_CP = fsNamed("cp|cpSync");
+const FS_GLOB = fsNamed("glob|globSync");
+const FS_WATCH = fsNamed("watch|watchFile|unwatchFile");
+const FS_OPEN = /\b[\w$]*[pP]romises[\w$]*\s*\.\s*open\b|\brequire_promises\(\)\s*\.\s*open\b|(?<![.\w$])open\s*\(/;
+/* process's members in internal/process_more.js: as process's (process.x, process_default.x), or bare
+ * when distinctive (imported from node:process) */
+const PROCESS_MORE = new RegExp(`\\bprocess[\\w$]*\\s*\\.\\s*(?:${PROCESS_DISTINCT}|${PROCESS_COMMON})\\b|(?<![.\\w$])(?:${PROCESS_DISTINCT})\\b`);
+const EVENTS_ON = /(?<![.\w$])on\s*\(|\b(?:events|EventEmitter)[\w$]*\s*\.\s*on\b|\brequire_events\(\)\s*\.\s*on\b/;
+const UTIL_DEBUG = utilNamed("debug");
+const UTIL_MORE = /\b(?:callbackify|transferableAbort(?:Controller|Signal)|toUSVString|getCallSites?|setTraceSigInt|_extend)\b/;
+const UTIL_MORE_MEMBERS = utilNamed("aborted|log|is(?:Array|Boolean|Buffer|Date|Error|Function|Null|NullOrUndefined|Number|Object|Primitive|RegExp|String|Symbol|Undefined)");
+const TIMER_USE = /\.(?:unref|hasRef|refresh)\s*\(|\bclass Timeout\b/;
+const EMITTER_METHOD = /(?:\.|\[\s*["'`])\s*(?:on|once|off|emit|addListener|prependListener|prependOnceListener|removeListener|removeAllListeners|listeners|rawListeners|listenerCount|eventNames|setMaxListeners|getMaxListeners)\b/;
+
+/** The table createRequire's require() looks packages up in (node:module): the Symbol.for key
+ *  on globalThis of a Map, name → a function giving the module's exports, which the bundler
+ *  sets with the packages it finds a program may require() at run time. */
+export const requireTable = "visaljs.requireTable";
+
+/** The host primitives: the name prelude code imports → its C function (JSNativeFn) and length.
+ *  Failures return -errno (a number), which the prelude turns into Node's error. */
+export const primitives: Readonly<Record<string, { c: string; length: number }>> = {
+  fsReadFile: { c: "js_host_fs_read_file", length: 1 },       // (path) → string (UTF-8)
+  fsWriteFile: { c: "js_host_fs_write_file", length: 3 },     // (path, string, append) → undefined
+  fsExists: { c: "js_host_fs_exists", length: 1 },            // (path) → boolean
+  fsUnlink: { c: "js_host_fs_unlink", length: 1 },            // (path) → undefined
+  fsStat: { c: "js_host_fs_stat", length: 2 },                // (path, follow) → [mode, size, mtimeMs, atimeMs, ctimeMs, birthtimeMs, ino, dev, nlink, uid, gid, rdev, blksize, blocks]
+  fsReaddir: { c: "js_host_fs_readdir", length: 1 },          // (path) → [name, type (uv_dirent_type_t), …]
+  fsReadAt: { c: "js_host_fs_read_at", length: 3 },           // (path, position, length) → Buffer
+  fsRealpath: { c: "js_host_fs_realpath", length: 1 },        // (path) → the canonical path
+  fsMkdir: { c: "js_host_fs_mkdir", length: 2 },              // (path, mode) → undefined
+  fsUtimes: { c: "js_host_fs_utimes", length: 3 },            // (path, atime, mtime: seconds) → undefined
+  fsConstants: { c: "js_host_fs_constants", length: 0 },      // () → fs.constants as [name, number, …]
+  fsCall: { c: "js_host_fs_call", length: 2 },                // (op, …) → the rest of the fs calls (FS_OPS in prelude/fs.js): undefined, a result, or -errno
+  /* fs.watch and fs.watchFile: libuv's file system event handles and stat pollers (src/host_fswatch.c) */
+  fsWatchStart: { c: "js_host_fs_watch_start", length: 3 },   // (path, recursive, cb) → id | -errno; cb(events | -errno, filename)
+  fsPollStart: { c: "js_host_fs_poll_start", length: 3 },     // (path, interval, cb) → id | -errno; cb(status, current, previous)
+  fsWatchClose: { c: "js_host_fs_watch_close", length: 1 },
+  fsWatchRef: { c: "js_host_fs_watch_ref", length: 2 },       // (id, ref)
+  fsOpen: { c: "js_host_fs_open", length: 3 },                // (path, flags: "w+" | O_* number, mode) → fd
+  fsClose: { c: "js_host_fs_close", length: 1 },              // (fd) → undefined
+  fsWrite: { c: "js_host_fs_write", length: 5 },              // (fd, bytes, offset, length, position (-1: current)) → bytes written
+  fsRead: { c: "js_host_fs_read", length: 5 },                // (fd, bytes, offset, length, position (-1: current)) → bytes read
+  errnoName: { c: "js_host_errno_name", length: 1 },          // (-errno) → "ENOENT"
+  errnoMessage: { c: "js_host_errno_message", length: 1 },    // (-errno) → "no such file or directory"
+  errnoMap: { c: "js_host_errno_map", length: 0 },            // () → [[uv code, name, message], …], libuv's order
+  cwd: { c: "js_host_cwd", length: 0 },                       // () → the working directory (the runtime's)
+  ttyIsatty: { c: "js_host_tty_isatty", length: 1 },          // (fd) → boolean
+  timerUnref: { c: "js_host_timer_unref", length: 2 },        // (fn, ms) → id: a timer that doesn't keep the program alive
+  /* node:timers' Timeouts and Immediates (the runtime's timers, runtime/src/jobs.c) */
+  timerStart: { c: "js_host_timer_start", length: 4 },        // (fn, ms (< 0: an immediate), ref, id (0: new; else restart it)) → id
+  timerRef: { c: "js_host_timer_ref", length: 2 },            // (id, ref)
+  timerClear: { c: "js_host_timer_clear", length: 1 },        // (id)
+  /* the async context the runtime carries through jobs, timers and promise reactions */
+  asyncContextGet: { c: "js_host_async_context_get", length: 0 },  // () → the current one (undefined: none)
+  asyncContextSet: { c: "js_host_async_context_set", length: 1 },  // (context)
+  /* the program's own process, beyond the runtime's process object (src/host_proc.c) */
+  procChdir: { c: "js_host_proc_chdir", length: 1 },              // (path) → 0 | -errno
+  procUmask: { c: "js_host_proc_umask", length: 1 },              // (mask | -1) → the old mask
+  procUptime: { c: "js_host_proc_uptime", length: 0 },            // () → seconds since the program started
+  procCpuUsage: { c: "js_host_proc_cpu_usage", length: 1 },       // (thread) → [user µs, system µs] | -errno
+  procResourceUsage: { c: "js_host_proc_resource_usage", length: 0 },// () → [16 numbers, Node's order] | -errno
+  procPpid: { c: "js_host_proc_ppid", length: 0 },                // () → the parent's pid
+  procMemory: { c: "js_host_proc_memory", length: 0 },            // () → [available, constrained] bytes
+  procSetId: { c: "js_host_proc_set_id", length: 2 },             // (0 setuid | 1 setgid | 2 seteuid | 3 setegid, id) → 0 | -errno
+  procUserId: { c: "js_host_proc_user_id", length: 1 },           // (name) → uid | -1
+  procGroupId: { c: "js_host_proc_group_id", length: 1 },         // (name) → gid | -1
+  procUserName: { c: "js_host_proc_user_name", length: 1 },       // (uid) → name | null
+  procGetGroups: { c: "js_host_proc_get_groups", length: 0 },     // () → [gid, …] | -errno
+  procSetGroups: { c: "js_host_proc_set_groups", length: 1 },     // ([gid, …]) → 0 | -errno
+  procInitGroups: { c: "js_host_proc_init_groups", length: 2 },   // (user, gid) → 0 | -errno
+  procAbort: { c: "js_host_proc_abort", length: 0 },              // ()
+  procReallyExit: { c: "js_host_proc_really_exit", length: 1 },   // (code): output flushed, no 'exit'
+  procExecve: { c: "js_host_proc_execve", length: 3 },            // (file, [arg, …], [key=value, …]) → -errno
+  /* node:os, through libuv (src/host_os.c): strings and numbers, or -errno */
+  osInterfaces: { c: "js_host_os_interfaces", length: 0 },    // () → [name, address, netmask, family, mac, internal, scopeid, …] | -errno
+  osGetPriority: { c: "js_host_os_get_priority", length: 1 },  // (pid) → priority | -errno
+  osSetPriority: { c: "js_host_os_set_priority", length: 2 },  // (pid, priority) → 0 | -errno
+  osUname: { c: "js_host_os_uname", length: 0 },              // () → [sysname, release, version, machine]
+  osHostname: { c: "js_host_os_hostname", length: 0 },
+  osHomedir: { c: "js_host_os_homedir", length: 0 },
+  osTmpdir: { c: "js_host_os_tmpdir", length: 0 },
+  osMemory: { c: "js_host_os_memory", length: 0 },            // () → [total, free]
+  osUptime: { c: "js_host_os_uptime", length: 0 },
+  osLoadavg: { c: "js_host_os_loadavg", length: 0 },
+  osParallelism: { c: "js_host_os_parallelism", length: 0 },
+  osCpus: { c: "js_host_os_cpus", length: 0 },                // () → [[model, speed, user, nice, sys, idle, irq], …]
+  osUserInfo: { c: "js_host_os_user_info", length: 0 },       // () → [uid, gid, username, homedir, shell]
+  osConstants: { c: "js_host_os_constants", length: 0 },      // () → [signals, errno] as [name, number, …]
+  /* process's signal events and process.kill (src/host_signal.c) */
+  signalStart: { c: "js_host_signal_start", length: 2 },      // (signum, cb) → 0 | -errno: cb(signum) on each arrival
+  signalStop: { c: "js_host_signal_stop", length: 1 },
+  processKill: { c: "js_host_process_kill", length: 2 },      // (pid, signum) → 0 | -errno
+  processMemory: { c: "js_host_process_memory", length: 0 },  // () → [rss, heapTotal, heapUsed]
+  /* node:child_process: child processes on libuv (src/host_process.c); their pipes are node:net's */
+  processSpawn: { c: "js_host_process_spawn", length: 9 },   // (file, args, envPairs, cwd, stdio [[kind, value], …], flags, uid, gid, cb) → [0, id, pid] | [-errno]; cb(exitStatus, termSignal)
+  processKillChild: { c: "js_host_process_kill_child", length: 2 },  // (id, signum) → 0 | -errno
+  processRef: { c: "js_host_process_ref", length: 2 },       // (id, ref)
+  processClose: { c: "js_host_process_close", length: 1 },   // (id): after its exit
+  processSpawnSync: { c: "js_host_process_spawn_sync", length: 11 },  // (file, args, envPairs, cwd, stdio, flags, uid, gid, timeout, maxBuffer, killSignal) → [error, pid, exitStatus, termSignal, output]
+  /* node:util: the runtime's own (console uses them too) */
+  utilInspect: { c: "js_util_inspect", length: 2 },
+  utilFormat: { c: "js_util_format", length: 0 },
+  utilFormatWithOptions: { c: "js_util_format_with_options", length: 1 },
+  utilTypeTag: { c: "js_util_type_tag", length: 1 },          // (value) → its internal kind: "Date", "Proxy", "Uint8Array", … | ""
+  /* node:crypto: the runtime's own (Web Crypto runs on the same C; runtime/src/crypto_host.c) */
+  cryptoHashNew: { c: "js_crypto_hash_new", length: 2 },      // (algorithm, outputLength) → hash | null
+  cryptoHashInfo: { c: "js_crypto_hash_info", length: 1 },    // (algorithm) → digest length | -1 unknown | -(len + 1) XOF
+  cryptoHashCopy: { c: "js_crypto_hash_copy", length: 2 },    // (hash, outputLength) → hash
+  cryptoHmacNew: { c: "js_crypto_hmac_new", length: 2 },      // (algorithm, key bytes | string) → hmac | null
+  cryptoDigestUpdate: { c: "js_crypto_digest_update", length: 2 },  // (hash | hmac, string (UTF-8) | bytes)
+  cryptoDigestFinal: { c: "js_crypto_digest_final", length: 1 },    // (hash | hmac) → Buffer
+  cryptoRandomFill: { c: "js_crypto_random_fill", length: 3 },      // (bytes, offset, size)
+  cryptoHostRandomUUID: { c: "js_crypto_host_random_uuid", length: 0 },
+  cryptoTimingSafeEqual: { c: "js_crypto_timing_safe_equal", length: 2 },
+  cryptoHashes: { c: "js_crypto_hashes", length: 0 },         // () → crypto.getHashes()
+  cryptoPbkdf2: { c: "js_crypto_pbkdf2", length: 5 },         // (digest, password, salt, iterations, keylen) → Buffer | null | false
+  cryptoHkdf: { c: "js_crypto_hkdf", length: 5 },             // (digest, ikm, salt, info, keylen) → ArrayBuffer | null | false
+  cryptoScryptCheck: { c: "js_crypto_scrypt_check", length: 4 },  // (N, r, p, maxmem) → 0 | 1 invalid | 2 memory
+  cryptoScrypt: { c: "js_crypto_scrypt", length: 6 },         // (password, salt, N, r, p, keylen) → Buffer | false
+  /* ciphers: results are Buffers, or the C error codes (JS_CIPHER_ERR_*) the prelude turns into Node's errors */
+  cryptoCipherNew: { c: "js_crypto_cipher_new", length: 5 },  // (name, encrypt, key, iv | null, authTagLength | -1) → handle | code
+  cryptoCipherUpdate: { c: "js_crypto_cipher_update", length: 2 },
+  cryptoCipherFinal: { c: "js_crypto_cipher_final", length: 1 },
+  cryptoCipherSetAAD: { c: "js_crypto_cipher_set_aad", length: 3 },  // (handle, aad, plaintextLength | -1) → 0 | code
+  cryptoCipherSetAuthTag: { c: "js_crypto_cipher_set_auth_tag", length: 2 },
+  cryptoCipherGetAuthTag: { c: "js_crypto_cipher_get_auth_tag", length: 1 },  // → Buffer | undefined
+  cryptoCipherSetPadding: { c: "js_crypto_cipher_set_padding", length: 2 },   // → boolean
+  cryptoCipherInfo: { c: "js_crypto_cipher_info", length: 1 },  // (name | nid) → [name, nid, mode, blockSize, ivLength, keyLength] | null
+  cryptoCiphers: { c: "js_crypto_ciphers", length: 0 },
+  /* keys: handles to the runtime's key record, which CryptoKey shares (runtime/src/crypto_pkey.c) */
+  cryptoKeyParse: { c: "js_crypto_key_parse", length: 3 },    // (der, encoding 0 spki 1 pkcs1 2 pkcs8 3 sec1 4 cert, private) → handle | error code
+  cryptoKeyExport: { c: "js_crypto_key_export", length: 2 },  // (handle, encoding) → DER Buffer | error code
+  cryptoKeyInfo: { c: "js_crypto_key_info", length: 1 },      // (handle) → [type, asymmetricKeyType, namedCurve, pss [hash, mgf1, salt] | null]
+  cryptoKeyParts: { c: "js_crypto_key_parts", length: 1 },    // (handle) → RSA's n, e, d, p, q, dp, dq, qi | EC's point, scalar (Buffers)
+  cryptoKeyFromParts: { c: "js_crypto_key_from_parts", length: 4 },  // (kind, private, crv, parts) → handle | error code
+  cryptoKeyPublic: { c: "js_crypto_key_public", length: 1 },  // (private handle) → its public handle
+  cryptoKeyEquals: { c: "js_crypto_key_equals", length: 2 },
+  cryptoKeySecret: { c: "js_crypto_key_secret", length: 1 },  // (bytes) → handle
+  cryptoKeySecretBytes: { c: "js_crypto_key_secret_bytes", length: 1 },
+  cryptoKeyGenerate: { c: "js_crypto_key_generate", length: 4 },  // (kind, bits | curve, publicExponent, pss) → handle | error code
+  cryptoKeyHandleOf: { c: "js_crypto_key_handle_of", length: 1 },  // (CryptoKey) → its handle | undefined
+  cryptoToCryptoKey: { c: "js_crypto_to_crypto_key", length: 5 },  // importKey's steps, synchronously
+  /* asymmetric operations (runtime/src/crypto_asym.c): results, or error codes (JS_ASYM_ERR_*) */
+  cryptoSign: { c: "js_crypto_sign", length: 6 },             // (key, hash, digest, padding, saltLength, p1363) → Buffer | code
+  cryptoVerify: { c: "js_crypto_verify", length: 7 },         // (key, hash, digest, signature, padding, saltLength, p1363) → boolean | code
+  cryptoSignMessage: { c: "js_crypto_sign_message", length: 2 },      // (key, data) → Buffer | code: Ed25519
+  cryptoVerifyMessage: { c: "js_crypto_verify_message", length: 3 },  // (key, data, signature) → boolean | code
+  /* big integers (runtime/src/crypto_bn.c): Diffie-Hellman, generatePrime, checkPrime */
+  cryptoModExp: { c: "js_crypto_mod_exp", length: 4 },        // (base, exponent, modulus, pad) → Buffer | null
+  cryptoGeneratePrime: { c: "js_crypto_generate_prime", length: 4 },  // (bits, safe, add, rem) → Buffer | null
+  cryptoCheckPrime: { c: "js_crypto_check_prime", length: 2 },  // (candidate, checks) → boolean
+  cryptoRsaCrypt: { c: "js_crypto_rsa_crypt", length: 6 },    // (key, op, data, padding, oaepHash, oaepLabel) → Buffer | code
+  cryptoEcdh: { c: "js_crypto_ecdh", length: 2 },             // (private key, peer point | key) → secret | code
+  cryptoEcPoint: { c: "js_crypto_ec_point", length: 3 },      // (curve, point, format 4 | 2 | 6) → Buffer | code
+  cryptoEcPrivate: { c: "js_crypto_ec_private", length: 2 },  // (curve, scalar) → handle | code
+  /* node:tls: BoringSSL (runtime/src/crypto_tls.c); contexts (SSL_CTX) and connections (SSL) are handles */
+  tlsContextNew: { c: "js_tls_context_new", length: 6 },      // (min, max, ciphers, serverPreference, groups, sigalgs) → context | error
+  tlsContextAddRoots: { c: "js_tls_context_add_roots", length: 1 },
+  tlsContextAddCA: { c: "js_tls_context_add_ca", length: 2 },  // (context, der) → 0 | error
+  tlsContextSetCert: { c: "js_tls_context_set_cert", length: 2 },  // (context, [der, …]) → 0 | error
+  tlsContextSetKey: { c: "js_tls_context_set_key", length: 2 },    // (context, key handle) → 0 | 1 unusable | 2 not the cert's
+  tlsRootCertificates: { c: "js_tls_root_certificates", length: 0 },  // () → [pem, …]
+  tlsCiphers: { c: "js_tls_ciphers", length: 0 },             // () → [OpenSSL name, …]
+  tlsNew: { c: "js_tls_new", length: 7 },                     // (context, server, servername, alpn, session, requestCert, alpnStrict) → connection | error
+  tlsRun: { c: "js_tls_run", length: 3 },                     // (connection, records | null, data | null) → [records, data, taken, state, error, handshakes]
+  tlsShutdown: { c: "js_tls_shutdown", length: 1 },           // (connection) → records: our close_notify
+  tlsInfo: { c: "js_tls_info", length: 1 },                   // → [version, cipher, alpn | false, servername | null, resumed, group]
+  tlsPeerCerts: { c: "js_tls_peer_certs", length: 1 },        // → [der, …]
+  tlsVerifyError: { c: "js_tls_verify_error", length: 1 },    // → 0 | X509_V_ERR_* | -1 none received
+  tlsSession: { c: "js_tls_session", length: 1 },             // → Buffer | undefined
+  tlsExportKeyingMaterial: { c: "js_tls_export_keying_material", length: 4 },
+  tlsSetNoRenegotiation: { c: "js_tls_set_no_renegotiation", length: 1 },
+  tlsFinished: { c: "js_tls_finished", length: 2 },           // (connection, peer) → Buffer | undefined
+  /* node:http: llhttp on node:net's sockets (src/host_http.c); a connection is its socket's handle id */
+  httpParsers: { c: "js_host_http_parsers", length: 5 },      // (onHead, onBody, onComplete, onUpgrade, onError) → parsers
+  httpAttach: { c: "js_host_http_attach", length: 4 },        // (conn, parsers, response, maxHeaderSize) → 0 | -errno: bytes go to llhttp
+  httpDetach: { c: "js_host_http_detach", length: 1 },        // (conn): bytes go to JS again
+  httpExpired: { c: "js_host_http_expired", length: 3 },      // (parsers, headersTimeout, requestTimeout) → [conn, …] over time
+  httpWrite: { c: "js_host_http_write", length: 2 },          // (conn, string | Uint8Array) → written (corked)
+  httpFlush: { c: "js_host_http_flush", length: 1 },          // (conn): the corked output, now
+  httpFedOpen: { c: "js_host_http_fed_open", length: 1 },     // (writer) → conn: a socket whose bytes JS feeds (TLS, a Duplex)
+  httpFeed: { c: "js_host_http_feed", length: 2 },            // (conn, bytes | null) → taken by the parser
+  httpFedClose: { c: "js_host_http_fed_close", length: 1 },   // (conn)
+  httpDate: { c: "js_host_http_date", length: 0 },            // () → "Sun, 04 Oct 2026 20:51:49 GMT" (cached per second)
+  /* node:net and dns.lookup: TCP and pipe handles on libuv (src/host_net.c); each calls back cb(event, value) */
+  netOpen: { c: "js_host_net_open", length: 2 },              // (pipe, cb) → id
+  netGuessHandle: { c: "js_host_net_guess_handle", length: 1 },  // (fd) → "TCP" | "PIPE" | "TTY" | "UDP" | "FILE" | "UNKNOWN"
+  netOpenFd: { c: "js_host_net_open_fd", length: 2 },         // (id, fd) → 0 | -errno
+  netBind: { c: "js_host_net_bind", length: 4 },              // (id, ip | path, port, flags 1 ipv6Only | 2 reusePort) → 0 | -errno
+  netChmod: { c: "js_host_net_chmod", length: 2 },            // (id, mode 1 readable | 2 writable) → 0 | -errno: a pipe server's
+  netListen: { c: "js_host_net_listen", length: 2 },          // (id, backlog) → 0 | -errno
+  netConnect: { c: "js_host_net_connect", length: 3 },        // (id, ip | path, port) → 0 | -errno
+  netCallback: { c: "js_host_net_callback", length: 2 },      // (id, cb): an accepted connection's
+  netReadStart: { c: "js_host_net_read_start", length: 1 },
+  netReadStop: { c: "js_host_net_read_stop", length: 1 },
+  netWrite: { c: "js_host_net_write", length: 2 },            // (id, bytes) → 0 done | 1 pending | -errno
+  netShutdown: { c: "js_host_net_shutdown", length: 1 },
+  netClose: { c: "js_host_net_close", length: 1 },
+  netReset: { c: "js_host_net_reset", length: 1 },            // close with an RST → 0 | -errno
+  netRef: { c: "js_host_net_ref", length: 2 },                // (id, ref)
+  netAddress: { c: "js_host_net_address", length: 2 },        // (id, peer) → [address, family, port] | path | -errno
+  netNoDelay: { c: "js_host_net_no_delay", length: 2 },
+  netKeepAlive: { c: "js_host_net_keep_alive", length: 3 },   // (id, on, seconds)
+  ttyOpen: { c: "js_host_tty_open", length: 2 },              // (fd, cb) → id | -errno: a terminal's, read as a net handle
+  ttySetRawMode: { c: "js_host_tty_set_raw_mode", length: 2 }, // (id, raw) → 0 | -errno
+  dnsLookup: { c: "js_host_dns_lookup", length: 3 },          // (host, family, cb) → 0 | -errno; cb(errno, code, [[address, family], …])
+  /* node:zlib: Chromium's zlib, as Node has it (src/host_zlib.c); a stream is a handle. Failures are
+   * [message, errno, code], as Node's binding passes them to its onerror */
+  zlibNew: { c: "js_host_zlib_new", length: 1 },              // (mode) → handle
+  zlibInit: { c: "js_host_zlib_init", length: 6 },            // (handle, windowBits, level, memLevel, strategy, dictionary | undefined)
+  zlibWrite: { c: "js_host_zlib_write", length: 9 },          // (handle, flush, in | null, inOff, inLen, out, outOff, outLen, state) → 0 | failure; state: [availOut, availIn]
+  zlibParams: { c: "js_host_zlib_params", length: 3 },        // (handle, level, strategy) → 0 | failure
+  zlibReset: { c: "js_host_zlib_reset", length: 1 },          // (handle) → 0 | failure
+  zlibClose: { c: "js_host_zlib_close", length: 1 },
+  zlibCrc32: { c: "js_host_zlib_crc32", length: 2 },          // (string | bytes, value) → CRC-32
+  /* its Brotli streams (src/host_brotli.c), the same way */
+  brotliNew: { c: "js_host_brotli_new", length: 1 },          // (mode) → handle
+  brotliInit: { c: "js_host_brotli_init", length: 2 },        // (handle, params: Uint32Array, 0xffffffff unset) → 0 | failure
+  brotliWrite: { c: "js_host_brotli_write", length: 9 },      // as zlibWrite
+  brotliReset: { c: "js_host_brotli_reset", length: 1 },      // (handle) → 0 | failure
+  brotliClose: { c: "js_host_brotli_close", length: 1 },
+  /* and its zstd streams (src/host_zstd.c) */
+  zstdNew: { c: "js_host_zstd_new", length: 1 },              // (compress) → handle
+  zstdInit: { c: "js_host_zstd_init", length: 4 },            // (handle, params: Uint32Array, pledgedSrcSize | undefined, dictionary | undefined) → 0 | failure
+  zstdWrite: { c: "js_host_zstd_write", length: 9 },          // as zlibWrite
+  zstdReset: { c: "js_host_zstd_reset", length: 1 },          // (handle) → 0 | failure
+  zstdClose: { c: "js_host_zstd_close", length: 1 },
+};
+
+/* libuv's sources for this platform, as its CMakeLists.txt lists them, its flags, and the
+ * system libraries it links */
+const UV_COMMON = ["fs-poll", "idna", "inet", "random", "strscpy", "strtok", "thread-common", "threadpool", "timer", "uv-common", "uv-data-getter-setters", "version"];
+const UV_UNIX = ["async", "core", "dl", "fs", "getaddrinfo", "getnameinfo", "loop-watcher", "loop", "pipe", "poll", "process", "random-devurandom", "signal", "stream", "tcp", "thread", "tty", "udp", "proctitle"].map((f) => `unix/${f}`);
+const UV_PLATFORM: Record<string, { sources: string[]; defines: string[]; link?: string[] }> = {
+  linux: { sources: [...UV_UNIX, ...["linux", "procfs-exepath", "random-getrandom", "random-sysctl-linux"].map((f) => `unix/${f}`)], defines: ["_GNU_SOURCE", "_POSIX_C_SOURCE=200112"] },
+  darwin: { sources: [...UV_UNIX, ...["random-getentropy", "darwin-proctitle", "darwin", "fsevents", "bsd-ifaddrs", "kqueue"].map((f) => `unix/${f}`)], defines: ["_DARWIN_UNLIMITED_SELECT=1", "_DARWIN_USE_64_BIT_INODE=1"] },
+  win32: {
+    sources: ["async", "core", "detect-wakeup", "dl", "error", "fs", "fs-event", "getaddrinfo", "getnameinfo", "handle", "loop-watcher", "pipe", "thread", "poll", "process", "process-stdio", "signal", "snprintf", "stream", "tcp", "tty", "udp", "util", "winapi", "winsock"].map((f) => `win/${f}`),
+    defines: ["WIN32_LEAN_AND_MEAN", "_WIN32_WINNT=0x0A00", "_CRT_DECLARE_NONSTDC_NAMES=0"],
+    link: ["psapi", "user32", "advapi32", "iphlpapi", "userenv", "ws2_32", "dbghelp", "ole32", "shell32"],
+  },
+};
+
+/* Brotli's platform macro, as Node's brotli.gyp defines it */
+const BROTLI_OS: Record<string, string> = { linux: "OS_LINUX", darwin: "OS_MACOSX", freebsd: "OS_FREEBSD" };
+
+/** The C libraries to build and link (before libjsrt, which they use), for `platform` (a
+ *  prebuilt package's is another's: cli/prebuilt). */
+export function libraries(runtimeInclude: string, platform: NodeJS.Platform = process.platform) {
+  const uv = UV_PLATFORM[platform];
+  const uvSources = uv ? [...UV_COMMON, ...uv.sources].map((f) => join(UV, "src", `${f}.c`)) : [];
+  const zlibHeaders = [...files(ZLIB, ".h"), ...files(join(ZLIB, "contrib", "optimizations"), ".h")];
+  const brotliHeaders = ["common", "dec", "enc", join("include", "brotli")].flatMap((d) => files(join(BROTLI, d), ".h"));
+  const zstdHeaders = ["", "common", "compress", "decompress"].flatMap((d) => files(join(ZSTD, d), ".h"));
+  const uvHeaders = [join(UV, "include"), join(UV, "include", "uv"), join(UV, "src"), join(UV, "src", "unix"), join(UV, "src", "win")].flatMap((d) => files(d, ".h"));
+  return [
+    {
+      name: "jsnode",
+      sources: [...files(join(DIR, "src"), ".c"), ...files(LLHTTP, ".c")],
+      /* the runtime's headers too: the host code is compiled against its structs (JSRuntime, …) */
+      headers: [...files(INCLUDE, ".h"), ...files(runtimeInclude, ".h"), ...files(LLHTTP, ".h"), ...uvHeaders, ...zlibHeaders, ...brotliHeaders, ...zstdHeaders],
+      flags: [`-I${INCLUDE}`, `-I${runtimeInclude}`, `-I${LLHTTP}`, `-I${join(UV, "include")}`, `-I${ZLIB}`, `-I${join(BROTLI, "include")}`, `-I${ZSTD}`],
+    },
+    {
+      /* Chromium's zlib, as Node vendors it (deps/zlib): its portable C, whose output is the same
+       * bytes as Node's on every CPU (the SIMD paths only make checksums and copies faster) */
+      name: "zlib",
+      sources: files(ZLIB, ".c"),
+      headers: zlibHeaders,
+      flags: ["-w", "-DCPU_NO_SIMD", "-DHAVE_HIDDEN", `-I${ZLIB}`],
+    },
+    {
+      /* Brotli 1.1.0, as Node vendors it (deps/brotli) */
+      name: "brotli",
+      sources: ["common", "dec", "enc"].flatMap((d) => files(join(BROTLI, d), ".c")),
+      headers: brotliHeaders,
+      flags: ["-w", ...(BROTLI_OS[platform] ? [`-D${BROTLI_OS[platform]}`] : []), `-I${join(BROTLI, "include")}`],
+    },
+    {
+      /* zstd 1.5.7, as Node vendors it (deps/zstd), with its defines: multithreaded (nbWorkers), C only */
+      name: "zstd",
+      sources: ["common", "compress", "decompress"].flatMap((d) => files(join(ZSTD, d), ".c")),
+      headers: zstdHeaders,
+      flags: ["-w", "-DXXH_NAMESPACE=ZSTD_", "-DZSTD_MULTITHREAD", "-DZSTD_DISABLE_ASM", `-I${ZSTD}`],
+    },
+    {
+      name: "uv",
+      sources: uvSources,
+      headers: uvHeaders,
+      flags: ["-std=gnu11", "-w", "-fno-strict-aliasing", "-D_FILE_OFFSET_BITS=64", "-D_LARGEFILE_SOURCE", ...(uv?.defines ?? []).map((d) => `-D${d}`),
+        `-I${join(UV, "include")}`, `-I${join(UV, "src")}`],
+      link: uv?.link ?? [],
+    },
+  ];
+}
+
+/** Third-party code in a program's binary, with the license files that go with it (the
+ *  runtime's Notice). Each directory of third_party/ is in one of these. */
+export const notices = [
+  { name: "Node.js", what: "node: modules ported from Node.js", license: "MIT", files: [join(DIR, "third_party", "nodejs", "LICENSE")] },
+  { name: "libuv", what: "the event loop and I/O", license: "MIT AND ISC AND BSD-2-Clause", files: [join(UV, "LICENSE"), join(UV, "LICENSE-extra")] },
+  { name: "llhttp", what: "the HTTP parser", license: "MIT", files: [join(LLHTTP, "LICENSE")] },
+  { name: "zlib", what: "deflate and gzip (Chromium's copy)", license: "Zlib AND BSD-3-Clause",
+    files: [join(ZLIB, "LICENSE"), join(ZLIB, "LICENSE.chromium")] },
+  { name: "Brotli", what: "Brotli compression", license: "MIT", files: [join(BROTLI, "LICENSE")] },
+  { name: "Zstandard", what: "zstd compression", license: "BSD-3-Clause", files: [join(ZSTD, "LICENSE")] },
+  { name: "punycode.js", what: "node:punycode", license: "MIT", files: [join(DIR, "third_party", "punycode", "LICENSE")] },
+  { name: "parseargs", what: "util.parseArgs", license: "MIT", files: [join(DIR, "third_party", "parseargs", "LICENSE")] },
+  { name: "HdrHistogram", what: "perf_hooks' histograms", license: "CC0-1.0 OR BSD-2-Clause", files: [join(DIR, "third_party", "hdrhistogram", "LICENSE")] },
+];

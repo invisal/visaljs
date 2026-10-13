@@ -1,0 +1,10 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "visaljs-playground",
+  "compatibility_date": "2026-09-30",
+  // Static assets only: Astro builds every page to HTML at build time.
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  }
+}

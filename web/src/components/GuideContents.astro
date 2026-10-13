@@ -1,0 +1,15 @@
+---
+// The guide's sidebar: the chapters, in order.
+import { chapters } from "../lib/guide.ts";
+import GuideSidebar from "./GuideSidebar.tsx";
+
+interface Props {
+  /** The id of the chapter being read. */
+  current?: string | undefined;
+}
+
+const { current } = Astro.props;
+const all = (await chapters()).map((c) => ({ id: c.id, title: c.data.title, icon: c.data.icon, soon: c.data.soon }));
+---
+
+<GuideSidebar chapters={all} current={current} />

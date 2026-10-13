@@ -1,0 +1,64 @@
+Response {
+  status: 201,
+  statusText: '',
+  headers: Headers { 'X-A': '1', 'content-type': 'text/plain;charset=UTF-8' },
+  body: ReadableStream { locked: false, state: 'readable', supportsBYOB: true },
+  bodyUsed: false,
+  ok: true,
+  redirected: false,
+  type: 'default',
+  url: ''
+}
+201 true  default  false false text/plain;charset=UTF-8
+hi true TypeError: Body is unusable: Body has already been read TypeError: Response.clone: Body has already been consumed.
+Request {
+  method: 'POST',
+  url: 'http://x.test/a?b',
+  headers: Headers { 'content-type': 'application/json' },
+  destination: '',
+  referrer: 'about:client',
+  referrerPolicy: '',
+  mode: 'cors',
+  credentials: 'same-origin',
+  cache: 'default',
+  redirect: 'follow',
+  integrity: '',
+  keepalive: false,
+  isReloadNavigation: false,
+  isHistoryNavigation: false,
+  signal: AbortSignal { aborted: false }
+}
+POST http://x.test/a?b cors same-origin default follow about:client false half false
+{ a: 1 } true TypeError: Body is unusable: Body has already been read
+hi "" null ReadableStream { locked: false, state: 'readable', supportsBYOB: true }
+a/b application/x-www-form-urlencoded;charset=UTF-8
+a=1&b=2 ArrayBuffer { [Uint8Contents]: <00 00>, [byteLength]: 2 }
+Blob { size: 3, type: 'text/plain;charset=utf-8' } ArrayBuffer { [Uint8Contents]: <61 62>, [byteLength]: 2 } Uint8Array(2) [ 97, 98 ]
+null stream
+{ value: Uint8Array(6) [ 99, 104, 117, 110, 107, 115 ], done: false } { value: undefined, done: true }
+TypeError: Body is unusable: Body has already been read false
+202 application/json 1 {"a":1}
+text/x
+301 http://x.test/b TypeError: immutable
+error 0 false TypeError: immutable
+abc abc
+A A
+PUT http://x.test/a?b x true TypeError: Cannot construct a Request with a Request object that has already been used.
+cloned GET DELETE
+true true why
+RangeError: init["status"] must be in the range of 200 to 599, inclusive. | TypeError: Response constructor: Invalid response status code 204
+TypeError: Failed to parse URL from /rel | TypeError: Request with GET/HEAD method cannot have body.
+TypeError: 'CONNECT' HTTP method is unsupported. | TypeError: 'bad method' is not a valid HTTP method.
+TypeError: RequestInit: duplex option is required when sending a body. | TypeError: Class constructor _Response cannot be invoked without 'new'
+RangeError: Invalid status code 200 | TypeError: Value is not JSON serializable | TypeError: Request constructor: 1 argument required, but 0 found.
+420 true m
+http://x/y [
+  'type',       'url',
+  'redirected', 'status',
+  'ok',         'statusText',
+  'headers',    'body',
+  'bodyUsed',   'clone',
+  'blob',       'arrayBuffer',
+  'text',       'json',
+  'formData',   'bytes'
+] 26

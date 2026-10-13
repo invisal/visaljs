@@ -1,0 +1,15 @@
+text é
+AB
+buffer
+CD
+EFG
+H
+€
+TypeError ERR_INVALID_ARG_TYPE The "chunk" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (5)
+TypeError ERR_INVALID_ARG_TYPE The "chunk" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received type boolean (true)
+TypeError ERR_INVALID_ARG_TYPE The "chunk" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received undefined
+TypeError ERR_INVALID_ARG_TYPE The "chunk" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received an instance of Object
+TypeError ERR_INVALID_ARG_TYPE The "chunk" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received an instance of ArrayBuffer
+TypeError ERR_STREAM_NULL_VALUES May not write null values to stream
+done
+written

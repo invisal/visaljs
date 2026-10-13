@@ -1,0 +1,24 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.wrangler/
+.astro/
+
+# fixture packages for the bundler end-to-end test (tests/programs/bundle.js)
+!tests/programs/bundle/node_modules/
+
+# fixture packages for the differential corpus (tests/differential/multi-file.js)
+!tests/differential/app/node_modules/
+
+# binaries built from the apps
+tests/apps/*/server
+tests/apps/*/md2html
+tests/apps/*/todo
+tests/apps/*/validate
+tests/apps/*/tsc
+tests/apps/*/render
+tests/apps/*/*.exe
+tests/apps/*/*.lib
+tests/apps/typescript/sample/dist/
+node_trace.*.log

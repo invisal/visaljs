@@ -1,0 +1,4 @@
+{
+  "//": "Node's tests are CommonJS, as in Node's repository (the root package.json says module)",
+  "type": "commonjs"
+}

@@ -1,0 +1,252 @@
+CryptoKey {
+  type: 'private',
+  extractable: true,
+  algorithm: {
+    name: 'RSASSA-PKCS1-v1_5',
+    modulusLength: 1024,
+    publicExponent: [Uint8Array],
+    hash: [Object]
+  },
+  usages: [ 'sign' ]
+} {
+  name: 'RSASSA-PKCS1-v1_5',
+  modulusLength: 1024,
+  publicExponent: Uint8Array(3) [ 1, 0, 1 ],
+  hash: { name: 'SHA-256' }
+} CryptoKey {
+  type: 'public',
+  extractable: true,
+  algorithm: {
+    name: 'RSASSA-PKCS1-v1_5',
+    modulusLength: 1024,
+    publicExponent: [Uint8Array],
+    hash: [Object]
+  },
+  usages: [ 'verify' ]
+}
+ArrayBuffer bc058967ed652e2917eb792c5c77017d578a2907fa3870746495db45d311d00886e4afae67617c34bc22980ad42cfc9a99b51d914bf44dec98e4157efeed14cf10f8b262965d47563059ad608beea728d5da163125cb6445e8c479b2c2d4c12239348e043002db7fb9638404e8492d6b42f05b4695bd80e1ff6d3fe848b629c6
+true
+false
+SHA-1 nZaoBAvvdgmYFxTVaFy1oqmqUpjyZaCQd3QBjqElsfYTPU+RGdPKBgGLjmc3ZVlEx78UdlaZSQmnNRhAuqxqaC13pWtpA310Mkj134Du4lHI9Yd7Qjpci6az0/VARXHUl8Z4O/DUld4QqSWYaOuU2Mo/qFsCU8BIWcvotWvYGgc=
+SHA-384 Z3qYrI74OA0gt8KQBxVweZaOqFHYDv/DmHoByV+updtnyShAh0C5XWpDOSW8Ne0Vq0PnPp6WqzGwe1IPOV6Xq096qufYZo2R+nJZIgcBoQiBSYU88r9vZ+6CLlKBLeCDnt3a2tpZBfWyJs3x1oNrAfOxwv5l8R4lLoUf86KEB8M=
+SHA-512 BU5ca5Q1e0s9E1exnS4blIXfV3VvCyxmWs8Ku3/WN/2wR0aZZFFqjh/DPlctW+gRVObb04aRr/S4pUcEu5iSRhyf37Ej12DIfavDus/NVHJjZ09HcvjiDWPG57KjJ2gEKg/+Nz390FxQiTGyzptgMwNq4CfRHFfp0tOpQYE7KB8=
+{
+  key_ops: [ 'sign' ],
+  ext: true,
+  alg: 'RS256',
+  kty: 'RSA',
+  n: '83MIKaRGwVeKFTreCXxYRRpia9AWYEMv5U0TvAgT8mpTpHJbj5uowI7OWtnfkdPIU6Fa7Bx_UFz7PWSoGqdaULIqxzhMKdoh8ebNJjDRNjC4_kElOXIr4ABIyrExM6kkPJKXPJO5WSCfCsLU1E1KLiXWDpeRVcYJnyCSrpuY9Y0',
+  e: 'AQAB',
+  d: '8FYgudNm0pqURC8wYlbyYY4RmfP9Ex1hHFNCZz_mSUx0tIT9JUH7j9WrnH84uqNEQmOp-iyL949DrLFBT8blXZYHNvqkOolmEPSl5m9_LYdRJEJ8wx5eZJO3Xsg3caeOc84-BaaoMdvnjjtg_KsW1SN9aOaKLenlFrX0YaRADHU',
+  p: '--7aRPUl7w5JiwTHU62weLMR_JcRaAxoutPkOQMq896zBqINwP-lAhmdPjkWHe4gwXPJAqY7gIK0YblwUdIHvw',
+  q: '92EejKYOKfKc9tBlA9p857Yr8RxPNQ1P-NuCdJgVklQvEnQX3f2w4907dgLME7QhIpyuKOPSAi--Huc0Vp01sw',
+  dp: 'pSPhYZhMYFI-NOlR-3D8H3JKFQe1ej3AHM8uZ4zDCA5vzaZGW793m1PM9e-XptDkGcra9Wif0lJbCT_z9z40ow',
+  dq: 'o7bWbOaIgSJa1szbzU0PVJmvQwYlNUr2Hg_HqjnsLMchz-ic0wFNy79h1pvLS07ujuV6LP14wpGuFO2WKawpGQ',
+  qi: 'JgksiU99M6BoIijA8dTdJVKvWKa0M65MPUWSnJjtAl0LVducHZ5tL-9PTknftE2r3Q8CLq4KEb-967aLRrWl8w'
+}
+{
+  key_ops: [ 'verify' ],
+  ext: true,
+  alg: 'RS256',
+  kty: 'RSA',
+  n: '83MIKaRGwVeKFTreCXxYRRpia9AWYEMv5U0TvAgT8mpTpHJbj5uowI7OWtnfkdPIU6Fa7Bx_UFz7PWSoGqdaULIqxzhMKdoh8ebNJjDRNjC4_kElOXIr4ABIyrExM6kkPJKXPJO5WSCfCsLU1E1KLiXWDpeRVcYJnyCSrpuY9Y0',
+  e: 'AQAB'
+}
+true
+true
+NotSupportedError [9]: Unable to export RSASSA-PKCS1-v1_5 public key using raw format
+NotSupportedError [9]: Unable to export RSASSA-PKCS1-v1_5 private key using spki format
+NotSupportedError [9]: Unable to export RSASSA-PKCS1-v1_5 public key using pkcs8 format
+NotSupportedError [9]: Unable to export RSASSA-PKCS1-v1_5 private key using raw format
+SyntaxError [12]: Unsupported key usage for an RSASSA-PKCS1-v1_5 key
+SyntaxError [12]: Unsupported key usage for an RSASSA-PKCS1-v1_5 key
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'RsaHashedImportParams' because 'hash' is required in 'RsaHashedImportParams'.
+DataError [0]: Invalid key type
+DataError [0]: Invalid key type
+DataError [0]: Invalid keyData
+NotSupportedError [9]: Unable to import RSASSA-PKCS1-v1_5 using raw format
+ArrayBuffer bc058967ed652e2917eb792c5c77017d578a2907fa3870746495db45d311d00886e4afae67617c34bc22980ad42cfc9a99b51d914bf44dec98e4157efeed14cf10f8b262965d47563059ad608beea728d5da163125cb6445e8c479b2c2d4c12239348e043002db7fb9638404e8492d6b42f05b4695bd80e1ff6d3fe848b629c6
+DataError [0]: JWK "alg" does not match the requested algorithm
+{
+  key_ops: [ 'encrypt' ],
+  ext: true,
+  alg: 'RSA-OAEP',
+  kty: 'RSA',
+  n: 'AQAB',
+  e: 'AQAB'
+}
+DataError [0]: Invalid JWK "kty" Parameter
+DataError [0]: Invalid JWK "use" Parameter
+pss 0 128 true false
+pss 20 128 true false
+pss 32 128 true false
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'RsaPssParams' because 'saltLength' is required in 'RsaPssParams'.
+OperationError [0]: The operation failed for an operation-specific reason
+PS256
+hi
+hi
+OperationError [0]: The operation failed for an operation-specific reason
+OperationError [0]: The operation failed for an operation-specific reason
+OperationError [0]: The operation failed for an operation-specific reason
+InvalidAccessError [15]: The requested operation is not valid for the provided key
+RSA-OAEP-256
+SyntaxError [12]: Unsupported key usage for an RSA-OAEP key
+InvalidAccessError [15]: The requested operation is not valid for the provided key
+P-256 { name: 'ECDSA', namedCurve: 'P-256' } 64 true false
+{
+  key_ops: [ 'sign' ],
+  ext: true,
+  kty: 'EC',
+  x: 'qJS_jqjjOZhu_S6URkaOUPdEEeUPdpN3CQPul60TX58',
+  y: '4zJ7GErgfBowmIvkl-CW5vQjG4_jgGeDu8dRMTT9WM0',
+  crv: 'P-256',
+  d: 'ZTzwzR2_GF2AibfGsdH35w7YMYvqad51dCtZxE9lvKA'
+} 04a894bf8ea8e339986efd2e9446468e50f74411e50f7693770903ee97ad135f9fe3327b184ae07c1a30988be497e096e6f4231b8fe3806783bbc7513134fd58cd
+true
+P-384 { name: 'ECDSA', namedCurve: 'P-384' } 96 true false
+{
+  key_ops: [ 'sign' ],
+  ext: true,
+  kty: 'EC',
+  x: 'q84T5YlCQn0hnDV43XjmeCyNK7y9-xwOy4nBI5wpG7bVd3PyjxZjeDHBcgH0Z-ZT',
+  y: 'NbtnA0zBozC7ejOVdlwbEuHsGOFidbQ0E8RpBEiZylY66c6WdTUep6I_as1eylCH',
+  crv: 'P-384',
+  d: 'MhxhzTT8Qp87pC4xhK1aq8Z0jmIHCB0Z1rYQBi2YdQFcB-9E6Jq4gk2FqH4kj4Bx'
+} 04abce13e58942427d219c3578dd78e6782c8d2bbcbdfb1c0ecb89c1239c291bb6d57773f28f16637831c17201f467e65335bb67034cc1a330bb7a3395765c1b12e1ec18e16275b43413c469044899ca563ae9ce9675351ea7a23f6acd5eca5087
+true
+P-521 { name: 'ECDSA', namedCurve: 'P-521' } 132 true false
+{
+  key_ops: [ 'sign' ],
+  ext: true,
+  kty: 'EC',
+  x: 'AAqokoshIfVb6I8FiYs1P88Qfajs1NSNHZ1q4bgHjFMI5j4X9FcpEmX8JO9fG4DkO6nVb50vnalkh6kmxCC-NkPL',
+  y: 'AcMHIvcdh1rqbR2Xo27bi1sv9r-fObU7QLfgoPJgzufQ0bufmQ62sO6TvPArN6ontDgJ2BFT3QAUVz94M26II9Kj',
+  crv: 'P-521',
+  d: 'ACM6cGSPX-yZGExnk9Gfh9bBQrrscZSDMYxdNkjgKd5jIpz4MKMTllMwMCZM6oUOVAQxRvvm3DEeM2aGhi5Vatxn'
+} 04000aa8928b2121f55be88f05898b353fcf107da8ecd4d48d1d9d6ae1b8078c5308e63e17f457291265fc24ef5f1b80e43ba9d56f9d2f9da96487a926c420be3643cb01c30722f71d875aea6d1d97a36edb8b5b2ff6bf9f39b53b40b7e0a0f260cee7d0d1bb9f990eb6b0ee93bcf02b37aa27b43809d81153dd0014573f78336e8823d2a3
+true
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'EcdsaParams' because 'hash' is required in 'EcdsaParams'.
+false
+InvalidAccessException [0]: key is not extractable
+InvalidAccessException [0]: key is not extractable
+DataError [0]: Named curve mismatch
+NotSupportedError [9]: Unrecognized namedCurve
+DataError [0]: Invalid keyData
+ArrayBuffer 046ff03b949241ce1dadd43519e6960e0a85b41a69a05c328103aa2bce1594ca163c4f753a55bf01dc53f6c0b0c7eee78b40c6ff7d25a96e2282b989cef71c144a
+DataError [0]: JWK "crv" does not match the requested algorithm
+DataError [0]: JWK "alg" does not match the requested algorithm
+{ name: 'ECDSA', namedCurve: 'P-256' }
+CryptoKey {
+  type: 'private',
+  extractable: true,
+  algorithm: { name: 'ECDH', namedCurve: 'P-256' },
+  usages: [ 'deriveBits', 'deriveKey' ]
+} CryptoKey {
+  type: 'public',
+  extractable: true,
+  algorithm: { name: 'ECDH', namedCurve: 'P-256' },
+  usages: []
+}
+ArrayBuffer 870a333e3241dcb635c443fd037525b397f816accb5c28a77984c45395ec960b
+ArrayBuffer 870a333e3241dcb635c443fd037525b397f816accb5c28a77984c45395ec960b
+ArrayBuffer 870a333e3241dcb635c443fd037525b3
+ArrayBuffer 8700
+OperationError [0]: derived bit length is too small
+InvalidAccessError [15]: algorithm.public must be a public key
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to normalize algorithm: 'public' of 'EcdhKeyDeriveParams' (passed algorithm) is not of type CryptoKey.
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'EcdhKeyDeriveParams' because 'public' is required in 'EcdhKeyDeriveParams'.
+ArrayBuffer 870a333e3241dcb635c443fd037525b3
+SyntaxError [12]: Unsupported key usage for a ECDH key
+{
+  key_ops: [],
+  ext: true,
+  kty: 'EC',
+  x: 'qJS_jqjjOZhu_S6URkaOUPdEEeUPdpN3CQPul60TX58',
+  y: '4zJ7GErgfBowmIvkl-CW5vQjG4_jgGeDu8dRMTT9WM0',
+  crv: 'P-256'
+}
+InvalidAccessError [15]: Named curve mismatch
+CryptoKey {
+  type: 'private',
+  extractable: true,
+  algorithm: { name: 'X25519' },
+  usages: [ 'deriveBits' ]
+} CryptoKey {
+  type: 'public',
+  extractable: true,
+  algorithm: { name: 'X25519' },
+  usages: []
+}
+ArrayBuffer 5da1dc2f3c24bc066f12b67a8e777f56f157d44f1b2ecbcf5912220e7f120808
+ArrayBuffer 5da1dc2f3c24bc066f12b67a8e777f56f157d44f1b2ecbcf5912220e7f120808
+ArrayBuffer e6c38d504f3063604d09df4c25d9c4b899fb6d6cb5da75b733b64951076fe875
+{
+  key_ops: [ 'deriveBits' ],
+  ext: true,
+  crv: 'X25519',
+  d: 'AK7SUVMPYSmyABg7x8KmSW7wyfUX3CJmWeAu4dv5FGw',
+  x: '5sONUE8wY2BNCd9MJdnEuJn7bWy12nW3M7ZJUQdv6HU',
+  kty: 'OKP'
+}
+[ 'public', { name: 'X25519' } ]
+DataError [0]: X25519 raw keys must be exactly 32-bytes
+SyntaxError [12]: Unsupported key usage for a X25519 key
+SyntaxError [12]: Unsupported key usage for a X25519 key
+DataError [0]: Invalid key type
+DataError [0]: JWK "crv" Parameter and algorithm name mismatch
+InvalidAccessError [15]: algorithm.public must be an ECDH key
+InvalidAccessError [15]: Key algorithm mismatch
+[
+  {
+    name: 'RSASSA-PKCS1-v1_5',
+    modulusLength: 1024,
+    publicExponent: Uint8Array(3) [ 1, 0, 1 ],
+    hash: { name: 'SHA-256' }
+  },
+  [ 'verify' ],
+  [ 'sign' ],
+  [ 'publicKey', 'privateKey' ],
+  true,
+  true,
+  true
+]
+[ [ 'encrypt', 'wrapKey' ], [ 'decrypt' ], false, 'message' ]
+[
+  { name: 'ECDSA', namedCurve: 'P-384' },
+  [ 'verify' ],
+  [ 'sign' ],
+  true,
+  true
+]
+[ [], [ 'deriveBits' ], true ]
+[ [], [ 'deriveKey', 'deriveBits' ], { name: 'X25519' }, true ]
+SyntaxError [12]: Unsupported key usage for a RSA key
+OperationError [0]: The publicExponent must be equivalent to an unsigned 32-bit value
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to normalize algorithm: 'publicExponent' of 'RsaHashedKeyGenParams' (passed algorithm) is not an Uint8Array object.
+OperationError [0]: The operation failed for an operation-specific reason
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'RsaHashedKeyGenParams' because 'modulusLength' is required in 'RsaHashedKeyGenParams'.
+SyntaxError [12]: Usages cannot be empty when creating a key.
+NotSupportedError [9]: Unrecognized namedCurve
+SyntaxError [12]: Usages cannot be empty when creating a key.
+SyntaxError [12]: Unsupported key usage for an ECDH key
+SyntaxError [12]: Unsupported key usage for an X25519 key
+rsa
+true
+CryptoKey {
+  type: 'private',
+  extractable: false,
+  algorithm: {
+    name: 'RSA-PSS',
+    modulusLength: 1024,
+    publicExponent: [Uint8Array],
+    hash: [Object]
+  },
+  usages: [ 'sign' ]
+}
+CryptoKey {
+  type: 'public',
+  extractable: true,
+  algorithm: { name: 'ECDH', namedCurve: 'P-256' },
+  usages: []
+}
+{ name: 'X25519' }

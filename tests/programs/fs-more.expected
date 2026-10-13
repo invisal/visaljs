@@ -1,0 +1,38 @@
+realpath true
+realpath missing ENOENT lstat ENOENT: no such file or directory, lstat '<cwd>/nope'
+realpath.native <cwd>/file
+realpath.native missing ENOENT realpath ENOENT: no such file or directory, realpath 'nope'
+realpath buffer true
+mkdir undefined
+mkdir again EEXIST mkdir EEXIST: file already exists, mkdir 'one'
+mkdir file EEXIST mkdir EEXIST: file already exists, mkdir 'file'
+mkdir no parent ENOENT mkdir ENOENT: no such file or directory, mkdir 'q/r'
+mkdir recursive a
+mkdir recursive again undefined
+mkdir recursive through a file ENOTDIR mkdir ENOTDIR: not a directory, mkdir 'file/x'
+mkdir recursive onto a file EEXIST mkdir EEXIST: file already exists, mkdir 'file'
+mkdir made true
+open bad flags ERR_INVALID_ARG_VALUE undefined The argument 'flags' is invalid. Received 'zz'
+open missing ENOENT open ENOENT: no such file or directory, open 'nope'
+open exclusive EEXIST open EEXIST: file already exists, open 'file'
+close bad fd EBADF close EBADF: bad file descriptor, close
+close not a number ERR_INVALID_ARG_TYPE undefined The "fd" argument must be of type number. Received type string ('x')
+write string 6
+write bytes 3
+write at 1
+written "Xéllobcd"
+write closed EBADF write EBADF: bad file descriptor, write
+read 4 Xél
+read at 4 éll
+appended true
+utimes undefined
+utimes mtime 2000000 1000000
+utimes string 6000
+utimes missing ENOENT utime ENOENT: no such file or directory, utime 'nope'
+realpath cb null <cwd>/file
+realpath.native cb ENOENT
+mkdir cb null cb
+open/close cb null number null
+mkdir promise p
+realpath promise <cwd>/p/q
+utimes promise 2000

@@ -1,0 +1,24 @@
+quick brown fox jumps over the lazy dog, again and again. | quick brown fox jumps over the lazy  | brown fox jumps over the 57 36 24
+true true true
+ïcødé — “quotes” and emoji 😀 in a UTF-16 parent string | cødé — “quotes” and emoji 😀  | — “quotes” and emoji 😀 in a UTF false
+239 128512 — “QUOTES” AND EMOJI 😀 IN A UTF 28
+{ 'quick brown fox jumps over': 2 } true x 1
+150  again.|quick brown  12 "brown fox jumps over the" cødé — “quotes” and emoji 😀 !
+false true true true true .
+220001
+/^a/ "xa" undefined null 0
+/^a/ "ab" undefined [ 0, 'a' ] 0
+/^a/g "aa" 1 null 0
+/^a/g "aa" 0 [ 0, 'a' ] 1
+/^a/y "aa" 1 null 0
+/^a|b/ "xb" undefined [ 1, 'b' ] 0
+/^(?:a|b)c/ "bc" undefined [ 0, 'bc' ] 0
+/^(?:a|b)c/ "xbc" undefined null 0
+/^a/m "x\na" undefined [ 2, 'a' ] 0
+/(?=^)a/ "a" undefined [ 0, 'a' ] 0
+/^$/ "" undefined [ 0, '' ] 0
+/^/g "abc" 2 null 0
+/^\s*x/i "  X" undefined [ 0, '  X' ] 0
+/^\s*x/ "y  x" undefined null 0
+>a
+>b baa [ 'x' ] null -1

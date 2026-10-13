@@ -1,0 +1,99 @@
+names: dot,junitReporter,value,tapReporter dot,junit,spec,tap,lcov object
+--- tap
+TAP version 13
+# Subtest: suite
+    # Subtest: passes
+    ok 1 - passes
+      ---
+      duration_ms: 1.5
+      ...
+    # Subtest: fails
+    not ok 2 - fails
+      ---
+      duration_ms: 2
+      error: 'boom & <bang>'
+      ...
+    # Subtest: skipped
+    ok 3 - skipped # SKIP not now
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: todo
+    ok 4 - todo # TODO
+      ---
+      duration_ms: 0
+      ...
+    1..4
+not ok 1 - suite
+  ---
+  duration_ms: 5
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  ...
+1..1
+# tests 4 -- done
+
+--- dot
+.X..X
+
+Failed tests:
+
+✖ fails (2ms)
+  [Error: boom & <bang>]
+✖ suite (5ms)
+  [Error: 1 subtest failed] { failureType: 'subtestsFailed' }
+
+--- junit
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testsuite name="suite" time="0.005000" disabled="0" errors="0" tests="4" failures="1" skipped="2" hostname="HOST">
+		<testcase name="passes" time="0.001500" classname="test"/>
+		<testcase name="fails" time="0.002000" classname="test" failure="boom &amp; &lt;bang>">
+			<failure type="undefined" message="boom &amp; &lt;bang>">
+[Error: boom &amp; &lt;bang>]
+			</failure>
+		</testcase>
+		<testcase name="skipped" time="0.000000" classname="test">
+			<skipped type="skipped" message="not now"/>
+		</testcase>
+		<testcase name="todo" time="0.000000" classname="test">
+			<skipped type="todo" message="true"/>
+		</testcase>
+	</testsuite>
+	<!-- tests 4 &#45;&#45; done -->
+</testsuites>
+
+--- spec
+▶ suite
+  ✔ passes (1.5ms)
+  ✖ fails (2ms)
+  ﹣ skipped # not now
+  ✔ todo # TODO
+✖ suite (5ms)
+ℹ tests 4 -- done
+
+✖ failing tests:
+
+✖ fails (2ms)
+  [Error: boom & <bang>]
+
+--- spec with new: true
+--- lcov
+TN:
+SF:src/a.js
+FN:1,f
+FN:5,anonymous_1
+FNDA:2,f
+FNDA:0,anonymous_1
+FNF:2
+FNH:1
+BRDA:2,0,0,1
+BRF:1
+BRH:1
+DA:1,2
+DA:2,1
+LH:2
+LF:3
+end_of_record
+
+lcov getter: true

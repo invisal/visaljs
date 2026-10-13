@@ -1,0 +1,16 @@
+{
+  "name": "@visaljs-apps/mysql",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A to-do list in MySQL through mysql2, compiled by visaljs",
+  "type": "module",
+  "main": "todo.js",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build todo.js -o todo",
+    "start": "node todo.js",
+    "db": "docker compose up -d"
+  },
+  "dependencies": {
+    "mysql2": "3.24.5"
+  }
+}

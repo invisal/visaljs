@@ -1,0 +1,38 @@
+[object Object] [object Array] [object Null]
+[object Undefined] [object Number] [object String]
+[object Function] [object Error] [object Object]
+true false true true
+a|b 0|1|length
+42 2 false true
+42 false false false
+1 true true true undefined
+100 function
+1 mine true true
+null object
+2
+false undefined true
+true
+TypeError: Invalid property descriptor. Cannot both specify accessors and a value or writable attribute, #<Object>
+TypeError
+106 16 15
+nested call
+string
+3 1-2-3 true false
+5 1,2,3,4,5 5 4
+10,21,32,43
+0:5/3 2:7/3 
+2 -1 -1 -1
+2,3,4 3,4 2,3
+1,2,3,, |
+a+b xxyyzz
+3 c
+123truenullundefined|0
+e 101 2 -1 3
+el llo el hello
+Hi☺ abc x
+43 NaN ff 0.1
+false true false true 1
+TypeError: Number.prototype.toString requires that 'this' be a Number
+RangeError: toString() radix argument must be between 2 and 36
+true
+true

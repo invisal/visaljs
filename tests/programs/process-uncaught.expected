@@ -1,0 +1,8 @@
+main
+uncaughtException from a microtask uncaughtException
+unhandledRejection handled late true
+a job its listener queued
+uncaughtException from a timer uncaughtException
+late's handler
+rejectionHandled true
+exit 0 [ 'next microtask', 'timer', 'later timer' ]

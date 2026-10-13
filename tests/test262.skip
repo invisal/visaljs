@@ -1,0 +1,19 @@
+# test262 features and paths that aren't compiled at all.
+# Everything else runs; failures need no justification (see test262.results).
+#
+#   feature <tag>     skip tests whose `features` include <tag>
+#   path    <glob>    skip tests under test/ matching <glob> (** and *)
+
+# not implemented yet
+feature  regexp-unicode-property-escapes
+feature  Temporal
+feature  ShadowRealm
+
+# not supported
+feature  Atomics.waitAsync          # no threads
+feature  SharedArrayBuffer          # no threads
+feature  IsHTMLDDA                  # browser-only annex
+path     language/eval-code/**      # eval is a non-goal
+path     annexB/**                  # later
+path     intl402/**                 # Intl's own suite, not run
+path     staging/**                 # proposals not yet in test/

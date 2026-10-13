@@ -1,0 +1,17 @@
+{
+  "name": "@visaljs-apps/express-postgres",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An Express app backed by PostgreSQL through pg, compiled by visaljs",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build server.js -o server",
+    "start": "node server.js",
+    "db": "docker compose up -d"
+  },
+  "dependencies": {
+    "express": "5.2.1",
+    "pg": "8.23.1"
+  }
+}

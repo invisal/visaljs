@@ -1,0 +1,15 @@
+lines: ["one","two","three","four","fiveé","last"]
+closed: true false
+events: answer Ada, pause, resume, pause, close
+output: "name? $ "
+prompt: $ 
+after close: ERR_USE_AFTER_CLOSE
+for await: ["a","b","c"]
+answer: 42
+aborted: AbortError ABORT_ERR
+output: "how many? never? \r\n"
+escapes: "\u001b[4G\u001b[5;4H\u001b[2D\u001b[1B\u001b[1K\u001b[0K\u001b[2K\u001b[0J"
+no stream: true
+queued: ""
+committed: "\u001b[1G\u001b[1C\u001b[1A\u001b[2K\u001b[0J"
+rolled back: "\u001b[1G\u001b[1C\u001b[1A\u001b[2K\u001b[0J"

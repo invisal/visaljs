@@ -1,0 +1,28 @@
+3 undefined [ 1, 2, [ 3, [ 4 ] ] ] [ 1, 2, 3, 4 ] [ 1, 10, 2, 20 ]
+[ 1, 2, 3, [ 4 ], 5, 'x' ] [ <1 empty item>, 1, <1 empty item>, 2 ]
+[ 4, 5, 3, 4, 5 ] [ 1, 1, 2, 3, 5 ] [ 7, 7, 7 ] [ 1, 0, 0 ]
+5 0 4 -1
+2 0 true -1 true true
+[ 9, 8, 1, 3 ] 2 [ 9, 8, 1, 3 ] 4 [ 9, 8, 1, 3 ]
+[ 2, 3 ] [ 1, 'z', 'a', 'b', 'c' ] [ 4, 5 ] [ 1, 'z', 'a', 'b', 'c' ] [] [ 1, 'z', 'a', 'b', 'c' ]
+[ 1, 10, 100, 9 ] [ 1, 9, 10, 100 ] [ 'a', 'b', 'c', undefined, <1 empty item> ] [ 1, 2, 3 ] [ 3, 2, 1 ]
+bdac
+[ 1, 3 ] true true 6 321
+[ 1, 'x', 'y', 3 ] [ 1, 2, 9 ] [ 3, undefined, 1 ] [ 2, <1 empty item>, 6 ]
+TypeError Reduce of empty array with no initial value
+RangeError Invalid index : 5
+[ 'h', 'é', 'l', 'l', 'o' ] [ 0, 1, 4 ] [ 1, 2 ] [ 7, 8 ] [ [ 0, 1 ], [ 1, 2 ] ]
+true MyArray true 1 true
+[ 'a', <1 empty item>, 'c' ] a--c [ 'b', 'c' ]
+1,2,3 1,,,2 1.5,x 
+length,constructor,at,concat,copyWithin,fill,find,findIndex,findLast,findLastIndex,lastIndexOf,pop,push,reverse,shift,unshift,slice,sort,splice,includes,indexOf,join,keys,entries,values,forEach,filter,flat,flatMap,map,every,some,reduce,reduceRight,toReversed,toSorted,toSpliced,with,toLocaleString,toString at,copyWithin,entries,fill,find,findIndex,findLast,findLastIndex,flat,flatMap,includes,keys,toReversed,toSorted,toSpliced,values
+length,name,prototype,isArray,from,of,fromAsync true { value: [ 0, 'a' ], done: false }
+fromAsync is function
+[
+  [ 1, 2, 3 ],
+  [ 'a!', 'b!' ],
+  [ 20, 41 ],
+  'TypeError',
+  'RangeError: no',
+  true
+]

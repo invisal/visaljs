@@ -1,0 +1,34 @@
+default 28b52ffd60f842fd1300f6e229189027c9704b41fe8565fe…606e10abc2c4a0514a35e303b42d6897d3890668c34cb456 (649) true
+small 28b52ffd200529000068656c6c6f 28b52ffd2000010000 0
+level -5 28b52ffd60f842bd6300f4ae7b226964223a0a64656c7461…e93f3e537bc893a08d4cd3636a4a0f80961e33e580e0a115 (3201) true
+level 1 28b52ffd60f842e5120096a62f179045590ebed688449cb1…8d7000a63f1f9e1cb01080e100032a0400e020ad101ab456 (614) true
+level 3 28b52ffd60f842fd1300f6e229189027c9704b41fe8565fe…606e10abc2c4a0514a35e303b42d6897d3890668c34cb456 (649) true
+level 9 28b52ffd60f84255070042861116a0a719032e58b7d1cbad…a5745608d45e3a1930c35285c1029e097c63f2a68661a70a (244) true
+level 19 28b52ffd60f84235060062081314a0ab31857763bb25f116…7602e71a619b63266c209d3261019c2ff4dbe99b1a86a12a (208) true
+strategy 1 28b52ffd60f84255130066252c1790a7590e4b21fc62c0bf…04630c9de6e00c40ed6902c23ac19999a61da00d9bee5a01 (628)
+strategy 5 28b52ffd60f842f50600a2061216a0a719032e58b7d1cbad…524a4640dc5e32b160074c540600c04ca02fa6686a18a6ab (232)
+strategy 9 28b52ffd60f842050800a2840e11a0ed85f77b39bb0ceb7f…f894ca0a8fedc593850d9f5403073e17e691899b1a86b12a (266)
+checksum 28b52ffd64f842fd1300f6e229189027c9704b41fe8565fe…c2c4a0514a35e303b42d6897d3890668c34cb45678e56703 (653)
+pledged 28b52ffd60f842fd1300f6e229189027c9704b41fe8565fe…606e10abc2c4a0514a35e303b42d6897d3890668c34cb456 (649)
+window 28b52ffd4000f842b4040022c50f1690a7e94b217c69c1be…4c11cf2dcc23cb2559289ffb1848e80bb15936cf632041ae (1702)
+dictionary 28b52ffd60f8429d130066a12313b027cb01843b2be04a0c…018e45382c9142a0f0688c9685a7b41902005a1e9500e156 (637) true
+error Error ZSTD_error_corruption_detected 20 Data corruption detected
+error Error ZSTD_error_prefix_unknown 10 Unknown frame descriptor
+decompressed 0
+decompressed 0
+error RangeError ERR_ZSTD_INVALID_PARAM undefined 500 is not a valid zstd parameter
+error RangeError ERR_ZSTD_INVALID_PARAM undefined x is not a valid zstd parameter
+error TypeError ERR_INVALID_ARG_TYPE undefined The "options.params[key]" property must be of type number. Received type string ('3')
+error Error ERR_ZLIB_INITIALIZATION_FAILED undefined Setting parameter failed
+error TypeError ERR_INVALID_ARG_VALUE undefined pledgedSrcSize may not be negative
+error RangeError ERR_OUT_OF_RANGE undefined The value of "options.flush" is out of range. It must be >= 0 and <= 2. Received 3
+error Error ERR_ZLIB_INITIALIZATION_FAILED undefined Setting parameter failed
+callback null 28b52ffd0058fd1300f6e229189027c9704b41fe8565fead…606e10abc2c4a0514a35e303b42d6897d3890668c34cb456 (648)
+callback back null true
+callback error ZSTD_error_prefix_unknown 10 Unknown frame descriptor
+flushed streamed 
+stream true 17409 669
+stream bytes 28b52ffd0058d5130016e32917a027590e2eb06e63eb6535…81788b8c9e3c1cdb8a3656e0d8c2b1ec4e34a00d33d15a01 (643)
+stream error ZSTD_error_prefix_unknown 10 Unknown frame descriptor
+shape undefined true true
+without new TypeError

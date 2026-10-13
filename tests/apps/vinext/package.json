@@ -1,0 +1,21 @@
+{
+  "name": "@visaljs-apps/vinext",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A Next.js app built with vinext (Next.js on Vite), compiled by visaljs",
+  "type": "module",
+  "main": ".",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build",
+    "start": "vinext start"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "6.1.2",
+    "@vitejs/plugin-rsc": "0.5.36",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-server-dom-webpack": "19.3.0",
+    "vinext": "1.0.1",
+    "vite": "8.3.4"
+  }
+}

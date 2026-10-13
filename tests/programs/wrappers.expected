@@ -1,0 +1,28 @@
+[Number: 5] [String: 'ab'] [Boolean: false] [Symbol: Symbol(q)] object object object object
+6 ab! truthy true false true false
+5 ab false true q Symbol(q)
+[object Number] [object String] [object Boolean] [object Symbol]
+[object Number] 0 true false
+[ '0', '1', '5', 'length', 'x' ] [ '0', '1', '5', 'x' ] 2 a b undefined
+{ value: 'a', writable: false, enumerable: true, configurable: false } { value: 2, writable: false, enumerable: false, configurable: false }
+a false true true false false
+TypeError
+TypeError Cannot redefine property: length
+true [ 'h', 'é', '😀' ] [ 'x', 'y' ]
+[String: 'hi'] true true true true
+[String: 'ab'] { c: 1 } [Number: 3] [Number: 7]
+[ 'aa', 'bb', 'cc' ] [ [ 0, 'x' ], [ 1, 'y' ] ]
+object true true number
+object 5
+42
+[Number (Big): 4] 8 true [String (Str): 'ok'] 2 k
+1.50
+TypeError Number.prototype.toFixed requires that 'this' be a Number
+w
+TypeError String.prototype.valueOf requires that 'this' be a String
+true
+TypeError Boolean.prototype.valueOf requires that 'this' be a Boolean
+Symbol(t)
+TypeError Symbol is not a constructor
+TypeError
+symbol symbol length,name,prototype,for,keyFor,asyncIterator,hasInstance,isConcatSpreadable,iterator,match,matchAll,replace,search,species,split,toPrimitive,toStringTag,unscopables,dispose,asyncDispose

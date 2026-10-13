@@ -1,0 +1,13 @@
+ERR_UNKNOWN_SIGNAL Unknown signal: SIGFOO undefined
+ERR_INVALID_ARG_TYPE The "pid" argument must be of type number. Received type string ('x') undefined
+ESRCH kill ESRCH kill
+EINVAL uv_signal_start EINVAL uv_signal_start
+true 0
+removed x b
+removed x a
+removed y c
+[]
+true
+got SIGUSR2 true
+once SIGUSR1 2
+0 0

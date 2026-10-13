@@ -1,0 +1,75 @@
+---
+// Every page: the header, then either a sidebar (slot "sidebar", a drawer on small screens)
+// and the main column, or, without a sidebar, the page's own full-width content. Light mode only
+// (Kumo's data-mode).
+import "../index.css";
+import { GUIDE_PUBLISHED } from "../lib/guide-published.ts";
+
+interface Props {
+  title: string;
+  page: "home" | "guide" | "node";
+  /** The sidebar brings its own width, padding, border and scrolling (Kumo's Sidebar). */
+  flush?: boolean;
+  /** The header bar; the front page goes without. */
+  header?: boolean;
+}
+
+const { title, page, flush = false, header = true } = Astro.props;
+const sidebar = Astro.slots.has("sidebar");
+const tab = (to: Props["page"]) => (page === to ? "text-kumo-strong" : "text-kumo-subtle hover:text-kumo-default");
+---
+
+<!doctype html>
+<html lang="en" data-mode="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+  </head>
+  <body class="min-h-screen bg-kumo-canvas text-kumo-default">
+    {
+      header && (
+        <header class="sticky top-0 z-20 flex items-center gap-3 border-b border-kumo-hairline bg-kumo-canvas/90 px-4 py-2.5 backdrop-blur">
+          {sidebar && <button type="button" id="menu-toggle" class="rounded border border-kumo-line px-2 py-0.5 text-sm lg:hidden" aria-label="Toggle the contents">☰</button>}
+          <a href="/" class="font-semibold">visaljs</a>
+          <span class="hidden text-sm text-kumo-subtle sm:inline">JavaScript to C</span>
+          <nav class="ml-auto flex gap-4 text-sm">
+            {GUIDE_PUBLISHED && <a href="/guide/introduction/" class={tab("guide")}>Guide</a>}
+            <a href="/node/" class={tab("node")}>Node API</a>
+            <a href="https://github.com/invisal/visaljs" class="text-kumo-subtle hover:text-kumo-default">GitHub</a>
+          </nav>
+        </header>
+      )
+    }
+    {
+      sidebar ? (
+        <div class="flex">
+          <aside
+            id="sidebar"
+            class:list={[
+              "hidden data-[open]:fixed data-[open]:inset-x-0 data-[open]:top-[45px] data-[open]:bottom-0 data-[open]:z-10 data-[open]:block data-[open]:bg-kumo-canvas lg:sticky lg:top-[45px] lg:block lg:h-[calc(100vh-45px)] lg:shrink-0",
+              !flush && "overflow-y-auto px-4 py-6 lg:w-64 lg:border-r lg:border-kumo-hairline",
+            ]}
+          >
+            <slot name="sidebar" />
+          </aside>
+          <main class="min-w-0 flex-1 px-4 py-8 lg:px-10">
+            <slot />
+          </main>
+        </div>
+      ) : (
+        <slot />
+      )
+    }
+    <script>
+      /* the drawer on small screens: the button toggles it, a link in it closes it */
+      const sidebar = document.getElementById("sidebar");
+      if (sidebar) {
+        document.getElementById("menu-toggle")!.addEventListener("click", () => sidebar.toggleAttribute("data-open"));
+        sidebar.addEventListener("click", (e) => {
+          if ((e.target as Element).closest("a")) sidebar.removeAttribute("data-open");
+        });
+      }
+    </script>
+  </body>
+</html>

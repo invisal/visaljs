@@ -1,0 +1,23 @@
+relative: "CWD/app/package.json"
+parent: "CWD/app/package.json"
+package: "CWD/app/node_modules/dep/package.json"
+scoped: "CWD/app/node_modules/@scope/pkg/package.json"
+file URL: "CWD/app/package.json"
+missing package: Error ERR_MODULE_NOT_FOUND Cannot find package 'nope' imported from CWD/app/src/lib/x.js
+constants: {"compileCacheStatus":{"FAILED":0,"ENABLED":1,"ALREADY_ENABLED":2,"DISABLED":3}}
+source maps: {"enabled":false,"nodeModules":false,"generatedCode":false}
+findSourceMap: undefined
+payload: ["a.js","b.js"]
+findEntry: {"generatedLine":0,"generatedColumn":9,"originalSource":"a.js","originalLine":0,"originalColumn":9,"name":"foo"}
+findEntry 2: {"generatedLine":1,"generatedColumn":5,"originalSource":"b.js","originalLine":1,"originalColumn":15,"name":"bar"}
+findEntry none: {"generatedLine":1,"generatedColumn":5,"originalSource":"b.js","originalLine":1,"originalColumn":15,"name":"bar"}
+findOrigin: {"name":"foo","fileName":"a.js","lineNumber":1,"columnNumber":10}
+findOrigin 2: {"name":"bar","fileName":"b.js","lineNumber":4,"columnNumber":18}
+lineLengths: undefined
+sourcemap no payload: TypeError ERR_INVALID_ARG_TYPE The "payload" argument must be of type object. Received null
+Module: ["function",true,"function",true]
+wrap: "(function (exports, require, module, __filename, __dirname) { x\n});"
+resolve builtin: "fs"
+resolve missing: Error MODULE_NOT_FOUND Cannot find module './nope.js'
+instance: ["/a/b.js","/a",false,0]
+syncBuiltinESMExports: undefined

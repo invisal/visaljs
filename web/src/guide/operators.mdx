@@ -1,0 +1,79 @@
+---
+title: "Operators"
+order: 3
+icon: "plus-minus"
+---
+
+In C, `a + b` adds two numbers. In JavaScript, `+` can add numbers, join strings, or even run your own code first. C's `+` can't do any of that, so every operator becomes a call into the runtime, like `js_add` from the introduction.
+
+## Just add
+
+Let's start simple. If both values are doubles, unbox them, add them, and box the result again.
+
+```c
+JSValue js_add(JSValue a, JSValue b) {
+    if (js_is_double(a) && js_is_double(b))
+        return js_double(js_as_double(a) + js_as_double(b));
+    ...
+}
+```
+
+`js_as_double` and `js_double` are the two functions from the last chapter. One takes the double out of a `JSValue`, the other puts it back.
+
+## Not just numbers
+
+`+` also joins strings, and an object first turns into a primitive by calling its `valueOf` or `toString`. So after the doubles, we handle the other cases.
+
+<Note>
+
+We haven't talked about strings yet. They deserve a big section of their own, so for now, let's pretend we already have them.
+
+</Note>
+
+```c
+JSValue js_add(JSValue a, JSValue b) {
+    if (js_is_double(a) && js_is_double(b))
+        return js_double(js_as_double(a) + js_as_double(b));
++     a = js_to_primitive(a);                      /* objects: valueOf / toString */
++     b = js_to_primitive(b);
++     if (js_is_string(a) || js_is_string(b))
++         return js_concat(js_to_string(a), js_to_string(b));
++     return js_double(js_to_number(a) + js_to_number(b));  /* true + 1 is 2 */
+}
+```
+
+A primitive is any value that isn't an object, like a number, a string, a boolean, `null` or `undefined`. `js_to_primitive` gives a primitive back as it is. For an object, it calls `valueOf`, and if that doesn't return a primitive, it calls `toString`.
+
+```js
+const price = { valueOf() { return 5; } };
+price + 1;   // 6, from valueOf
+[1, 2] + 1;  // "1,21", an array's valueOf is itself, so toString gives "1,2"
+```
+
+The other helpers do what their names say. `js_to_string` and `js_to_number` turn a primitive into a string or a number, and `js_concat` joins two strings.
+
+## Emit to C
+
+Every operator works this way, so the runtime needs one function for each of them. `<` is `js_lt`, `===` is `js_strict_eq`, `typeof` is `js_typeof`, and so on. The compiler only has to call the right one.
+
+<Pair>
+
+```js
+let c = a + b;
+let d = a < b;
+let e = typeof a;
+```
+
+```c
+JSValue c = js_add(a, b);
+JSValue d = js_lt(a, b);
+JSValue e = js_typeof(a);
+```
+
+</Pair>
+
+## Native isn't fast yet
+
+Compiling to native code doesn't make our code fast on its own. In C, adding two doubles is a single instruction. Our `a + b` is a function call, two type checks, an unbox for each side and a box for the result. That's the price of dynamic types, and we still pay it.
+
+Later, we'll learn tricks to infer the types ahead of time. When the compiler knows `a` and `b` are always numbers, it can skip the checks and use C's own `+`, and close the gap.

@@ -1,0 +1,18 @@
+connection: true 127.0.0.1
+"HTTP/1.1 200 OK\r\nDate: <date>\r\nConnection: close\r\nContent-Length: 46\r\n\r\ntrue true 127.0.0.1 IPv4 number true true open"
+connections: 1 true
+upgrade: GET /chat echo "first" true
+"HTTP/1.1 101 Switching Protocols\r\nUpgrade: echo\r\nConnection: Upgrade\r\n\r\necho: firstecho: secondecho: bye"
+connect: example.com:443 "hello"
+"HTTP/1.1 200 Connection Established\r\n\r\ntunnel"
+"HTTP/1.1 200 OK\r\nDate: <date>\r\nConnection: close\r\nContent-Length: 11\r\n\r\nplain false"
+"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n"
+clientError: HPE_INVALID_HEADER_TOKEN Parse Error: Invalid header token Invalid header token
+"HTTP/1.1 400 Custom\r\nConnection: close\r\n\r\n"
+server timeout: true
+"HTTP/1.1 408 Request Timeout\r\nConnection: close\r\n\r\n"
+"HTTP/1.1 200 OK\r\nDate: <date>\r\nConnection: close\r\nContent-Length: 4\r\n\r\nlate"
+"HTTP/1.1 200 OK\r\nDate: <date>\r\nConnection: keep-alive\r\nKeep-Alive: timeout=2\r\nContent-Length: 2\r\n\r\nhi"
+"HTTP/1.1 200 OK\r\nDate: <date>\r\nConnection: keep-alive\r\nKeep-Alive: timeout=0\r\nContent-Length: 2\r\n\r\nhi" closed by the server after the timeout: true
+server closed
+idle connection closed by close()

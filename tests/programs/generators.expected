@@ -1,0 +1,27 @@
+0,1,2,3,4
+first 10 6! undefined! undefined!
+default, created, body 1 0
+1 2 local/A B local undefined!
+1 caught boom end! undefined! [finally]
+early! [finally] undefined!
+never started! undefined!
+rethrown: before start undefined!
+completed rethrows: after end
+cleanup overridden! undefined!
+TypeError: Generator is already running
+in1 | in2 sent | outer got inner result | 7 | 8 | h | i
+inner caught x
+ret! [return R, outer finally]
+TypeError [closed]
+true
+1 [closed,closed]
+m1,m2
+1,2,3 3,2,1
+0,1,2,3,4
+0,1,2
+true
+true
+true
+function false
+TypeError
+true

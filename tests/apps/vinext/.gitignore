@@ -1,0 +1,5 @@
+/dist/
+.vinext/
+.next/
+next-env.d.ts
+/vinext

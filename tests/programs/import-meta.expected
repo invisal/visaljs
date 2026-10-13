@@ -1,0 +1,26 @@
+dirname,filename,main,resolve,url true true/true/true true
+file://<file> <file> true
+true false false <dir>/import-meta /where.js programs/import-meta/x.js
+resolve 1
+./x.js -> file://<dir>/x.js
+../up/y.js -> file://<parent>/up/y.js
+/abs/z.js -> file:///abs/z.js
+./a b/ü.js -> file://<dir>/a%20b/%C3%BC.js
+./q.js?v=1#h -> file://<dir>/q.js?v=1#h
+node:fs -> node:fs
+fs -> node:fs
+file:///x/../y -> file:///y
+https://e.com/a/../b -> https://e.com/b
+. -> file://<dir>/
+./ -> file://<dir>/
+.. -> file://<parent>/
+./a//b/./c/.. -> file://<dir>/a//b/
+x/../../y -> Error ERR_MODULE_NOT_FOUND: Cannot find package 'x' imported from <file>
+@scope/pkg/sub -> Error ERR_MODULE_NOT_FOUND: Cannot find package '@scope/pkg' imported from <file>
+1 -> Error ERR_MODULE_NOT_FOUND: Cannot find package '1' imported from <file>
+import() rejected: Error ERR_MODULE_NOT_FOUND: Cannot find module '<dir>/import-meta/missing.js' imported from <file>
+import() rejected: Error ERR_MODULE_NOT_FOUND: Cannot find package 'not-a-package-1' imported from <file>
+import() rejected: TypeError undefined: The second argument to import() must be an object
+import() rejected: TypeError undefined: The 'assert' option must be an object
+import() rejected: TypeError undefined: Import assertion value must be a string
+import() rejected: RangeError undefined: bad specifier

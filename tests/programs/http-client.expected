@@ -1,0 +1,46 @@
+requests:
+  sent: "GET / HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nConnection: keep-alive\r\n\r\n"
+  headers: {"x-reply":"yes","content-length":"5"} ["X-Reply","yes","Content-Length","5"]
+  events: socket true, finish, response 200 OK 1.1, close
+  sent: "POST / HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nConnection: keep-alive\r\nContent-Length: 6\r\n\r\na body"
+  sent: "POST / HTTP/1.1\r\nContent-Type: text/plain\r\nHost: 127.0.0.1:<port>\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\n\r\n8\r\nstreamed\r\n0\r\n\r\n"
+  sent: "PUT /p?q=1 HTTP/1.1\r\nX-A: 1\r\nX-A: 2\r\nHost: 127.0.0.1:<port>\r\nAuthorization: Basic dXNlcjpwYXNz\r\nConnection: keep-alive\r\nContent-Length: 5\r\n\r\nbytes"
+  sent: "GET / HTTP/1.1\r\nX-Raw: 1\r\nHost: example\r\nConnection: keep-alive\r\n\r\n"
+  sent: "GET / HTTP/1.1\r\nConnection: close\r\n\r\n"
+  sent: "GET /from/url?x=1 HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nAuthorization: Basic dXNlcjpwdw==\r\nConnection: keep-alive\r\n\r\n"
+  sent: "GET /url-object HTTP/1.1\r\nX-Extra: 1\r\nHost: 127.0.0.1:<port>\r\nConnection: keep-alive\r\n\r\n"
+responses:
+  sent: "HEAD / HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nConnection: keep-alive\r\n\r\n"
+  HEAD: ["5",""]
+  sent: "GET / HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nConnection: keep-alive\r\n\r\n"
+  chunked: ["abcde",{"x-sum":"5"},["X-Sum","5"]]
+  sent: "GET / HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nConnection: keep-alive\r\n\r\n"
+  1xx: 103 Early Hints {"link":"</style.css>"} | continue | 100 Continue {} -> 200 after hints
+  sent: "GET / HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nConnection: keep-alive\r\n\r\n"
+  404: [404,["a=1","b=2"],"nope"]
+  sent: "GET / HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nConnection: keep-alive\r\n\r\n"
+  HTTP/1.0: ["1.0","until the end",true]
+keep-alive:
+  maxSockets 1: /a, /b, /c one socket: true free: 1 in use: 0
+  name: h:1:l:4
+failures:
+  refused: ECONNREFUSED connect connect ECONNREFUSED 127.0.0.1:<port>
+  sent: "GET / HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nConnection: close\r\n\r\n"
+  hang up: ECONNRESET socket hang up
+  sent: "GET / HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nConnection: close\r\n\r\n"
+  response aborted
+  response error: ECONNRESET aborted
+  sent: "GET / HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nConnection: close\r\n\r\n"
+  timeout
+  after timeout: ECONNRESET socket hang up
+  sent: "GET / HTTP/1.1\r\nHost: 127.0.0.1:<port>\r\nConnection: close\r\n\r\n"
+  parse error: HPE_INVALID_CONSTANT Parse Error: Expected HTTP/, RTSP/ or ICE/
+TypeError ERR_INVALID_PROTOCOL: Protocol "https:" not supported. Expected "http:"
+TypeError ERR_INVALID_HTTP_TOKEN: Method must be a valid HTTP token ["BAD METHOD"]
+TypeError ERR_UNESCAPED_CHARACTERS: Request path contains unescaped characters
+TypeError ERR_INVALID_ARG_TYPE: The "options.agent" property must be one of Agent-like Object, undefined, or false. Received type number (5)
+upgrades:
+  upgrade: 101 echo "from server"
+  upgraded socket: "echo ping"
+  connect: 200 Connection Established "tunnel open"
+function true true 5000 function

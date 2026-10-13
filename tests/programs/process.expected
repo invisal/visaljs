@@ -1,0 +1,45 @@
+┌─────────┬───┬─────┬──────┐
+│ (index) │ a │ b   │ c    │
+├─────────┼───┼─────┼──────┤
+│ 0       │ 1 │ 'x' │      │
+│ 1       │ 2 │     │ true │
+└─────────┴───┴─────┴──────┘
+┌─────────┬───┬───┐
+│ (index) │ 0 │ 1 │
+├─────────┼───┼───┤
+│ 0       │ 1 │ 2 │
+│ 1       │ 3 │   │
+└─────────┴───┴───┘
+┌─────────┬───┬──────────────────────────────┐
+│ (index) │ c │ d                            │
+├─────────┼───┼──────────────────────────────┤
+│ r1      │ 1 │ [ 1, 2, 3, ... 1 more item ] │
+│ r2      │ 2 │                              │
+└─────────┴───┴──────────────────────────────┘
+┌─────────┬────────────────────┬────────┐
+│ (index) │ o                  │ Values │
+├─────────┼────────────────────┼────────┤
+│ 0       │                    │ 1      │
+│ 1       │                    │ 's'    │
+│ 2       │ { deep: [Object] } │        │
+└─────────┴────────────────────┴────────┘
+not tabular
+in a group
+  ┌─────────┬───┐
+  │ (index) │ x │
+  ├─────────┼───┤
+  │ 0       │ 1 │
+  └─────────┴───┘
+object true true
+2 string true string
+true number string
+written without a newline
+true undefined
+TypeError ERR_INVALID_ARG_TYPE The "code" argument must be of type number. Received type string ('x')
+RangeError ERR_OUT_OF_RANGE The value of "code" is out of range. It must be an integer. Received 1.5
+TypeError ERR_INVALID_ARG_TYPE The "code" argument must be of type number. Received an instance of Object
+0 number
+2 number number true
+ERR_INVALID_ARG_TYPE The "callback" argument must be of type function. Received type number (5)
+sync
+tick 1 2

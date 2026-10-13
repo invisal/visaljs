@@ -1,0 +1,104 @@
+Object [JSON] {} [object JSON]
+{
+  b: [ 1, -0, 2500, 'xé😀', true, null ],
+  a: { '1': 'one', '2': 'two', ['__proto__']: 7 },
+  '': {}
+} [ '1', '2', '__proto__' ] true true
+[] /
+	"\ 100 -0 { a: 2 }
+"n" number {"source":"1.50"} false
+"s" string {"source":"\"t\""} false
+"0" number {"source":"10"} false
+"1" number {} false
+"2" number {"source":"30"} false
+"list" object {} false
+"deep" boolean {"source":"false"} false
+"o" object {} false
+"" object {} false
+{ n: 3, list: [ 20, 198, 60 ], o: { deep: false } }
+{"s":"q\"\\\n\u0001\ud800","n":[1,0,null,null,1e+21,0.1],"nil":null}
+{
+  "s": "q\"\\\n\u0001\ud800",
+  "n": [
+    1,
+    0,
+    null,
+    null,
+    1e+21,
+    0.1
+  ],
+  "nil": null
+}
+[
+--[],
+--{},
+--[
+----{}
+--],
+--{
+----"a": []
+--}
+]
+{
+abcdefghij"a": 1,
+abcdefghij"b": [
+abcdefghijabcdefghij1,
+abcdefghijabcdefghij2
+abcdefghij]
+} [
+          1
+] [
+   1
+] [
+	1
+]
+undefined undefined undefined "x" null [null,null,null]
+"toJSON()" {"x":"x!"} ["0"]
+[3,"s",false,{}]
+{"a":1,"c":{"a":3},"1":"one","b":2}
+{"a":101,"b":[102,{"c":103}]}
+[true,""]
+"  " {"😀":"\udc00"} [null,1] {}
+TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    --- property 'self' closes the circle
+TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'y' -> object with constructor 'Array'
+    |     index 1 -> object with constructor 'Object'
+    --- property 'back' closes the circle
+TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'K'
+    |     property 'k' -> object with constructor 'Object'
+    |     property 'inner' -> object with constructor 'Array'
+    --- index 0 closes the circle
+TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     property 'b' -> object with constructor 'Object'
+    |     property 'c' -> object with constructor 'Object'
+    |     ...
+    |     property 'e' -> object with constructor 'Object'
+    --- property 'loop' closes the circle
+TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    |     <anonymous> -> object with constructor 'Object'
+    --- property 'again' closes the circle
+TypeError: Converting circular structure to JSON
+    --> starting at object with constructor 'Object'
+    --- property 'me' closes the circle
+[Object: null prototype] { rawJSON: '1e1000' } true null true false
+{"big":1e1000,"list":["s",null,-0.10]}
+"{}" SyntaxError Unexpected token '{', "{}" is not valid JSON
+"[]" SyntaxError Unexpected token '[', "[]" is not valid JSON
+" 1" SyntaxError Unexpected token ' ', " 1" is not valid JSON
+"1 " SyntaxError Invalid value for JSON.rawJSON
+"" SyntaxError Invalid value for JSON.rawJSON
+"abc" SyntaxError Unexpected token 'a', "abc" is not valid JSON
+"\"a" SyntaxError Unterminated string in JSON at position 2 (line 1 column 3)
+"1." SyntaxError Unterminated fractional number in JSON at position 2 (line 1 column 3)
+"tru" SyntaxError Unexpected end of JSON input
+"1x" SyntaxError Invalid value for JSON.rawJSON
+{"a":[1,"b"]} undefined [Circular] "s"
+2
+9999
+2 3 1 isRawJSON parse,stringify,rawJSON,isRawJSON

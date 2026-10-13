@@ -1,0 +1,70 @@
+function main()
+bb0:
+  %area0 = make_function area
+  declare_global function ."area", %area0  !mayThrow
+  %grow0 = make_function grow
+  declare_global function ."grow", %grow0  !mayThrow
+  declare_global var ."box"  !mayThrow
+  declare_global var ."list"  !mayThrow
+  %0 = new_object
+  %1 = const 2
+  define_prop %0, %1, ."w"
+  %2 = const 3
+  define_prop %0, %2, ."h"
+  %3 = const 1
+  %4 = const 1
+  %5 = add %3, %4  !mayThrow
+  %6 = to_property_key %5  !mayThrow
+  %7 = const "two"
+  define_elem %0, %6, %7
+  %8 = const null
+  set_proto %0, %8
+  %9 = global_this
+  set_prop %9, %0, ."box"  !mayThrow
+  %10 = global_this
+  %box0 = get_prop %10, ."box"  !mayThrow
+  %11 = call_direct area(%box0)  !mayThrow
+  %12 = call_runtime print(%11)  !mayThrow
+  %13 = const "w"
+  %14 = global_this
+  %box1 = get_prop %14, ."box"  !mayThrow
+  %15 = in %13, %box1  !mayThrow
+  %16 = call_runtime print(%15)  !mayThrow
+  %17 = const 1
+  %18 = empty
+  %19 = global_this
+  %box2 = get_prop %19, ."box"  !mayThrow
+  %20 = new_array %17, %18, %box2
+  %21 = global_this
+  set_prop %21, %20, ."list"  !mayThrow
+  %22 = global_name "console"  !mayThrow
+  %23 = get_prop %22, ."log"  !mayThrow
+  %24 = global_this
+  %list0 = get_prop %24, ."list"  !mayThrow
+  %25 = get_prop %list0, [2]  !mayThrow
+  %26 = get_prop %25, ."w"  !mayThrow
+  %27 = global_name "Error"  !mayThrow
+  %28 = const "e"
+  %29 = new %27, %28  !mayThrow
+  %30 = get_prop %29, ."message"  !mayThrow
+  %31 = call %23, %22, %26, %30  !mayThrow
+  %32 = const undefined
+  return %32
+
+function area(%r0)
+bb0:
+  %0 = get_prop %r0, ."w"  !mayThrow
+  %1 = get_prop %r0, ."h"  !mayThrow
+  %2 = mul %0, %1  !mayThrow
+  return %2
+
+function grow(%r0, %k0)
+bb0:
+  %0 = get_prop %r0, ."w"  !mayThrow
+  %1 = const 1
+  %2 = add %0, %1  !mayThrow
+  set_prop %r0, %2, ."w"  !mayThrow
+  %3 = const 0
+  set_elem %r0, %k0, %3  !mayThrow
+  %4 = delete_prop %r0, ."h"  !mayThrow
+  return %4

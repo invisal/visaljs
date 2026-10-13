@@ -1,0 +1,46 @@
+true true
+isArgumentsObject isArrayBuffer isAsyncFunction isBigIntObject isBooleanObject isDataView isDate isExternal isGeneratorFunction isGeneratorObject isMap isMapIterator isModuleNamespaceObject isNativeError isNumberObject isPromise isProxy isRegExp isSet isSetIterator isSharedArrayBuffer isStringObject isSymbolObject isWeakMap isWeakSet isAnyArrayBuffer isBoxedPrimitive isArrayBufferView isTypedArray isUint8Array isUint8ClampedArray isUint16Array isUint32Array isInt8Array isInt16Array isInt32Array isFloat16Array isFloat32Array isFloat64Array isBigInt64Array isBigUint64Array isKeyObject isCryptoKey
+true
+isArgumentsObject: arguments, strict arguments
+isArrayBuffer: ArrayBuffer
+isAsyncFunction: async function, async arrow, async generator function
+isBigIntObject: Object(1n)
+isBooleanObject: Boolean
+isDataView: DataView
+isDate: date, MyDate
+isExternal: -
+isGeneratorFunction: generator function, async generator function
+isGeneratorObject: generator, async generator
+isMap: Map, MyMap
+isMapIterator: map iterator, map keys
+isModuleNamespaceObject: -
+isNativeError: Error, TypeError
+isNumberObject: Number(1)
+isPromise: Promise
+isProxy: Proxy of object, Proxy of Date, Proxy of function
+isRegExp: RegExp
+isSet: Set
+isSetIterator: set iterator
+isSharedArrayBuffer: -
+isStringObject: String
+isSymbolObject: Object(Symbol)
+isWeakMap: WeakMap
+isWeakSet: WeakSet
+isAnyArrayBuffer: ArrayBuffer
+isBoxedPrimitive: Number(1), String, Boolean, Object(Symbol), Object(1n)
+isArrayBufferView: DataView, Uint8Array, Buffer, Uint8ClampedArray, Int8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array
+isTypedArray: Uint8Array, Buffer, Uint8ClampedArray, Int8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array
+isUint8Array: Uint8Array, Buffer
+isUint8ClampedArray: Uint8ClampedArray
+isUint16Array: Uint16Array
+isUint32Array: Uint32Array
+isInt8Array: Int8Array
+isInt16Array: Int16Array
+isInt32Array: Int32Array
+isFloat16Array: -
+isFloat32Array: Float32Array
+isFloat64Array: Float64Array
+isBigInt64Array: BigInt64Array
+isBigUint64Array: BigUint64Array
+isKeyObject: KeyObject
+isCryptoKey: CryptoKey

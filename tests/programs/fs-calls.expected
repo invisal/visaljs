@@ -1,0 +1,72 @@
+rename ok
+rename missing Error ENOENT ENOENT: no such file or directory, rename 'a.txt' -> 'c.txt' dest c.txt
+link ok
+nlink 2
+symlink ok
+readlink b.txt
+readlink buffer 5
+readlink file Error EINVAL EINVAL: invalid argument, readlink 'b.txt' 
+symlink exists Error EEXIST EEXIST: file already exists, symlink 'b.txt' -> 'soft.txt' dest soft.txt
+symlink type Error ERR_FS_INVALID_SYMLINK_TYPE Symlink type must be one of "dir", "file", or "junction". Received "folder" 
+lstat link true
+copyFile ok
+copy content hello world
+copyFile excl Error EEXIST EEXIST: file already exists, copyfile 'b.txt' -> 'copy.txt' dest copy.txt
+access ok
+access missing Error ENOENT ENOENT: no such file or directory, access 'nope.txt' 
+chmod ok
+mode 600
+chmod string ok
+mode 644
+chown self ok
+chown bad TypeError ERR_INVALID_ARG_TYPE The "uid" argument must be of type number. Received type string ('0') 
+fstat size 11
+fstat file true
+fchmod ok
+fsync ok
+fdatasync ok
+ftruncate ok
+futimes ok
+mtime 2000000
+after ftruncate hello
+truncate ok
+after truncate he
+truncate missing Error ENOENT ENOENT: no such file or directory, open 'nope.txt' 
+lutimes ok
+lutimes mtime 4000000
+mkdtemp true
+mkdtemp missing Error ENOENT ENOENT: no such file or directory, mkdtemp 'no/such/dir-XXXXXX' 
+rmdir not empty Error ENOTEMPTY ENOTEMPTY: directory not empty, rmdir 'tree' 
+rmdir ok
+rmdir missing Error ENOENT ENOENT: no such file or directory, rmdir 'tmp-missing' 
+rm dir SystemError ERR_FS_EISDIR Path is a directory: rm returned EISDIR (is a directory) tree 
+rm missing Error ENOENT ENOENT: no such file or directory, lstat 'nope' 
+rm force ok
+rm recursive ok
+gone false
+rm file ok
+readdir b.txt copy.txt soft.txt
+SystemError ERR_FS_EISDIR EISDIR rm rm
+rename cb null
+copyFile cb null
+access cb ENOENT
+exists cb true
+mkdtemp cb null 9
+rm cb null false
+appendFile cb null hello world!
+read cb null 5 true hello
+write cb null 5 HELLO
+write buffer cb null 2 HELLO__orld!
+promises e.txt HELLO__orld!
+access ENOENT
+rm ENOENT lstat
+copy.txt d.txt e.txt g.txt soft.txt
+pending true out.txt 0 true
+open number
+ready
+finish 9
+close abcdefghi
+start aXYdefghi+more
+error ENOENT open
+bad closed
+patched patched true

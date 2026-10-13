@@ -1,0 +1,14 @@
+{
+  "name": "@visaljs/runtime",
+  "version": "0.0.0",
+  "description": "visaljs's C runtime: values, GC, objects, built-ins, the event loop",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./components": "./components.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,12 @@
+---
+// A guide subsection's heading (### in the MDX), a link to itself.
+interface Props {
+  id: string;
+}
+
+const { id } = Astro.props;
+---
+
+<h3 id={id} class="scroll-mt-16 pt-2 text-lg font-semibold tracking-tight">
+  <a href={`#${id}`} class="hover:underline"><slot /></a>
+</h3>

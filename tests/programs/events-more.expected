@@ -1,0 +1,31 @@
+monitor: boom
+still thrown: boom
+captured: rejected
+handler: nope work 1,2
+default captureRejections: false true
+once: [1,"two"]
+once rejected: bad 0 0
+once aborted: AbortError ABORT_ERR 0
+EventTarget once: ping
+on: 1,2,3 listeners left 000
+on got a
+on threw: stream broke
+on aborted: AbortError
+on buffered: {"value":["early"],"done":false}
+on return: {"done":true} 0
+getEventListeners: 2 true
+listenerCount: 2
+getMaxListeners: 10
+after set: 3 default 10
+EventTarget max: 7
+setMaxListeners(-1): ERR_OUT_OF_RANGE The value of "setMaxListeners" is out of range. It must be >= 0. Received -1
+setMaxListeners(null): ERR_OUT_OF_RANGE The value of "setMaxListeners" is out of range. It must be >= 0. Received NaN
+setMaxListeners("x"): ERR_INVALID_ARG_TYPE The "setMaxListeners" argument must be of type number. Received type string ('x')
+statics: function function function true false
+disposable: function
+abort listener ran
+before the microtask
+already aborted: on a microtask
+context: made here
+asyncResource: true number
+no name: ERR_INVALID_ARG_TYPE

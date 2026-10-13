@@ -1,0 +1,11 @@
+3 2 10
+Stack(2) v1.0
+Shape,area,bump,counter,make,square 9
+6 10 4
+hello, bundle esm
+demo a+b 10
+lazy: loaded 1
+live binding: 1
+square square Shape Shape make make 16
+legacy-math/index.js true true undefined undefined
+sloppy CommonJS: true 7 2

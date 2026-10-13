@@ -1,0 +1,31 @@
+default 1b8b55001c076eac1b8f8c744d95024899bda502081ea4b6…117e849fe1e70913ca19c20833c34e0032aabf2e10c07b04 (168) true
+small 0b028068656c6c6f03 3b 0
+quality 0 8bc52a0080aaaaaaeaffee9713831e2e7ab888c9e9aea6aa…52cab510e5029cd67862b5c4d787d36afcbf7b0101d44706 (609) true
+quality 1 8bc52a0080aaaaaaeaffae9713831e2e7ab888e9e9aea60b…af5b4564db80ba6527db10a4d2d817f2241df4bfe409c363 (2907) true
+quality 4 1b8b5500847f581bf657d2c7146c413851d01d8c83cd7ffe…04a2c08d86cd583a8783ab3e48870008c3833f2a10c0f308 (229) true
+quality 5 1b8b550084026ffd4afa9c0591cd6c5874e90340436ec5f0…becfecfb0881851484d27c0bcdb7304696517f542080ff23 (212) true
+quality 9 1b8b550084a276be42c71c84fd4c5206dd0c007e207f631a…d1f13e3c8685888242bc856b2df88bd06bf4eb0201f43f02 (212) true
+quality 11 1b8b55001c076eac1b8f8c744d95024899bda502081ea4b6…117e849fe1e70913ca19c20833c34e0032aabf2e10c07b04 (168) true
+window a158ac022014b5f3153ae620ec6792824f9c7d1600b007c4…49a2e4a6030f4ddee5b3dba29de66b3bb2dfc129492b2d02 (805)
+text mode 1b8b55001c076eac1b8f8c744d95024899bda502081ea4b6…117e849fe1e70913ca19c20833c34e0032aabf2e10c07b04 (168)
+boolean param 1b8b5500045538af509caed7416a1bdeafbd3a9cff8ca024…1f928fc9c7274854ca24886462b21101982abf2e10c07b04 (163)
+large window 11592c5601701cb8b16e3c32d235550a2065f6960a207890…47f8117e869f274c28670823cc0c3b01c8a8feba4000ef11 (169)
+info BrotliCompress
+error Error ERR__ERROR_FORMAT_PADDING_2 -15 Decompression failed
+error Error Z_BUF_ERROR -5 unexpected end of file
+error Error ERR__ERROR_FORMAT_PADDING_2 -15 Decompression failed
+error RangeError ERR_BROTLI_INVALID_PARAM undefined 100 is not a valid Brotli parameter
+error RangeError ERR_BROTLI_INVALID_PARAM undefined x is not a valid Brotli parameter
+error TypeError ERR_INVALID_ARG_TYPE undefined The "options.params[key]" property must be of type number. Received type string ('4')
+error RangeError ERR_BROTLI_INVALID_PARAM undefined -1 is not a valid Brotli parameter
+error RangeError ERR_OUT_OF_RANGE undefined The value of "options.flush" is out of range. It must be >= 0 and <= 3. Received 4
+callback null 1b8b55001c076eac1b8f8c744d95024899bda502081ea4b6…117e849fe1e70913ca19c20833c34e0032aabf2e10c07b04 (168)
+callback back null true
+callback error ERR__ERROR_FORMAT_CL_SPACE -6 Decompression failed
+flushed streamed 
+stream true 21909 236
+stream bytes true
+stream error ERR__ERROR_FORMAT_PADDING_1 -14 Decompression failed
+truncated Z_BUF_ERROR -5 unexpected end of file
+reset kept
+params function true true

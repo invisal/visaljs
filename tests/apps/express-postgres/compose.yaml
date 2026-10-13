@@ -1,0 +1,10 @@
+# A throwaway PostgreSQL for the example: `docker compose up -d`, then `docker compose down -v`.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"

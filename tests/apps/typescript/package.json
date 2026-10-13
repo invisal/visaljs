@@ -1,0 +1,14 @@
+{
+  "name": "@visaljs-apps/typescript",
+  "version": "0.0.0",
+  "private": true,
+  "description": "TypeScript's own compiler, tsc, compiled by visaljs into a native binary",
+  "main": "tsc.cjs",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build tsc.cjs -o tsc",
+    "start": "node tsc.cjs -p sample"
+  },
+  "dependencies": {
+    "typescript": "6.0.3"
+  }
+}

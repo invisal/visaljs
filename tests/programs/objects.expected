@@ -1,0 +1,31 @@
+3
+three three 4 undefined
+12 3 24 computed
+true false true
+true
+false
+true
+30
+501500
+3 10 undefined 30 false
+7 70 undefined
+2 undefined
+6
+hi 2 true
+5
+5 7
+5 é undefined
+true
+true
+false
+too far RangeError true
+no new Error: no new
+true
+Cannot read properties of undefined (reading 'prop')
+point.missing is not a function
+Cannot set properties of null (setting 'dyn')
+Cannot use 'in' operator to search for 'x' in 5
+undefined
+object true true
+42
+console 1 works

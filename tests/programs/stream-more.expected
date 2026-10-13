@@ -1,0 +1,20 @@
+compose: A!B!
+b read: from a
+a read: from b
+b ended
+isWritable: true isDestroyed: false
+after end: false
+destroyed: true false
+not streams: null null
+destroy error: gone
+defaults: 65536 16
+new streams: 1024 16
+negative: ERR_OUT_OF_RANGE
+statics: true
+text: héllo é!
+json: {"a":[1,2]}
+buffer: 616263
+arrayBuffer: 3
+blob: 4 blob
+web: web stream
+generator: generator

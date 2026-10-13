@@ -1,0 +1,51 @@
+(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2}) u true false /(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/u
+a\/b \n /(?:)/ true
+u g true dgimsuy
+d d
+g g
+i i
+m m
+s s
+u u
+v v
+y y
+[
+  '2024-02-29',
+  '2024',
+  '02',
+  '29',
+  index: 3,
+  input: 'on 2024-02-29!',
+  groups: [Object: null prototype] { year: '2024', month: '02', day: '29' }
+] 3 2024 4
+[ 'b', undefined, 'b', index: 0, input: 'b', groups: undefined ] [
+  [ 1, 2 ],
+  undefined,
+  groups: [Object: null prototype] { x: undefined }
+]
+1 2 2 3 null 0
+false 0 true 2
+true true true false
+true false DEF true
+true cc aaa true
+42 1 undefined
+[ '1', '22', '333' ] [ '1', '1', undefined, index: 1, input: 'a1b22', groups: undefined ] null 0
+[ '1:1', '3:22', '6:333' ]
+29/02/2024 Smith, John
+aaaaaa a[a|c|$]c ab$2b1c
+aB1C3 bbb
+[ 'one', 'two', 'three' ] [ 'a', 'b' ] [ 'a', 'b', 'c' ] [ '' ] []
+4 -1 2 4
+-x- -😀- abc!
+TypeError: String.prototype.matchAll called with a non-global RegExp argument
+TypeError: String.prototype.replaceAll called with a non-global RegExp argument
+SyntaxError: Invalid regular expression: /(/: Unterminated group
+SyntaxError: Invalid flags supplied to RegExp constructor 'gg'
+SyntaxError: Invalid regular expression: /[b-a]/: Range out of order in character class
+SyntaxError: Invalid regular expression: /\p{Nope}/u: Invalid property name
+TypeError: Method RegExp.prototype.exec called on incompatible receiver #<Object>
+TypeError: RegExp.prototype.global getter called on non-RegExp object
+<HELLO> <BIG> <WORLD> true
+abc:X [object RegExp]
+(?:)  undefined true
+/a\/b/g [ /x/ ] { r: /y/m } /a/g { note: 1 } Words /w/y /\n/

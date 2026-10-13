@@ -1,0 +1,11 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { GUIDE_PUBLISHED } from "../lib/guide-published.ts";
+---
+
+<Layout title="Not found · visaljs" page="home">
+  <main class="mx-auto max-w-3xl px-4 py-16">
+    <h1 class="text-3xl font-bold tracking-tight">Not found</h1>
+    <p class="mt-4 text-kumo-default">There's no page here. Try the {GUIDE_PUBLISHED && <><a href="/guide/introduction/" class="underline">guide</a> or the </>}<a href="/node/" class="underline">Node API</a>.</p>
+  </main>
+</Layout>

@@ -1,0 +1,105 @@
+URL {
+  href: 'https://user:pw@example.com:8080/b?x=1&y=2#frag',
+  origin: 'https://example.com:8080',
+  protocol: 'https:',
+  username: 'user',
+  password: 'pw',
+  host: 'example.com:8080',
+  hostname: 'example.com',
+  port: '8080',
+  pathname: '/b',
+  search: '?x=1&y=2',
+  searchParams: URLSearchParams { 'x' => '1', 'y' => '2' },
+  hash: '#frag'
+}
+[
+  URL {
+    href: 'https://user:pw@example.com:8080/b?x=1&y=2#frag',
+    origin: 'https://example.com:8080',
+    protocol: 'https:',
+    username: 'user',
+    password: 'pw',
+    host: 'example.com:8080',
+    hostname: 'example.com',
+    port: '8080',
+    pathname: '/b',
+    search: '?x=1&y=2',
+    searchParams: URLSearchParams { 'x' => '1', 'y' => '2' },
+    hash: '#frag'
+  }
+] {
+  u: URL {
+    href: 'http://xn--mnchen-3ya.de/%C3%A4?q=%C3%BC#%C3%A9',
+    origin: 'http://xn--mnchen-3ya.de',
+    protocol: 'http:',
+    username: '',
+    password: '',
+    host: 'xn--mnchen-3ya.de',
+    hostname: 'xn--mnchen-3ya.de',
+    port: '',
+    pathname: '/%C3%A4',
+    search: '?q=%C3%BC',
+    searchParams: URLSearchParams { 'q' => 'ü' },
+    hash: '#%C3%A9'
+  }
+}
+https://user:pw@example.com:8080/b?x=1&y=2#frag {"u":"https://user:pw@example.com:8080/b?x=1&y=2#frag"} https://user:pw@example.com:8080/b?x=1&y=2#frag https://example.com:8080 https://a.com null
+http://h/p?q https://other/x [::1]
+true false true null http://h/z
+https://me:p%40ss@example.com:8443/a%20b/%C3%BC?x=y%20z#top%20level
+https://me:p%40ss@[::1]:99/a%20b/%C3%BC?x=y%20z#top%20level [::1]:99 [::1] 99
+ftp://me:p%40ss@[::1]/a%20b/%C3%BC?x=y%20z#top%20level
+http://reset/  
+true 0 
+[ '1', '3' ] 2 null true true false 3
+http://reset/?a=one&c=x+y%26z [ [ 'a', 'one' ], [ 'c', 'x y&z' ] ]
+?a=one&c=x+y%26z
+"http://reset/"  0
+[
+  [ 'a', '1' ],
+  [ 'b', '2 3' ],
+  [ 'c', 'A%zz' ],
+  [ '', 'e' ],
+  [ 'f', '' ],
+  [ 'g', 'h=i' ]
+] a=1&b=2+3&c=A%25zz&=e&f=&g=h%3Di URLSearchParams { 'a' => '1', 'b' => '2 3', 'c' => 'A%zz', '' => 'e', 'f' => '', 'g' => 'h=i' }
+x=1&y=1%2C2&a+b=c%26d k=v&s=t
+a=1&b=2+3&c=A%25zz&=e&f=&g=h%3Di m=n URLSearchParams {} URLSearchParams {}
+%C3%A9=%C3%BC&%F0%9F%92%A9=%EF%BF%BD 💩�
+a=2&a=1&b=1&z=1&z=0
+a=2:true:T a=1:true:T b=1:true:T z=1:true:T z=0:true:T
+URLSearchParams Iterator { 'a', 'a', 'b', 'z', 'z' } URLSearchParams Iterator { '2', '1', '1', '1', '0' } URLSearchParams Iterator {
+  [ 'a', '2' ],
+  [ 'a', '1' ],
+  [ 'b', '1' ],
+  [ 'z', '1' ],
+  [ 'z', '0' ] } [ 'a', 'a', 'b', 'z', 'z' ] [ '2', '1', '1', '1', '0' ]
+URLSearchParams Iterator { [ 'b', '1' ], [ 'z', '1' ], [ 'z', '0' ] } { value: [ 'a', '1' ], done: false } [object URLSearchParams Iterator] [object URLSearchParams]
+URLSearchParams {
+  'aaaaaaaaaaaaaaaa' => 'bbbbbbbbbbbbbbbbbbbbbb',
+  'cccccccccccccccccccccc' => 'dddddddddddddddddddd',
+  'eeeeeeeeeeeeeeeeeeeeeeee' => '1' }
+MyParams { 'a' => '1' } true
+http://h/ true
+TypeError ERR_INVALID_URL Invalid URL nope undefined
+TypeError ERR_INVALID_URL Invalid URL nope also bad
+TypeError ERR_MISSING_ARGS The "url" argument must be specified undefined undefined
+TypeError undefined Class constructor URL cannot be invoked without 'new' undefined undefined
+TypeError ERR_INVALID_URL Invalid URL bad undefined
+TypeError ERR_MISSING_ARGS The "url" argument must be specified undefined undefined
+TypeError undefined Receiver must be an instance of class URL undefined undefined
+TypeError ERR_MISSING_ARGS The "name" and "value" arguments must be specified undefined undefined
+TypeError ERR_MISSING_ARGS The "name" argument must be specified undefined undefined
+TypeError ERR_MISSING_ARGS The "name" and "value" arguments must be specified undefined undefined
+TypeError ERR_MISSING_ARGS The "name" argument must be specified undefined undefined
+TypeError ERR_MISSING_ARGS The "name" argument must be specified undefined undefined
+TypeError ERR_MISSING_ARGS The "name" argument must be specified undefined undefined
+TypeError ERR_INVALID_ARG_TYPE The "callback" argument must be of type function. Received undefined undefined undefined
+TypeError ERR_INVALID_ARG_TYPE The "callback" argument must be of type function. Received type number (5) undefined undefined
+TypeError ERR_INVALID_TUPLE Each query pair must be an iterable [name, value] tuple undefined undefined
+TypeError ERR_INVALID_TUPLE Each query pair must be an iterable [name, value] tuple undefined undefined
+TypeError ERR_INVALID_TUPLE Each query pair must be an iterable [name, value] tuple undefined undefined
+TypeError ERR_INVALID_THIS Value of "this" must be of type URLSearchParams undefined undefined
+TypeError undefined Class constructor URLSearchParams cannot be invoked without 'new' undefined undefined
+TypeError ERR_INVALID_THIS Value of "this" must be of type URLSearchParamsIterator undefined undefined
+false false 1 0 true

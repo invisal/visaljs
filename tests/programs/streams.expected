@@ -1,0 +1,42 @@
+ReadableStream { locked: false, state: 'readable', supportsBYOB: false } false
+ReadableStream { locked: true, state: 'readable', supportsBYOB: false } ReadableStreamDefaultReader {
+  stream: ReadableStream { locked: true, state: 'readable', supportsBYOB: false },
+  readRequests: 0,
+  close: Promise { <pending> }
+}
+TypeError [ERR_INVALID_STATE]: Invalid state: ReadableStream is locked
+{ value: 'a', done: false } { value: 'b', done: false } { value: undefined, done: true } undefined { value: undefined, done: true }
+TypeError [ERR_INVALID_STATE]: Invalid state: Controller is already closed | TypeError [ERR_INVALID_STATE]: Invalid state: Controller is already closed
+Error: x ReadableStream { locked: true, state: 'errored', supportsBYOB: false }
+pull 1
+iter 1
+pull 2
+iter 2
+pull 3
+iter 3
+pull 4
+ReadableStreamDefaultController {} 10
+6
+{ value: 'abcd', done: false } 10
+false TypeError [ERR_INVALID_STATE]: Invalid state: The reader is not attached to a stream TypeError [ERR_INVALID_STATE]: Invalid state: Reader released
+cancel bye
+undefined ReadableStream { locked: false, state: 'closed', supportsBYOB: false }
+undefined { value: undefined, done: true } TypeError [ERR_INVALID_STATE]: Invalid state: ReadableStream is locked
+{ value: 'late', done: false }
+TypeError: boom TypeError: boom
+[ 1, 2 ] [ 1, 2 ]
+first x
+true false
+TypeError [ERR_INVALID_ARG_TYPE]: The "source" argument must be of type object. Received type number (1) | TypeError [ERR_INVALID_ARG_TYPE]: The "source.pull" property must be of type function. Received type number (1)
+RangeError [ERR_INVALID_ARG_VALUE]: The property 'strategy.highWaterMark' is invalid. Received -1 | TypeError [ERR_ILLEGAL_CONSTRUCTOR]: Illegal constructor
+Error: in start
+TypeError [ERR_INVALID_ARG_TYPE]: The "stream" argument must be an instance of ReadableStream. Received an instance of Object
+[
+  'locked',
+  'cancel',
+  'getReader',
+  'pipeThrough',
+  'pipeTo',
+  'tee',
+  'values'
+] function

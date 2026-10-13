@@ -1,0 +1,14 @@
+10 2 symbol  true false
+true false false 
+TypeError TypeError TypeError TypeError
+well-known
+sum 999000, left 500
+true true true false TypeError
+set first
+set second
+second
+deref target
+TypeError TypeError
+true false false
+TypeError TypeError TypeError
+[object WeakMap] [object WeakSet] [object WeakRef] [object FinalizationRegistry]

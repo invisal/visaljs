@@ -1,0 +1,74 @@
+pbkdf2 md5 f6acd4bda3e4d3d831a5f61da9ca9d5c3877566e979f4928778d81be4f2e9433a31043bbf3945c35
+pbkdf2 sha1 6b4e26125c25cf21ae35ead955f479ea2e71f6ff9e400029f04810eece31355533bb2ed348e604da
+pbkdf2 sha224 947cf079cfc7f2016dcd7ec418840443edaabb90c496f98cabeec4bfb1a5a4aaff68cca92cf05a6d
+pbkdf2 sha256 ad35240ac683febfaf3cd49d845473fbbbaa2437f5f82d5a415ae00ac76c6bfccf9a9b8d6d2fe4a1
+pbkdf2 sha384 1bfb451b6087e5d24eeffb57d7284448da95b581d35a1887d9a6e756af559b1fb4798a4529502f87
+pbkdf2 sha512 b6b07cb2cebf4ad84468391a543824fccffe0e0769dbe6bddf10a65673c4b648e612d44918f9ce9a
+pbkdf2 sha512-256 9fa42ea03f8f8ac08be344def79d9c031e8f773f20a1061f5f38b37f01d32943ddc662e95a95dd1e
+pbkdf2 sha3-256 6677065466c97fdef1c15ae8d95020ca948334f53eceeafc6115ddf405f6d6a4f75ba13a75082d8d
+pbkdf2 sha3-512 cf022071b51477a7783157cbf39fe43377494e295da4d9bb8905117d0a4e998c6c930d02e1291e83
+pbkdf2 RSA-SHA256 ad35240ac683febfaf3cd49d845473fbbbaa2437f5f82d5a415ae00ac76c6bfccf9a9b8d6d2fe4a1
+4b007901b765489abead49d926f721d065a429c1
+3d2eec4fe41c849b80c8d83662c0e44a8b291a964cf2f07038
+56fa6aa75548099dcc37d7f03425e0c3
+95a494b50952a321
+1d71885bceef5fc6
+TypeError [ERR_INVALID_ARG_TYPE]: The "digest" argument must be of type string. Received undefined
+TypeError [ERR_CRYPTO_INVALID_DIGEST]: Invalid digest: foo
+RangeError [ERR_OUT_OF_RANGE]: The value of "iterations" is out of range. It must be >= 1 && <= 2147483647. Received 0
+RangeError [ERR_OUT_OF_RANGE]: The value of "keylen" is out of range. It must be >= 0 && <= 2147483647. Received -1
+TypeError [ERR_INVALID_ARG_TYPE]: The "password" argument must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView. Received type number (1)
+TypeError [ERR_INVALID_ARG_TYPE]: The "salt" argument must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView. Received type number (1)
+RangeError [ERR_OUT_OF_RANGE]: The value of "iterations" is out of range. It must be an integer. Received 1.5
+TypeError [ERR_INVALID_ARG_TYPE]: The "iterations" argument must be of type number. Received type string ('1')
+Error [undefined]: Deriving bits failed
+Error [undefined]: Deriving bits failed
+TypeError [ERR_INVALID_ARG_TYPE]: The "callback" argument must be of type function. Received undefined
+TypeError [ERR_CRYPTO_INVALID_DIGEST]: Invalid digest: foo
+ArrayBuffer 3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865
+ArrayBuffer a0bc90fe7a3fef57087f96ceeaccea0241f6e00a3fe35a789ced78dfbc7c95f5fb56cf6b88b72a532bbb9d2a257983e122a0
+ArrayBuffer 9ca0d662557439e3b83365f2da4626d35da195c6d9d1779f09838cf9e408966ece99106e2585ace6f083fa1acd5192f430fd
+ArrayBuffer 415163ccceef9d7e2325f45cf2c21989d3a3eb6078e7e48dc8ba6b35c8b75db92006a301c61af4564a6ce647f61e37eb6c89
+ArrayBuffer 24156e2c35525baaf3d0fbb92b734c8032a110a3f12e2596e441e1924870d84c3a500652a723738024432451046fd237efad
+ArrayBuffer 7c0ef77d81593534a377e29e61bed4e29ffad92bfced4a2521022782597b4554fec714c1f4c7ffce556cdd5f64a12b679074
+ArrayBuffer edd053d0030729baf813c1e0f0e9941d956133d5a3a33866cdad1b04953f4609e0e0aad124fc89843fd04da81e39809c4c0b
+ArrayBuffer 80c724c4a65d79568fc3606753c192ad
+ArrayBuffer 7aac7b8120501c2c8e1ee50e6cde1353
+8160
+RangeError [ERR_CRYPTO_INVALID_KEYLEN]: Invalid key length
+TypeError [ERR_CRYPTO_INVALID_DIGEST]: Invalid digest: foo
+TypeError [ERR_INVALID_ARG_TYPE]: The "ikm" argument must be of type string or an instance of SecretKeyObject, ArrayBuffer, TypedArray, DataView, or Buffer. Received type number (1)
+TypeError [ERR_INVALID_ARG_TYPE]: The "salt" argument must be of type string or an instance of ArrayBuffer, TypedArray, DataView, or Buffer. Received type number (1)
+TypeError [ERR_INVALID_ARG_TYPE]: The "info" argument must be of type string or an instance of ArrayBuffer, TypedArray, DataView, or Buffer. Received type number (1)
+RangeError [ERR_OUT_OF_RANGE]: The value of "info" is out of range. It must be must not contain more than 1024 bytes. Received 1025
+Error [undefined]: Deriving bits failed
+RangeError [ERR_OUT_OF_RANGE]: The value of "length" is out of range. It must be >= 0 && <= 9007199254740991. Received -1
+RangeError [ERR_OUT_OF_RANGE]: The value of "length" is out of range. It must be an integer. Received 1.5
+TypeError [ERR_INVALID_ARG_TYPE]: The "digest" argument must be of type string. Received type number (1)
+TypeError [ERR_INVALID_ARG_TYPE]: The "callback" argument must be of type function. Received undefined
+77d6576238657b203b19ca42c18a0497f16b4844e3074ae8dfdffa3fede21442fcd0069ded0948f8326a753a0fc81f17e8d3e0fb2e0d3628cf35e20c38d18906
+fdbabe1c9d3472007856e7190d01e9fe7c6ad7cbc8237830e77376634b3731622eaf30d92e22a3886ff109279d9830dac727afb94a83ee6d8360cbdfa2cc0640
+c0b515908e61334cae6d6003c00be60e
+4f2c2a6104b12e0c6e8c68f18654c503
+c0b515908e61334cae6d6003c00be60e
+<Buffer >
+c0b515908e61334cae6d6003c00be60e
+RangeError [ERR_CRYPTO_INVALID_SCRYPT_PARAMS]: Invalid scrypt params
+RangeError [ERR_CRYPTO_INVALID_SCRYPT_PARAMS]: Invalid scrypt params
+Error [ERR_CRYPTO_SCRYPT_INVALID_PARAMETER]: Invalid scrypt parameter
+Error [ERR_CRYPTO_SCRYPT_INVALID_PARAMETER]: Invalid scrypt parameter
+Error [ERR_CRYPTO_SCRYPT_INVALID_PARAMETER]: Invalid scrypt parameter
+RangeError [ERR_CRYPTO_INVALID_SCRYPT_PARAMS]: Invalid scrypt params: error:030000AC:digital envelope routines::memory limit exceeded
+RangeError [ERR_CRYPTO_INVALID_SCRYPT_PARAMS]: Invalid scrypt params: error:030000AC:digital envelope routines::memory limit exceeded
+RangeError [ERR_CRYPTO_INVALID_SCRYPT_PARAMS]: Invalid scrypt params: error:030000AC:digital envelope routines::memory limit exceeded
+RangeError [ERR_OUT_OF_RANGE]: The value of "N" is out of range. It must be >= 0 && <= 4294967295. Received -1
+TypeError [ERR_INVALID_ARG_TYPE]: The "N" argument must be of type number. Received type string ('a')
+RangeError [ERR_OUT_OF_RANGE]: The value of "maxmem" is out of range. It must be >= 0 && <= 9007199254740991. Received -1
+RangeError [ERR_OUT_OF_RANGE]: The value of "keylen" is out of range. It must be >= 0 && <= 2147483647. Received -1
+TypeError [ERR_INVALID_ARG_TYPE]: The "password" argument must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView. Received type number (1)
+TypeError [ERR_INVALID_ARG_TYPE]: The "callback" argument must be of type function. Received undefined
+pbkdf2 callback null <Buffer 06 1d f6 16 34 3c b9 88 30 71>
+hkdf callback null ArrayBuffer { [Uint8Contents]: <02 b0 92 9a>, [byteLength]: 4 }
+scrypt callback null <Buffer c0 b5 15 90 8e 61 33 4c>
+scrypt options callback null <Buffer c5 d0 6c 36 8e 4a 07 b8>
+pbkdf2 error callback Deriving bits failed

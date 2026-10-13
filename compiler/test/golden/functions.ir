@@ -1,0 +1,58 @@
+function main()
+bb0:
+  %Point0 = make_function Point
+  declare_global function ."Point", %Point0  !mayThrow
+  declare_global var ."fact"  !mayThrow
+  %0 = global_this
+  %Point1 = get_prop %0, ."Point"  !mayThrow
+  %1 = get_prop %Point1, ."prototype"  !mayThrow
+  %2 = make_function anonymous
+  set_prop %1, %2, ."get"  !mayThrow
+  %3 = make_function f
+  %4 = global_this
+  set_prop %4, %3, ."fact"  !mayThrow
+  %5 = global_this
+  %Point2 = get_prop %5, ."Point"  !mayThrow
+  %6 = global_this
+  %fact0 = get_prop %6, ."fact"  !mayThrow
+  %7 = const undefined
+  %8 = const 3
+  %9 = call %fact0, %7, %8  !mayThrow
+  %10 = construct_direct Point(%Point2, %9)  !mayThrow
+  %11 = get_prop %10, ."get"  !mayThrow
+  %12 = call %11, %10  !mayThrow
+  %13 = call_runtime print(%12)  !mayThrow
+  %14 = const undefined
+  return %14
+
+function Point(%this0, %x0)
+bb0:
+  %this1 = sloppy_this %this0
+  set_prop %this1, %x0, ."x"  !mayThrow
+  %0 = const undefined
+  return %0
+
+function anonymous(%this0)
+bb0:
+  %this1 = sloppy_this %this0
+  %0 = get_prop %this1, ."x"  !mayThrow
+  return %0
+
+function f(%callee0, %n0)
+bb0:
+  %0 = const 1
+  %1 = le %n0, %0  !mayThrow
+  branch %1, bb1, bb2
+bb1:
+  %2 = const 1
+  jump bb3
+bb2:
+  %3 = const undefined
+  %4 = const 1
+  %5 = sub %n0, %4  !mayThrow
+  %6 = call %callee0, %3, %5  !mayThrow
+  %7 = mul %n0, %6  !mayThrow
+  jump bb3
+bb3:  ; preds bb1, bb2
+  %8 = phi [bb1: %2], [bb2: %7]
+  return %8

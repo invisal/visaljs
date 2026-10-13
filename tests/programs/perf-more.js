@@ -1,0 +1,31 @@
+// perf_hooks: createHistogram (HdrHistogram buckets, percentiles, errors), PerformanceObserver (delivery
+// order, entry lists, errors) and monitorEventLoopDelay.
+import { createHistogram, PerformanceObserver, performance, monitorEventLoopDelay, PerformanceObserverEntryList, PerformanceResourceTiming } from "node:perf_hooks";
+const t = (l, f) => { try { print(l + " " + JSON.stringify(f())); } catch (e) { print(l + " " + e.code + " " + e.message); } };
+const h = createHistogram();
+for (const v of [1, 5, 9, 100, 250, 1000, 1001, 1234567, 99999]) h.record(v);
+print([h.min, h.max, h.mean, h.stddev, h.count, h.exceeds, h.percentile(50), h.percentile(99), h.percentile(100), h.percentile(0.001)].join(" "));
+print(JSON.stringify([...h.percentiles]));
+print(JSON.stringify(h.toJSON()));
+const h2 = createHistogram({ lowest: 1, highest: 1000, figures: 2 }); for (const v of [3, 7, 700, 999]) h2.record(v); print([h2.min, h2.max, h2.mean, JSON.stringify([...h2.percentiles])].join(" "));
+t("record over highest", () => h2.record(5000)); print([h2.exceeds, h2.count].join(" "));
+const h3 = createHistogram(); print([h3.min, h3.max, h3.mean, h3.stddev, JSON.stringify([...h3.percentiles]), h3.percentile(50)].join(" "));
+h.add(h2); print([h.count, h.min, h.max].join(" ")); h.reset(); print([h.count, h.min, h.max].join(" "));
+t("figures 6", () => createHistogram({ figures: 6 }));
+t("record 0", () => h.record(0));
+t("record -1", () => h.record(-1));
+t("record str", () => h.record("x"));
+t("p0", () => h.percentile(0));
+t("p101", () => h.percentile(101));
+t("lowest 0", () => createHistogram({ lowest: 0 }));
+print([typeof h.recordDelta, h.minBigInt, typeof h.percentileBigInt, h.count, h.countBigInt].join(" "));
+print([JSON.stringify(PerformanceObserver.supportedEntryTypes), typeof PerformanceObserverEntryList, typeof PerformanceResourceTiming].join(" "));
+const obs = new PerformanceObserver((list, o) => { print(["observed", list.getEntries().map((e) => e.entryType + ":" + e.name).join(","), o === obs, list.getEntriesByType("mark").length, list.getEntriesByName("m1").length].join(" ")); obs.disconnect(); });
+obs.observe({ entryTypes: ["mark", "measure"] });
+performance.mark("m1"); performance.mark("m2"); performance.measure("ms", "m1", "m2");
+print("sync after marks");
+setImmediate(() => print("immediate"));
+t("observe {}", () => obs.observe({}));
+t("observer 5", () => new PerformanceObserver(5));
+const e = monitorEventLoopDelay({ resolution: 10 }); print([e.constructor.name, typeof e.enable, e.enable(), e.enable(), e.disable(), e.disable()].join(" "));
+t("resolution 0", () => monitorEventLoopDelay({ resolution: 0 }));

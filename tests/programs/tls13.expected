@@ -1,0 +1,39 @@
+-- handshake
+  client: secureConnect TLSv1.3 TLSv1.3 authorized=true
+  client: end "hi"
+  server: secureConnection TLSv1.3 authorized=false error=null
+-- self-signed: the client finishes first, then rejects
+  client: error DEPTH_ZERO_SELF_SIGNED_CERT
+  server: tlsClientError ECONNRESET
+-- not rejected
+  client: secureConnect TLSv1.3 TLSv1.3 authorized=false
+  client: end "hi"
+  server: secureConnection TLSv1.3 authorized=false error=null
+-- a required client certificate, missing
+  client: secureConnect TLSv1.3 TLSv1.3 authorized=true
+  client: error ERR_SSL_TLSV13_ALERT_CERTIFICATE_REQUIRED
+  client: end ""
+  server: tlsClientError ERR_SSL_PEER_DID_NOT_RETURN_A_CERTIFICATE
+-- a client certificate
+  client: secureConnect TLSv1.3 TLSv1.3 authorized=true
+  client: end "ok"
+  server: secureConnection TLSv1.3 authorized=true error=null
+  server: peer test client
+-- an Ed25519 certificate
+  client: secureConnect TLSv1.3 TLSv1.3 authorized=true
+  client: end "hi"
+  server: secureConnection TLSv1.3 authorized=false error=null
+  server: own certificate localhost
+-- TLS 1.2 at most, from the client
+  client: secureConnect TLSv1.2 TLSv1.2 authorized=true
+  client: end "hi"
+  server: secureConnection TLSv1.2 authorized=false error=null
+-- TLS 1.3 only, against TLS 1.2
+  client: error ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION
+  server: tlsClientError ERR_SSL_UNSUPPORTED_PROTOCOL
+-- tickets true true false false true localhost
+   resumed true true true undefined
+-- half-close: server got 100000 bytes
+-- upgrade TLSv1.3 true
+   data "got early"
+TLSv1.3 true

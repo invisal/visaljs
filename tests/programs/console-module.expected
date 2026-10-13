@@ -1,0 +1,63 @@
+stdout:
+hello world, 42 { a: [ 1, 2 ] }
+info
+debug
+group A
+  inside
+  with two lines
+    deeper
+outside
+default: 1
+x: 1
+default: 2
+x: 1
+{ deep: [Object] }
+┌─────────┬───┬─────┬──────┐
+│ (index) │ a │ b   │ c    │
+├─────────┼───┼─────┼──────┤
+│ 0       │ 1 │ 'x' │      │
+│ 1       │ 2 │     │ true │
+└─────────┴───┴─────┴──────┘
+┌─────────┬───┬───┐
+│ (index) │ 0 │ 1 │
+├─────────┼───┼───┤
+│ 0       │ 1 │ 2 │
+│ 1       │ 3 │ 4 │
+└─────────┴───┴───┘
+┌─────────┬───┐
+│ (index) │ v │
+├─────────┼───┤
+│ r1      │ 1 │
+│ r2      │   │
+└─────────┴───┘
+┌───────────────────┬────────┬──────────┐
+│ (iteration index) │ Key    │ Values   │
+├───────────────────┼────────┼──────────┤
+│ 0                 │ 'k'    │ 1        │
+│ 1                 │ '日本' │ { o: 1 } │
+└───────────────────┴────────┴──────────┘
+┌───────────────────┬────────┐
+│ (iteration index) │ Values │
+├───────────────────┼────────┤
+│ 0                 │ 's'    │
+└───────────────────┴────────┘
+not tabular
+t: Nms extra
+t: Nms
+bound log
+
+stderr:
+warn
+boom
+Assertion failed: failed here
+Assertion failed { not: 'a string' }
+Trace: tracing
+
+one stream: "to stdout"
+indentation: "    four"
+instanceof: true true true
+module log: true function function ran
+bad options: ERR_CONSOLE_WRITABLE_STREAM
+bad options: ERR_CONSOLE_WRITABLE_STREAM
+bad options: ERR_OUT_OF_RANGE
+bad options: ERR_INVALID_ARG_VALUE

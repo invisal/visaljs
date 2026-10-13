@@ -1,0 +1,16 @@
+{
+  "name": "@visaljs/ir",
+  "version": "0.0.0",
+  "description": "visaljs's intermediate representation: types, builder, printer, verifier",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

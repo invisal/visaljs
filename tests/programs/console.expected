@@ -1,0 +1,124 @@
+{
+  key0: 'value0',
+  key1: 'value1',
+  key2: 'value2',
+  key3: 'value3',
+  key4: 'value4',
+  key5: 'value5',
+  key6: 'value6',
+  key7: 'value7'
+}
+{
+  a: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  b: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+}
+[Arguments] { '0': 1, '1': 'a' }
+WeakMap { <items unknown> } WeakSet { <items unknown> } Promise { 4 } Promise { <pending> }
+Promise { <rejected> [RangeError: r] }
+[Error: boom] { code: 'E1' }
+{ e: [Error: boom] { code: 'E1' }, list: [ [TypeError: t] ] }
+[MyErr [Error]: m] [Error: with cause] { [cause]: 'why' }
+[
+   1,  2,  3,  4,  5,  6,  7,  8,
+   9, 10, 11, 12, 13, 14, 15, 16,
+  17, 18, 19, 20, 21, 22, 23, 24,
+  25, 26, 27
+]
+[
+  's0',  's1',  's2',  's3',  's4',
+  's5',  's6',  's7',  's8',  's9',
+  's10', 's11', 's12', 's13', 's14',
+  's15', 's16', 's17', 's18', 's19',
+  's20', 's21', 's22', 's23', 's24',
+  's25', 's26', 's27', 's28', 's29'
+]
+[
+   0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11,
+  12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+  24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+  36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+  48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
+  60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
+  72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
+  84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95,
+  96, 97, 98, 99,
+  ... 20 more items
+]
+[AsyncFunction: af] [GeneratorFunction: gf] [AsyncGeneratorFunction: agf] [class A] [class B extends A] [Function (anonymous)] [Function: f] { p: 1 } [Function (anonymous)] [Function: bound f]
+{ a: { b: { c: [Object] } } } [ [ [ [Array] ] ] ] { arr: [ [ 1, [Array] ] ] }
+<ref *1> {
+  name: 'c',
+  self: [Circular *1],
+  list: [ [Circular *1], { back: [Circular *1] } ]
+}
+s|42.5|42|1500|{"j":[1,"x"]}|[ 1, [length]: 1 ]|{ O: 1 }|%|. extra 7
+{ a: 1 } [ 1, 2 ] null Symbol(q) rest
+NaN 0 100% %% %x
+[Object: null prototype] {} [ 1, <1 empty item>, 3 ] [ <2 empty items> ] Symbol(s) -0 [ undefined, null ] {
+  'a-b': 2,
+  g: [Getter],
+  s: [Setter],
+  gs: [Getter/Setter],
+  [Symbol(k)]: 1
+}
+it's [ "it's", 'say "hi"', `it's "x"`, 'a\nb\x01\x7F\ud800', 'tab\there' ]
+Point { x: 1, y: 2 } [ Point { x: 3, y: 4 } ] Point {}
+Object [Custom] {} custom! { replaced: true }
+{ visible: 1 } { visible: 1, [secret]: 2 } { a: [Object] }
+x=5 more 'str' [
+  1,
+  2
+]
+{
+  a: { c: 3, d: 2 },
+  b: 1,
+  m: Map(2) { 'x' => 2, 'y' => 1 },
+  s: Set(2) { 1, 2 }
+} [ 3, 1, 2, b: 2, z: 1 ]
+{
+  num: [Getter: 1],
+  nil: [Getter: null],
+  obj: [Getter] { k: [ 1 ] },
+  bad: [Getter: <Inspection threw (nope)>],
+  both: [Getter/Setter: 'b'],
+  only: [Setter]
+} {
+  num: [Getter: 1],
+  nil: [Getter: null],
+  obj: [Getter] { k: [ 1 ] },
+  bad: [Getter: <Inspection threw (nope)>],
+  both: [Getter/Setter],
+  only: [Setter]
+} {
+  num: [Getter],
+  nil: [Getter],
+  obj: [Getter],
+  bad: [Getter],
+  both: [Getter/Setter: 'b'],
+  only: [Setter]
+} {
+  num: [Getter],
+  nil: [Getter],
+  obj: [Getter],
+  bad: [Getter],
+  both: [Getter/Setter],
+  only: [Setter]
+}
+a very long string that goes past the break length of eighty characters for sure, yes [
+  'a very long string that goes past the break length of eighty characters\n' +
+    'with a newline'
+]
+info
+debug
+Group A
+  inside
+  multiline
+    { nested: [ 1, 2 ] }
+outside
+default: 1
+default: 2
+x: 1
+default: 1
+{ a: [Object] }
+
+undefined null true 3.14 NaN -Infinity 

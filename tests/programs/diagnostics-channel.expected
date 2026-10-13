@@ -1,0 +1,40 @@
+exports: Channel, channel, hasSubscribers, subscribe, tracingChannel, unsubscribe
+same channel: true true app:query
+inactive: false false false
+active: true true true
+seen {"sql":"SELECT 1"} app:query
+unsubscribe: true false false
+symbol channel: 42 Symbol(sym-channel)
+module unsubscribe: true false
+first, unsubscribing the second
+second still runs this time
+first, unsubscribing the second
+TypeError ERR_INVALID_ARG_TYPE The "channel" argument must be one of type string or symbol. Received type number (1)
+TypeError ERR_INVALID_ARG_TYPE The "nameOrChannels" argument must be of type string or an instance of TracingChannel or Object. Received type number (5)
+TypeError ERR_INVALID_ARG_TYPE The "nameOrChannels.start" property must be an instance of Channel. Received type number (1)
+TypeError ERR_INVALID_ARG_TYPE The "subscription" argument must be of type function. Received type string ('x')
+store active: true
+runStores: {"user":"ada"} this 3
+unbindStore: true false false
+runStores inactive: 42
+tracing channels: tracing:db:start tracing:db:end tracing:db:asyncStart tracing:db:asyncEnd tracing:db:error
+no subscribers: false 2
+subscribed: true
+traceSync: 13 start() end(result=13)
+traceSync threw: sync boom start() error(error=sync boom) end(error=sync boom)
+own channels: o:start o:err false
+42
+start() end() asyncStart(result=42) asyncEnd(result=42)
+rejected: async boom
+start() end() error(error=async boom) asyncStart(error=async boom) asyncEnd(error=async boom)
+thenable
+start() end() asyncStart(result=thenable) asyncEnd(result=thenable)
+callback: null cb!
+start() end() asyncStart(result=cb!) asyncEnd(result=cb!)
+callback error: cb boom
+start() end() error(error=cb boom) asyncStart(error=cb boom) asyncEnd(error=cb boom)
+ERR_INVALID_ARG_TYPE: The "callback" argument must be of type function. Received type string ('not a function')
+unsubscribe all: true false false
+the next subscriber still runs
+publish returned
+uncaught: subscriber failed

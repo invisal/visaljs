@@ -1,0 +1,23 @@
+{ '0': 'x', '1': 'y', z: 0, a: 1, b: 2, [Symbol(s)]: 3 } [ '0', '1', 'z', 'a', 'b' ] 3
+[ [ 'x', 1 ], [ 'y', [ 2 ] ] ] [ 'a', 'b' ] [ [ '0', 'h' ], [ '1', 'i' ] ]
+{ a: 1, b: 2 } { k: 'v' }
+{ f: 1, nested: { n: 2 } } true true false true false
+{ s: 2 } true false
+TypeError
+{
+  g: {
+    get: [Function: get g],
+    set: undefined,
+    enumerable: true,
+    configurable: true
+  },
+  v: { value: 2, writable: true, enumerable: true, configurable: true }
+}
+[Object: null prototype] { odd: [ 1, 3, 5 ], even: [ 2, 4 ] }
+true false true
+true false true false
+hi o true true undefined
+42 7 function undefined [object Object]
+length,name,prototype,assign,getOwnPropertyDescriptor,getOwnPropertyDescriptors,getOwnPropertyNames,getOwnPropertySymbols,hasOwn,is,preventExtensions,seal,create,defineProperties,defineProperty,freeze,getPrototypeOf,setPrototypeOf,isExtensible,isFrozen,isSealed,keys,entries,fromEntries,values,groupBy constructor,__defineGetter__,__defineSetter__,hasOwnProperty,__lookupGetter__,__lookupSetter__,isPrototypeOf,propertyIsEnumerable,toString,valueOf,__proto__,toLocaleString
+TypeError
+TypeError

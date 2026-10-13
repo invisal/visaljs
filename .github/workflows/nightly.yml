@@ -1,0 +1,150 @@
+# Nightly, on main: what is too slow to run on every pull request commit (ci.yml): the program
+# tests under GC stress, and the benchmarks (servers, kernels, GC). Skipped when main has no
+# commit since the last night; run it by hand from the Actions tab (workflow_dispatch) to check a
+# branch.
+#
+# Every job runs on GitHub's runners. They're shared machines, so the benchmarks' timings vary from
+# night to night: binary size and memory are the steady numbers.
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 19 * * *"  # 19:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Check for new commits
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" != schedule ] || [ -n "$(git log --since='25 hours ago' --format=%H -1)" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No commit on main since the last night: nothing to run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  bench:
+    # The server benchmarks (bench/servers.ts): Express and Hono as visaljs's binary, Node's single
+    # executable and Bun's compiled binary, measured one after another. Fails when visaljs serves
+    # under 0.8× Node's requests per second on an Express route (it serves about 1.3×; the margin
+    # is the shared runner's noise), or has errors (Hono runs at about Node's speed: a gate on it
+    # would fail at random). The tables go to the job summary.
+    # Locally: npm run bench:servers
+    name: Server benchmarks
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+      - name: wrk
+        run: command -v wrk || sudo -n apt-get install -y wrk
+      - run: npm ci
+      - run: npm run apps:install -- express hono
+      - name: Benchmark
+        run: |
+          set -o pipefail
+          npm run --silent bench:servers -- express --min-ratio=0.8 --json=bench/servers.json | tee bench.md
+          npm run --silent bench:servers -- hono --json=bench/servers.json | tee -a bench.md
+      - name: Summary
+        if: always()
+        run: if [ -f bench.md ]; then cat bench.md >> "$GITHUB_STEP_SUMMARY"; fi
+      # the website's numbers: download it and commit it as bench/servers.json to update the site
+      - uses: actions/upload-artifact@v7
+        with:
+          name: servers-json
+          path: bench/servers.json
+
+  kernels:
+    # The compute kernels (bench/kernels.ts): ours, Are We Fast Yet and the Benchmarks Game, each
+    # built by visaljs and timed against Node. Fails when a build fails or a kernel's output
+    # differs from Node's, except for kernels marked unsupported; the times are for reading (job
+    # summary), not a gate. Locally: npm run bench:kernels
+    name: Kernel benchmarks
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Benchmark
+        run: |
+          set -o pipefail
+          npm run --silent bench:kernels | tee kernels.md
+      - name: Summary
+        if: always()
+        run: if [ -f kernels.md ]; then cat kernels.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+  gc-bench:
+    # The GC benchmarks (bench/gc.ts): each built by visaljs and run against
+    # Node, with what the collector reports (JS_GC_STATS); then the server benchmark
+    # (bench/gc-server.ts): latency and memory under load and idle. Fails when a build fails,
+    # an output differs from Node's or a request fails; the numbers are for reading (job summary).
+    # Locally: npm run bench:gc, npm run bench:gc-server (needs wrk)
+    name: GC benchmarks
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: wrk
+        run: command -v wrk || sudo -n apt-get install -y wrk
+      - run: npm ci
+      - name: Benchmark
+        run: |
+          set -o pipefail
+          npm run --silent bench:gc | tee gc.md
+          echo >> gc.md
+          npm run --silent bench:gc-server | tee -a gc.md
+      - name: Summary
+        if: always()
+        run: if [ -f gc.md ]; then cat gc.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+  gc-checks:
+    # The program tests against a checking runtime: every 100th allocation collects, every
+    # pointer the marker follows is checked, and dead cells are poisoned. In shards, as ci.yml's.
+    # The runtime's own tests run under stress on every pull request (ci.yml).
+    name: Programs under GC stress (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run tests/programs
+        env:
+          VISALJS_GC_CHECKS: stress
+          JS_GC_STRESS_INTERVAL: "100"
+          VISALJS_PROGRAMS_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}

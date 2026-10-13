@@ -1,0 +1,29 @@
+{
+  "name": "visaljs",
+  "version": "0.0.7",
+  "description": "Ahead-of-time JavaScript to C compiler: the command line",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "visaljs": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/main.ts",
+    "./cc": "./src/cc.ts",
+    "./regexp": "./src/regexp.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@visaljs/compiler": "*",
+    "@visaljs/ir": "*",
+    "@visaljs/node": "*",
+    "@visaljs/optimizer": "*",
+    "@visaljs/runtime": "*",
+    "rolldown": "1.2.11"
+  }
+}

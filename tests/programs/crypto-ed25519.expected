@@ -1,0 +1,49 @@
+private ed25519 {} public ed25519
+public 302a300506032b6570032100d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
+sig(empty) e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b
+sig(af82) 6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a
+-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9g
+-----END PRIVATE KEY-----
+
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=
+-----END PUBLIC KEY-----
+
+{
+  crv: 'Ed25519',
+  d: 'nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A',
+  x: '11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo',
+  kty: 'OKP'
+} {
+  crv: 'Ed25519',
+  x: '11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo',
+  kty: 'OKP'
+}
+jwk round trip true true true
+from the PEM's public part 302a300506032b6570032100d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
+64 true true false
+false false
+true
+Error [ERR_OSSL_INVALID_DIGEST]: error:1C80007A:Provider routines::invalid digest
+Error [ERR_OSSL_INVALID_DIGEST]: error:1C80007A:Provider routines::invalid digest
+Error [ERR_CRYPTO_UNSUPPORTED_OPERATION]: Unsupported crypto operation
+Error [ERR_CRYPTO_UNSUPPORTED_OPERATION]: Unsupported crypto operation
+Error [ERR_CRYPTO_INCOMPATIBLE_KEY]: Incompatible key types for Diffie-Hellman: ed25519 and ed25519
+async sign null true
+async verify null true
+ed25519 ed25519 true false
+44 true
+[ 'crv', 'x', 'kty' ] [ 'crv', 'd', 'x', 'kty' ] true
+async pair null public private
+{ name: 'Ed25519' } { name: 'Ed25519' } [ 'verify' ] [ 'sign' ] public
+64 true false
+32 [ 'alg', 'crv', 'd', 'ext', 'key_ops', 'kty', 'x' ] Ed25519 OKP
+true
+subtle RFC vector true
+ed25519 true
+{ name: 'Ed25519' } true
+DataError: Ed25519 raw keys must be exactly 32-bytes
+SyntaxError: Unsupported key usage for an Ed25519 key
+DataError: JWK "crv" Parameter and algorithm name mismatch
+InvalidAccessError: Unable to use this key to sign

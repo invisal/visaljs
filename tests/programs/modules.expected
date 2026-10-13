@@ -1,0 +1,10 @@
+undefined undefined undefined 
+strict: ReferenceError
+modules 6 2
+before await
+after await 2
+for await a
+for await b
+microtask
+end of module
+timer

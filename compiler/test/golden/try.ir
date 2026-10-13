@@ -1,0 +1,120 @@
+function main()
+bb0:
+  %risky0 = make_function risky
+  declare_global function ."risky", %risky0  !mayThrow
+  %guarded0 = make_function guarded
+  declare_global function ."guarded", %guarded0  !mayThrow
+  %0 = const 5
+  %1 = call_direct guarded(%0)  !mayThrow
+  %2 = call_runtime print(%1)  !mayThrow
+  %3 = const undefined
+  return %3
+
+function risky(%n0)
+bb0:
+  %0 = const 2
+  %1 = gt %n0, %0  !mayThrow
+  branch %1, bb1, bb3
+bb1:
+  %2 = const "too big"
+  throw %2
+bb3:
+  return %n0
+
+function guarded(%n0)
+bb0:
+  %0 = const undefined
+  %1 = const undefined
+  %log0 = empty
+  %log1 = const ""
+  %i0 = empty
+  %i1 = const 0
+  jump bb2
+bb1:  ; preds bb2, bb27
+  %log2 = phi [bb2: %log3], [bb27: %log5]
+  return %log2
+bb2:  ; preds bb0, bb4
+  %i2 = phi [bb0: %i1], [bb4: %i3]
+  %log3 = phi [bb0: %log1], [bb4: %log5]
+  %exc0 = phi [bb0: %1], [bb4: %exc1]
+  %ret0 = phi [bb0: %0], [bb4: %ret1]
+  %2 = lt %i2, %n0  !mayThrow
+  branch %2, bb3, bb1
+bb3:
+  jump bb9
+bb4:  ; preds bb24, bb5
+  %3 = to_numeric %i2  !mayThrow
+  %i3 = inc %3  !mayThrow
+  jump bb2
+bb5:
+  jump bb4
+bb6:  ; preds bb12, bb15, bb17, bb19, bb7
+  %log4 = phi [bb12: %log6], [bb15: %log6], [bb17: %log6], [bb19: %log7], [bb7: %log3]
+  %completion0 = phi [bb12: %14], [bb15: %17], [bb17: %18], [bb19: %19], [bb7: %8]
+  %exc1 = phi [bb12: %exc0], [bb15: %exc0], [bb17: %exc0], [bb19: %exc0], [bb7: %7]
+  %ret1 = phi [bb12: %ret0], [bb15: %log6], [bb17: %ret0], [bb19: %ret0], [bb7: %ret0]
+  %4 = const ";"
+  %log5 = add %log4, %4  !mayThrow
+  %5 = const 0
+  %6 = strict_eq %completion0, %5
+  branch %6, bb20, bb21
+bb7:  ; preds bb8, bb18
+  %7 = take_exception
+  %8 = const 1
+  jump bb6
+bb8:  ; preds bb9, bb10; handler bb7
+  %e0 = take_exception
+  %9 = const "!"
+  %10 = add %9, %e0  !mayThrow
+  jump bb18
+bb9:  ; handler bb8
+  %11 = call_direct risky(%i2)  !mayThrow
+  jump bb10
+bb10:  ; handler bb8
+  %log6 = add %log3, %11  !mayThrow
+  jump bb11
+bb11:  ; handler bb8
+  %12 = const 1
+  %13 = strict_eq %i2, %12
+  branch %13, bb12, bb14
+bb12:  ; handler bb8
+  %14 = const 2
+  jump bb6
+bb14:  ; handler bb8
+  %15 = const 4
+  %16 = strict_eq %i2, %15
+  branch %16, bb15, bb17
+bb15:  ; handler bb8
+  %17 = const 3
+  jump bb6
+bb17:  ; handler bb8
+  %18 = const 0
+  jump bb6
+bb18:  ; handler bb7
+  %log7 = add %log3, %10  !mayThrow
+  jump bb19
+bb19:  ; handler bb7
+  %19 = const 4
+  jump bb6
+bb20:
+  jump bb5
+bb21:
+  %20 = const 1
+  %21 = strict_eq %completion0, %20
+  branch %21, bb22, bb23
+bb22:
+  throw %exc1
+bb23:
+  %22 = const 2
+  %23 = strict_eq %completion0, %22
+  branch %23, bb24, bb25
+bb24:
+  jump bb4
+bb25:
+  %24 = const 3
+  %25 = strict_eq %completion0, %24
+  branch %25, bb26, bb27
+bb26:
+  return %ret1
+bb27:
+  jump bb1

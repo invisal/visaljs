@@ -1,0 +1,22 @@
+sync
+ids true
+micro 1
+micro 2
+after await
+timeout
+1 ms
+0 ms, created after 1 ms
+args x y
+micro after the args timer
+next timer
+5 ms
+20 ms
+tick 1
+outer
+outer's microtask
+inner
+tick 2
+slept 60
+slept 70; ticks 2
+sequence done
+tick 3

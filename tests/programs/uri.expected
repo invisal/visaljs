@@ -1,0 +1,18 @@
+http://a.b/c%20d?x=1&y=%C3%A9#h http%3A%2F%2Fa.b%2Fc%20d%3Fx%3D1%26y%3D%C3%A9%23h
+a;/?:@&=+$,#-_.!~*'() a%3B%2F%3F%3A%40%26%3D%2B%24%2C%23-_.!~*'()
+%E6%97%A5%E6%9C%AC%F0%9F%98%80 %E6%97%A5%E6%9C%AC%F0%9F%98%80
+ 
+%25 %25
+日😀 日😀
+%3B%2F%3f%23x ;/?#x
+a b a b
+Aé Aé
+URIError URI malformed true
+URIError URI malformed true
+URIError URI malformed true
+URIError URI malformed true
+URIError URI malformed true
+URIError URI malformed true
+URIError URI malformed true
+URIError URI malformed
+%F0%9F%98%80x 1 encodeURI ü ü

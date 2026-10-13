@@ -1,0 +1,64 @@
+timeout after 5 writes, late enough: true, timeout 40
+RangeError ERR_OUT_OF_RANGE: The value of "msecs" is out of range. It must be a non-negative finite number. Received -1
+TypeError ERR_INVALID_ARG_TYPE: The "msecs" argument must be of type number. Received type string ('1')
+unref'd socket read: "late data"
+pipe address: <path> true
+pipe listen: EADDRINUSE listen <path> -1 listen EADDRINUSE: address already in use <path>
+pipe connection: undefined {}
+pipe client: OVER A PIPE undefined closed
+pipe connect: ENOENT connect <path> connect ENOENT <path>
+server: from 127.0.0.1 | client: from 127.0.0.1 | server: error ECONNRESET read | server: close true | client: close false
+TypeError ERR_INVALID_IP_ADDRESS: Invalid IP address: nope
+reset unconnected: ERR_SOCKET_CLOSED
+drop: 127.0.0.1 127.0.0.1 IPv4 number
+blocked: closed
+TypeError ERR_INVALID_ARG_TYPE: The "options.blockList" property must be an net.BlockList. Received an instance of Array
+onread: hell|o wo|rld
+aborted: listening false
+TypeError ERR_INVALID_ARG_VALUE: The argument 'options' must have the property "port" or "path". Received { host: '127.0.0.1' }
+[
+  'Address: IPv6 ::1',
+  'Subnet: IPv6 2001:db8::/32',
+  'Subnet: IPv4 8.8.0.0/16',
+  'Range: IPv4 192.168.1.10-192.168.1.20',
+  'Address: IPv4 10.0.0.1'
+]
+BlockList {
+  rules: [
+    'Address: IPv6 ::1',
+    'Subnet: IPv6 2001:db8::/32',
+    'Subnet: IPv4 8.8.0.0/16',
+    'Range: IPv4 192.168.1.10-192.168.1.20',
+    'Address: IPv4 10.0.0.1'
+  ]
+}
+check 10.0.0.1 true
+check 10.0.0.2 false
+check 192.168.1.15 true
+check 192.168.1.21 false
+check 8.8.4.4 true
+check 8.9.0.0 false
+check 2001:db8:1::5 true
+check 2001:db9:: false
+check ::1 true
+check ::ffff:10.0.0.1 true
+check not an address false
+TypeError ERR_INVALID_ARG_VALUE: The argument 'start' must come before end. Received SocketAddress { address: '10.0.0.9', port: 0, family: 'ipv4', flowlabel: 0 }
+RangeError ERR_OUT_OF_RANGE: The value of "prefix" is out of range. It must be >= 0 && <= 32. Received 33
+TypeError ERR_INVALID_ARG_TYPE: The "address" argument must be of type string. Received type number (42)
+true false ["Address: IPv6 ::1","Subnet: IPv6 2001:db8::/32","Subnet: IPv4 8.8.0.0/16","Range: IPv4 192.168.1.10-192.168.1.20","Address: IPv4 10.0.0.1"]
+127.0.0.1 0 ipv4 0 SocketAddress { address: '127.0.0.1', port: 0, family: 'ipv4', flowlabel: 0 }
+{"address":"2001:db8::1","port":443,"family":"ipv6","flowlabel":7} ::
+::ffff:1.2.3.4 -> ::ffff:1.2.3.4
+1:0:0:2:0:0:0:3 -> 1:0:0:2::3
+0:0:0:0:0:0:0:0 -> ::
+fe80::1%eth0 -> fe80::1
+{"address":"1.2.3.4","port":0,"family":"ipv4","flowlabel":0} {"address":"::1","port":8080,"family":"ipv6","flowlabel":0} undefined
+Error ERR_INVALID_ADDRESS: Invalid socket address
+TypeError ERR_INVALID_ARG_VALUE: The property 'options.family' is invalid. Received 'ipv5'
+RangeError ERR_SOCKET_BAD_PORT: options.port should be >= 0 and < 65536. Received type number (70000).
+true false
+TypeError ERR_INVALID_ARG_TYPE: The "value" argument must be of type boolean. Received type string ('yes')
+RangeError ERR_OUT_OF_RANGE: The value of "value" is out of range. It must be >= 1 && <= 2147483647. Received 0
+attempt timeout: 10
+unref'd server: the program ends

@@ -1,0 +1,33 @@
+Headers {
+  'Content-Type': 'text/plain',
+  'X-B': 'v1, v2',
+  'Set-Cookie': 'a=1, b=2'
+}
+[
+  [ 'content-type', 'text/plain' ],
+  [ 'set-cookie', 'a=1' ],
+  [ 'set-cookie', 'b=2' ],
+  [ 'x-b', 'v1, v2' ]
+] v1, v2 null true [ 'a=1', 'b=2' ] [ 'content-type', 'set-cookie', 'set-cookie', 'x-b' ] [ 'text/plain', 'a=1', 'b=2', 'v1, v2' ]
+Headers { a: '1', b: '2' } v1, v2 Headers {} Headers { a: '1', b: 'null', c: 'undefined' }
+v 1, 2
+each content-type text/html true this
+each set-cookie a=1 true this
+each set-cookie b=2 true this
+each z 1 true this
+[ 'a', 'content-type', 'set-cookie', 'set-cookie', 'z' ] [object Headers] [object Headers Iterator] function
+{ value: [ 'a', '1' ], done: false } true [
+  'append',  'delete',
+  'get',     'has',
+  'set',     'getSetCookie',
+  'keys',    'values',
+  'entries', 'forEach'
+]
+for-of a 1
+for-of b 2
+"padded"
+TypeError: Headers constructor: expected name/value pair to be length 2, found 1. | TypeError: Headers.append: "bad name" is an invalid header name. | TypeError: Headers.append: "x
+y" is an invalid header value.
+TypeError: Class constructor _Headers cannot be invoked without 'new' | TypeError: Headers constructor: Argument 1 could not be converted to one of: sequence<sequence<ByteString>>, record<ByteString, ByteString>. | TypeError: Headers.get: 1 argument required, but 0 found. | TypeError: Headers.append: 2 arguments required, but only 1 found.
+TypeError: Headers.set: "é" is an invalid header name. | TypeError: Cannot convert argument to a ByteString because the character at index 0 has a value of 8364 which is greater than 255. | TypeError [ERR_INVALID_THIS]: Illegal invocation
+v true Headers { k: 'v' }

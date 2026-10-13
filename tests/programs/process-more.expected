@@ -1,0 +1,40 @@
+chdir: true
+back: true
+chdir missing: Error ENOENT ENOENT: no such file or directory, chdir 'CWD' -> '/nonexistent-directory-xyz'
+chdir number: TypeError ERR_INVALID_ARG_TYPE The "directory" argument must be of type string. Received type number (5)
+umask set: true
+umask now: 23
+umask bad string: TypeError ERR_INVALID_ARG_VALUE The argument 'mask' must be a 32-bit unsigned integer or an octal string. Received '0o22'
+umask negative: RangeError ERR_OUT_OF_RANGE The value of "mask" is out of range. It must be >= 0 && <= 4294967295. Received -1
+uptime: number true
+cpuUsage: user,system number true
+cpuUsage negative: RangeError ERR_INVALID_ARG_VALUE The property 'prevValue.user' is invalid. Received -1
+cpuUsage string: TypeError ERR_INVALID_ARG_TYPE The "prevValue.user" property must be of type number. Received type string ('a')
+threadCpuUsage: user,system
+resourceUsage: userCPUTime,systemCPUTime,maxRSS,sharedMemorySize,unsharedDataSize,unsharedStackSize,minorPageFault,majorPageFault,swappedOut,fsRead,fsWrite,ipcSent,ipcReceived,signalsCount,voluntaryContextSwitches,involuntaryContextSwitches
+memory: number number ppid number
+title: renamed
+setuid root: Error EPERM EPERM, Operation not permitted
+setuid unknown: Error ERR_UNKNOWN_CREDENTIAL User identifier does not exist: no-such-user-xyz
+setgid unknown: Error ERR_UNKNOWN_CREDENTIAL Group identifier does not exist: no-such-group-xyz
+setuid object: TypeError ERR_INVALID_ARG_TYPE The "id" argument must be one of type number or string. Received an instance of Object
+setgroups string: TypeError ERR_INVALID_ARG_TYPE The "groups" argument must be an instance of Array. Received type string ('x')
+getgroups: true
+getBuiltinModule: function true undefined
+getBuiltinModule number: TypeError ERR_INVALID_ARG_TYPE The "id" argument must be of type string. Received type number (5)
+loadEnvFile: from file true
+loadEnvFile missing: Error ENOENT ENOENT: no such file or directory, open '/nonexistent-xyz.env'
+capture: false
+capture again: Error ERR_UNCAUGHT_EXCEPTION_CAPTURE_ALREADY_SET `process.setupUncaughtExceptionCapture()` was called while a capture callback was already active
+capture number: TypeError ERR_INVALID_ARG_TYPE The "fn" argument must be of type function or null. Received type number (5)
+capture now: true
+captured: thrown in a timer
+ref called
+unref called
+release: node Jod true
+config: true variables,target_defaults
+flags: true debugPort 9229 domain null sourceMaps false true
+setSourceMapsEnabled string: TypeError ERR_INVALID_ARG_TYPE The "enabled" argument must be of type boolean. Received type string ('x')
+report: function true SIGUSR2
+finalization: register,registerBeforeExit,unregister
+functions: true

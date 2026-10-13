@@ -1,0 +1,298 @@
+true true
+aes-128-cbc 15c9b5df4a57e3f6b02c0de7c4f20e23343b31960bf5d25dd199be967f7e474f84c144c4bfeaa0200a1ff653929d4204  true
+aes-128-ccm 52123842a6f14fba956149d038024fbd8835fc1f85ed0c54710aff9921e75cf1cd37077b9f 47202cf8e06b9fa0f366faad32307789 true
+aes-128-cfb 14dc05eb668f18a44cab1c27aa6fa766b62dd771a2be4be5506f1a8dd752a07be0696f5b1f  true
+aes-128-cfb1 035e939082bc5be327207cd3030960fc60b97395024509ff0ed06367f2eee1614540a19961  true
+aes-128-cfb8 14c29fe78f559ddab92ae059de489a4b1cae5ea686c6810bffaf46f7fa3466f602a318a850  true
+aes-128-ctr 14dc05eb668f18a44cab1c27aa6fa76650f70cea770403517f6bbfeb3735a281d5e22d11e6  true
+aes-128-ecb 53e193ce4b2cb1f87764fb997bacf70de17ee268e3057367e171c2502a3daf6bbbd0429772e8d730f4e9d45ebef8bd91  true
+aes-128-gcm 50ee017bd9086b48aca24764e5bf1f372837c8b5df64edbe63d0b8f74a425832ebaa1e0fc2 1a37bd67404b1fc23e50a47fda9234fc true
+aes-128-ofb 14dc05eb668f18a44cab1c27aa6fa7662cc2f88e132dcb918cd4ac2aff89bcea0b04c43abb  true
+aes-192-cbc 0e45513e1a4ae3ec7a4bb224f34bef66ed231da100c9a7f70877a22d4c34b6601586e87be33380fbbe93812f48f44dd0  true
+aes-192-ccm 36e2477c8a168535551607862937582c23c817e03caa1537f9236607350400e0e147155e73 5b109cac5ce1c1159e0d129fe31a6d2a true
+aes-192-cfb e88606288fe17643ed30fd07f026bcbcd3b917f1df22456fa30d6af3a28d3f279f5fe0dae5  true
+aes-192-cfb1 916c9a9492b98e25aa4090fb0e98732045ed3d15658dd62108f7b8ef0accde737e194b606d  true
+aes-192-cfb8 e8e9a761ec4a9605f41711e950a61a47dfa31f5e34eee6c2bcd8c5b27813a531bcf6fc0023  true
+aes-192-ctr e88606288fe17643ed30fd07f026bcbc3a398395335471f15d08005003aa67674079aea1c2  true
+aes-192-ecb f644076ee12a1839aaa5fa46b4525af54e80302058d8401e9b0bf9e009410a4450f9d9b8582ce70fa3b0081ef9a692fd  true
+aes-192-gcm 2c36f8bfef7d34b3723a6f5c98cd7bb53b94fcb9059a2b635c56fc81ffed147f603ddd06b5 42ed38c66fa564153fcf4048140026a2 true
+aes-192-ofb e88606288fe17643ed30fd07f026bcbc1ca01fb5fa5a0a2ee4c9a6f80b61ef24598893a5a5  true
+aes-256-cbc 21464abd3d634a66b11368cbe50ae872263f29bcd347c09d887f83d572026010a7859a3c99ef8e9eec012dc7edbb8933  true
+aes-256-ccm 3e21756a87597b471a10d270629a3d7fa7ab768014aafbde08fcf4421e0655cc79640c6087 483a73771cdf7c35b32a6550ea50ded1 true
+aes-256-cfb 61a403eb3b99c73ceeb43ce5445c0ed3bb9300f17436dd97253c5977fe036705f234b1342f  true
+aes-256-cfb1 43c74249248c034a974e639969a5f20f491d31991fe4d9a23445190db9916bb545d32b2587  true
+aes-256-cfb8 61131bfbd10cb69399bc84448f8ce145bde7708af21c3ece417da294c6826ea50ed7be34e2  true
+aes-256-ctr 61a403eb3b99c73ceeb43ce5445c0ed3d6d751dc10af14c9e09af708336867aae2f8131ffe  true
+aes-256-ecb 863bfed96659da960cb6cedfeb97c8ba20524b32bffe4db8f0f726e3ff4059ab611e8c3241e95fb9d8c366057b696ddb  true
+aes-256-gcm 04dcd8515571ecc9e88ef5980bf9a7ded1cf5067642710d57635593bbf35a1a39495efcf92 817e7137147f9569157601cfb7cb67f0 true
+aes-256-ofb 61a403eb3b99c73ceeb43ce5445c0ed383c84bb1b8aa637430308637541c4d135d6682c98d  true
+aes128 15c9b5df4a57e3f6b02c0de7c4f20e23343b31960bf5d25dd199be967f7e474f84c144c4bfeaa0200a1ff653929d4204  true
+aes128-wrap 45f1afc5183c2fde88c59a8d269270d6c73a887487db96ef163a20fe18e180ff360e13faba013ed2  true
+aes128-wrap-pad 4610da013388b2d8acc5ae82a3d1e3545f8e29252df7bfc7  true
+aes192 0e45513e1a4ae3ec7a4bb224f34bef66ed231da100c9a7f70877a22d4c34b6601586e87be33380fbbe93812f48f44dd0  true
+aes192-wrap a965b776a27d31811183afcb4300e65a21ea5b141f0a57b27c741fd696bd3918fae06b01a9dd10a6  true
+aes192-wrap-pad f2774cc7300f36723259d8848de9fffea0e03d34f9f22802  true
+aes256 21464abd3d634a66b11368cbe50ae872263f29bcd347c09d887f83d572026010a7859a3c99ef8e9eec012dc7edbb8933  true
+aes256-wrap 228a58949a024041cce6d595ae75caf385d59dd188a11cd162350a2a413ea123431889bd51ff9ee6  true
+aes256-wrap-pad 3b41d7bcb14a055491e063801d733ff1bdbdfdfbc1f58927  true
+chacha20 13ee5a047137df511539f69e80919b61b4a4c4db97fb3dad77a743b46b458cb71453b0d0da  true
+chacha20-poly1305 e516e3369285c5ee4a6fa0a984d58145ffc9ed850c3ce077bf36a27d3258910030f9080dc4 c6dfb8a9c2cb15fe608dd74c44ef5bf8 true
+des-ede 05a5fae5cc79beee5cad97da845b250e6a3b932e73c2db5549e5465a5d869aa1cf9da7e1945ccb15  true
+des-ede-cbc a4436982b442c482eb52fb3df1f5108a4df739d07595c886d110ffc38334f5e0a67f34bf2a843082  true
+des-ede-cfb 1f91f6c54c03c33144b959a9358cef99a63e1ee5843e98697a7fb6890023d41e3e40d74af3  true
+des-ede-ecb 05a5fae5cc79beee5cad97da845b250e6a3b932e73c2db5549e5465a5d869aa1cf9da7e1945ccb15  true
+des-ede-ofb 1f91f6c54c03c33139404b52555c676e6fe16655dcb373a1a9b0bbc2c5ccd7deff711625ac  true
+des-ede3 05a5fae5cc79beee5cad97da845b250e6a3b932e73c2db5549e5465a5d869aa1cf9da7e1945ccb15  true
+des-ede3-cbc a4436982b442c482eb52fb3df1f5108a4df739d07595c886d110ffc38334f5e0a67f34bf2a843082  true
+des-ede3-cfb 1f91f6c54c03c33144b959a9358cef99a63e1ee5843e98697a7fb6890023d41e3e40d74af3  true
+des-ede3-cfb1 0af90fe436b2e0d944fdaaf8b39d8cd407505eb2db9c2173435cd2ccce07f7c6824c833c05  true
+des-ede3-cfb8 1f6e37003a0deb0553e31fbf6d33c9cfc18523e7626750dc922b6e44504c6ffe4c6ae4057c  true
+des-ede3-ecb 05a5fae5cc79beee5cad97da845b250e6a3b932e73c2db5549e5465a5d869aa1cf9da7e1945ccb15  true
+des-ede3-ofb 1f91f6c54c03c33139404b52555c676e6fe16655dcb373a1a9b0bbc2c5ccd7deff711625ac  true
+des3 a4436982b442c482eb52fb3df1f5108a4df739d07595c886d110ffc38334f5e0a67f34bf2a843082  true
+id-aes128-CCM 52123842a6f14fba956149d038024fbd8835fc1f85ed0c54710aff9921e75cf1cd37077b9f 47202cf8e06b9fa0f366faad32307789 true
+id-aes128-GCM 50ee017bd9086b48aca24764e5bf1f372837c8b5df64edbe63d0b8f74a425832ebaa1e0fc2 1a37bd67404b1fc23e50a47fda9234fc true
+id-aes128-wrap 45f1afc5183c2fde88c59a8d269270d6c73a887487db96ef163a20fe18e180ff360e13faba013ed2  true
+id-aes128-wrap-pad 4610da013388b2d8acc5ae82a3d1e3545f8e29252df7bfc7  true
+id-aes192-CCM 36e2477c8a168535551607862937582c23c817e03caa1537f9236607350400e0e147155e73 5b109cac5ce1c1159e0d129fe31a6d2a true
+id-aes192-GCM 2c36f8bfef7d34b3723a6f5c98cd7bb53b94fcb9059a2b635c56fc81ffed147f603ddd06b5 42ed38c66fa564153fcf4048140026a2 true
+id-aes192-wrap a965b776a27d31811183afcb4300e65a21ea5b141f0a57b27c741fd696bd3918fae06b01a9dd10a6  true
+id-aes192-wrap-pad f2774cc7300f36723259d8848de9fffea0e03d34f9f22802  true
+id-aes256-CCM 3e21756a87597b471a10d270629a3d7fa7ab768014aafbde08fcf4421e0655cc79640c6087 483a73771cdf7c35b32a6550ea50ded1 true
+id-aes256-GCM 04dcd8515571ecc9e88ef5980bf9a7ded1cf5067642710d57635593bbf35a1a39495efcf92 817e7137147f9569157601cfb7cb67f0 true
+id-aes256-wrap 228a58949a024041cce6d595ae75caf385d59dd188a11cd162350a2a413ea123431889bd51ff9ee6  true
+id-aes256-wrap-pad 3b41d7bcb14a055491e063801d733ff1bdbdfdfbc1f58927  true
+"aes-256-gcm" {
+  mode: 'gcm',
+  name: 'id-aes256-gcm',
+  nid: 901,
+  blockSize: 1,
+  ivLength: 12,
+  keyLength: 32
+}
+"aes128" {
+  mode: 'cbc',
+  name: 'aes-128-cbc',
+  nid: 419,
+  blockSize: 16,
+  ivLength: 16,
+  keyLength: 16
+}
+"AES-128-CBC" {
+  mode: 'cbc',
+  name: 'aes-128-cbc',
+  nid: 419,
+  blockSize: 16,
+  ivLength: 16,
+  keyLength: 16
+}
+"id-aes256-GCM" {
+  mode: 'gcm',
+  name: 'id-aes256-gcm',
+  nid: 901,
+  blockSize: 1,
+  ivLength: 12,
+  keyLength: 32
+}
+"aes-128-ecb" {
+  mode: 'ecb',
+  name: 'aes-128-ecb',
+  nid: 418,
+  blockSize: 16,
+  keyLength: 16
+}
+"chacha20" {
+  mode: 'stream',
+  name: 'chacha20',
+  nid: 1019,
+  ivLength: 16,
+  keyLength: 32
+}
+"chacha20-poly1305" {
+  mode: 'stream',
+  name: 'chacha20-poly1305',
+  nid: 1018,
+  ivLength: 12,
+  keyLength: 32
+}
+"des3" {
+  mode: 'cbc',
+  name: 'des-ede3-cbc',
+  nid: 44,
+  blockSize: 8,
+  ivLength: 8,
+  keyLength: 24
+}
+"aes128-wrap-pad" {
+  mode: 'wrap',
+  name: 'id-aes128-wrap-pad',
+  nid: 897,
+  blockSize: 8,
+  ivLength: 4,
+  keyLength: 16
+}
+427 {
+  mode: 'cbc',
+  name: 'aes-256-cbc',
+  nid: 427,
+  blockSize: 16,
+  ivLength: 16,
+  keyLength: 32
+}
+896 {
+  mode: 'ccm',
+  name: 'id-aes128-ccm',
+  nid: 896,
+  blockSize: 1,
+  ivLength: 12,
+  keyLength: 16
+}
+"foo" undefined
+1 undefined
+TypeError [ERR_INVALID_ARG_TYPE]: The "nameOrNid" argument must be one of type string or number. Received an instance of Object
+RangeError [ERR_OUT_OF_RANGE]: The value of "nameOrNid" is out of range. It must be an integer. Received 1.5
+TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received type number (1)
+|wem0Upqsl5MBD0Z39jWO/g==
+[ 'ExAd', '', '7Hs=' ]
+[ '13101dec', '7bba', '' ]
+TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: foo
+Error [ERR_INTERNAL_ASSERTION]: Cannot change encoding
+This is caused by either a bug in Node.js or incorrect usage of Node.js internals.
+Please open an issue with this stack trace at https://github.com/nodejs/node/issues
+
+b531422c5dae60e8854600809c46b715
+6ad77cdab9adb3bfed21ef94210e121eb6aeaffa752dc08b51639731761aed00e431c158177be7de
+[ 0, 16, 16 ]
+[ 0, 16 ]
+Error [ERR_OSSL_WRONG_FINAL_BLOCK_LENGTH]: error:1C80006B:Provider routines::wrong final block length
+62ae12f324bfea08d5f675b513026bbff0b2ca39373cfed09b823ff793d298cf
+Error [ERR_OSSL_BAD_DECRYPT]: error:1C800064:Provider routines::bad decrypt
+Error [ERR_OSSL_WRONG_FINAL_BLOCK_LENGTH]: error:1C80006B:Provider routines::wrong final block length
+9b513e1f49 382462319a2bf25b2af6b0cea74e8e09
+hello0
+hello0
+hello0
+Error [undefined]: Unsupported state or unable to authenticate data
+Error [undefined]: Unsupported state or unable to authenticate data
+TypeError [ERR_CRYPTO_INVALID_AUTH_TAG]: Invalid authentication tag length: 3
+Error [ERR_CRYPTO_INVALID_STATE]: Invalid state for operation setAuthTag
+TypeError [ERR_CRYPTO_INVALID_AUTH_TAG]: Invalid authentication tag length: 16
+hello0
+aea8ae89
+TypeError [ERR_CRYPTO_INVALID_AUTH_TAG]: Invalid authentication tag length: 5
+TypeError [ERR_CRYPTO_INVALID_AUTH_TAG]: Invalid authentication tag length: 17
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.authTagLength' is invalid. Received 'a'
+TypeError [ERR_CRYPTO_INVALID_IV]: Invalid initialization vector
+Error [ERR_CRYPTO_INVALID_STATE]: Invalid state for operation getAuthTag
+Error [ERR_CRYPTO_INVALID_STATE]: Invalid state for operation setAAD
+1 7f31a80a68b57240a464d0976854a21889
+8 ee30f6903c0f02acdf31bfebe1499e851f
+16 a9b8f598f49f406f879f1bee3a62074f38
+64 eec6f875b170ed496938245dbddb7a6230
+67d70b39ed aa5b3c4e10ea4c2b
+hello|0
+Error [undefined]: Unsupported state or unable to authenticate data
+<Buffer >
+<Buffer >
+67db2d2932a4447a9142696e784be665a821
+Error [undefined]: Trying to add data in unsupported state
+TypeError [ERR_MISSING_ARGS]: options.plaintextLength required for CCM mode with AAD
+TypeError [ERR_CRYPTO_INVALID_IV]: Invalid initialization vector
+TypeError [ERR_CRYPTO_INVALID_AUTH_TAG]: Invalid authentication tag length: 3
+TypeError [ERR_CRYPTO_INVALID_AUTH_TAG]: authTagLength required for aes-128-ccm
+Error [undefined]: Trying to add data in unsupported state
+Error [ERR_OSSL_TAG_NOT_SET]: error:1C800077:Provider routines::tag not set
+35
+RangeError [ERR_CRYPTO_INVALID_MESSAGELEN]: Invalid message length
+694221bd817261ad76970d 191c3a597b2ca6b9745ffb89f24d402b
+Error [undefined]: Unsupported state or unable to authenticate data
+TypeError [ERR_CRYPTO_INVALID_AUTH_TAG]: Invalid authentication tag length: 8
+TypeError [ERR_CRYPTO_INVALID_IV]: Invalid initialization vector
+TypeError [ERR_CRYPTO_INVALID_IV]: Invalid initialization vector
+8
+03db830e6ee519704e293f02bece4e95ca6e82705e9310072291f61743f8574f238e98dcd9d725fe4c1fa0293dbd370c8b821668c41b7412970b2c8c924e7968461a4742ed77
+[
+  'ee1a1573da6ac5d535a9112baa169ef94c6cd39dfb9a7114',
+  '50a426c17dffc00f5fdf9ec28db6e4e18f6d7ecbf0612facdd40c35c58c31bb0',
+  ''
+]
+Error [undefined]: Trying to add data in unsupported state
+Error [undefined]: Trying to add data in unsupported state
+TypeError [ERR_CRYPTO_INVALID_IV]: Invalid initialization vector
+00000000000000000000000000000000
+Error [undefined]: Trying to add data in unsupported state
+[
+  '4ace56f99987a53187b5a9fe6749d12d',
+  '64d82a8df2afb75d95b6e8fcafa62883168eefe3c02b17f7',
+  ''
+]
+0000000000
+RangeError [ERR_CRYPTO_INVALID_KEYLEN]: Invalid key length
+TypeError [ERR_CRYPTO_INVALID_IV]: Invalid initialization vector
+TypeError [ERR_CRYPTO_INVALID_IV]: Invalid initialization vector
+Error [ERR_CRYPTO_UNKNOWN_CIPHER]: Unknown cipher
+TypeError [ERR_INVALID_ARG_TYPE]: The "iv" argument must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView. Received undefined
+cce1a41155667587123071beb30ed5c8
+cce1a41155667587123071beb30ed5c8
+TypeError [ERR_CRYPTO_INVALID_IV]: Invalid initialization vector
+TypeError [ERR_INVALID_ARG_TYPE]: The "key" argument must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, DataView, KeyObject, or CryptoKey. Received type number (1)
+TypeError [ERR_INVALID_ARG_TYPE]: The "cipher" argument must be of type string. Received type number (1)
+5d6e8c72c1b4f95d87bfe2d6e7e04600
+Error [ERR_CRYPTO_INVALID_STATE]: Invalid state
+Error [undefined]: Trying to add data in unsupported state
+Error [ERR_CRYPTO_INVALID_STATE]: Invalid state for operation setAutoPadding
+Error [ERR_CRYPTO_INVALID_STATE]: Invalid state for operation setAAD
+Error [ERR_CRYPTO_INVALID_STATE]: Invalid state for operation getAuthTag
+Error [ERR_CRYPTO_INVALID_STATE]: Invalid state for operation setAuthTag
+<Buffer >
+TypeError [ERR_INVALID_ARG_TYPE]: The "data" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received type number (1)
+<Buffer >
+TypeError [ERR_INVALID_ARG_VALUE]: The argument 'encoding' is invalid for data of length 3. Received 'hex'
+true
+true
+[
+  'constructor',
+  '_transform',
+  '_flush',
+  'update',
+  'final',
+  'setAutoPadding',
+  'getAuthTag',
+  'setAAD'
+]
+[
+  'constructor',
+  '_transform',
+  '_flush',
+  'update',
+  'final',
+  'setAutoPadding',
+  'setAuthTag',
+  'setAAD'
+]
+undefined
+["","€A","�"]
+["a","\ud83d","\ude00"]
+["","YWJj","ZGU="] base64
+TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: foo
+utf8 utf16le latin1 6869
+{
+  mode: 'cbc',
+  name: 'aes-128-cbc',
+  nid: 419,
+  blockSize: 16,
+  ivLength: 16,
+  keyLength: 16
+}
+undefined
+{
+  mode: 'gcm',
+  name: 'id-aes128-gcm',
+  nid: 895,
+  blockSize: 1,
+  ivLength: 16,
+  keyLength: 16
+}
+undefined
+undefined
+stream a453707889bf29351f4f03d621602e82

@@ -1,0 +1,53 @@
+posix "" . | false | . |  |  |  | {"root":"","dir":"","base":"","ext":"","name":""} | deep/er/dir | r | /base
+posix "." . | false | . | . | . |  | {"root":"","dir":"","base":".","ext":"","name":"."} | deep/er/dir | r | /base
+posix ".." .. | false | . | .. | .. |  | {"root":"","dir":"","base":"..","ext":"","name":".."} | deep/er | ../r | /
+posix "/" / | true | / |  |  |  | {"root":"/","dir":"/","base":"","ext":"","name":""} | / | /r | /
+posix "//" / | true | / |  |  |  | {"root":"/","dir":"/","base":"","ext":"","name":""} | // | /r | /
+posix "a/b/../c" a/c | false | a/b/.. | c | c |  | {"root":"","dir":"a/b/..","base":"c","ext":"","name":"c"} | deep/er/dir/a/c | a/c/r | /base/a/c
+posix "/a/./b//c/" /a/b/c/ | true | /a/./b/ | c | c |  | {"root":"/","dir":"/a/./b/","base":"c","ext":"","name":"c"} | /a/./b//c/ | /a/b/c/r | /a/b/c
+posix "../../x" ../../x | false | ../.. | x | x |  | {"root":"","dir":"../..","base":"x","ext":"","name":"x"} | deep/x | ../../x/r | /x
+posix "C:\\a\\..\\b" C:\a\..\b | false | . | C:\a\..\b | C:\a\..\b | .\b | {"root":"","dir":"","base":"C:\\a\\..\\b","ext":".\\b","name":"C:\\a\\."} | deep/er/dir/C:\a\..\b | C:\a\..\b/r | /base/C:\a\..\b
+posix "c:" c: | false | . | c: | c: |  | {"root":"","dir":"","base":"c:","ext":"","name":"c:"} | deep/er/dir/c: | c:/r | /base/c:
+posix "C:foo" C:foo | false | . | C:foo | C:foo |  | {"root":"","dir":"","base":"C:foo","ext":"","name":"C:foo"} | deep/er/dir/C:foo | C:foo/r | /base/C:foo
+posix "\\\\server\\share\\x" \\server\share\x | false | . | \\server\share\x | \\server\share\x |  | {"root":"","dir":"","base":"\\\\server\\share\\x","ext":"","name":"\\\\server\\share\\x"} | deep/er/dir/\\server\share\x | \\server\share\x/r | /base/\\server\share\x
+posix "//server/share" /server/share | true | //server | share | share |  | {"root":"/","dir":"//server","base":"share","ext":"","name":"share"} | //server/share | /server/share/r | /server/share
+posix "a.txt" a.txt | false | . | a.txt | a.txt | .txt | {"root":"","dir":"","base":"a.txt","ext":".txt","name":"a"} | deep/er/dir/a.txt | a.txt/r | /base/a.txt
+posix ".bashrc" .bashrc | false | . | .bashrc | .bashrc |  | {"root":"","dir":"","base":".bashrc","ext":"","name":".bashrc"} | deep/er/dir/.bashrc | .bashrc/r | /base/.bashrc
+posix "a/b.tar.gz" a/b.tar.gz | false | a | b.tar.gz | b.tar | .gz | {"root":"","dir":"a","base":"b.tar.gz","ext":".gz","name":"b.tar"} | deep/er/dir/a/b.tar.gz | a/b.tar.gz/r | /base/a/b.tar.gz
+posix "/x/y/" /x/y/ | true | /x | y | y |  | {"root":"/","dir":"/x","base":"y","ext":"","name":"y"} | /x/y/ | /x/y/r | /x/y
+posix "file." file. | false | . | file. | file. | . | {"root":"","dir":"","base":"file.","ext":".","name":"file"} | deep/er/dir/file. | file./r | /base/file.
+posix "\\\\?\\C:\\x" \\?\C:\x | false | . | \\?\C:\x | \\?\C:\x |  | {"root":"","dir":"","base":"\\\\?\\C:\\x","ext":"","name":"\\\\?\\C:\\x"} | deep/er/dir/\\?\C:\x | \\?\C:\x/r | /base/\\?\C:\x
+posix "CON" CON | false | . | CON | CON |  | {"root":"","dir":"","base":"CON","ext":"","name":"CON"} | deep/er/dir/CON | CON/r | /base/CON
+posix "a:b" a:b | false | . | a:b | a:b |  | {"root":"","dir":"","base":"a:b","ext":"","name":"a:b"} | deep/er/dir/a:b | a:b/r | /base/a:b
+posix "C:\\..\\..\\x" C:\..\..\x | false | . | C:\..\..\x | C:\..\..\x | .\x | {"root":"","dir":"","base":"C:\\..\\..\\x","ext":".\\x","name":"C:\\..\\."} | deep/er/dir/C:\..\..\x | C:\..\..\x/r | /base/C:\..\..\x
+posix ../../d ../C:\a\c\d x
+posix /x/f.txt /b / :
+win32 "" . | false | . |  |  |  | {"root":"","dir":"","base":"","ext":"","name":""} | <cwd>\deep\er\dir | r | C:\base
+win32 "." . | false | . | . | . |  | {"root":"","dir":"","base":".","ext":"","name":"."} | <cwd>\deep\er\dir | r | C:\base
+win32 ".." .. | false | . | .. | .. |  | {"root":"","dir":"","base":"..","ext":"","name":".."} | <cwd>\deep\er | ..\r | C:\
+win32 "/" \ | true | / |  |  |  | {"root":"/","dir":"/","base":"","ext":"","name":""} | / | \r | C:\
+win32 "//" \ | true | / |  |  |  | {"root":"/","dir":"/","base":"","ext":"","name":""} | // | \r | C:\
+win32 "a/b/../c" a\c | false | a/b/.. | c | c |  | {"root":"","dir":"a/b/..","base":"c","ext":"","name":"c"} | <cwd>\deep\er\dir\a\c | a\c\r | C:\base\a\c
+win32 "/a/./b//c/" \a\b\c\ | true | /a/./b/ | c | c |  | {"root":"/","dir":"/a/./b/","base":"c","ext":"","name":"c"} | \a\b\c | \a\b\c\r | C:\a\b\c
+win32 "../../x" ..\..\x | false | ../.. | x | x |  | {"root":"","dir":"../..","base":"x","ext":"","name":"x"} | <cwd>\deep\x | ..\..\x\r | C:\x
+win32 "C:\\a\\..\\b" C:\b | true | C:\a\.. | b | b |  | {"root":"C:\\","dir":"C:\\a\\..","base":"b","ext":"","name":"b"} | \\?\C:\b | C:\b\r | C:\b
+win32 "c:" c:. | false | c: |  |  |  | {"root":"c:","dir":"c:","base":"","ext":"","name":""} | <cwd>\deep\er\dir\c: | c:\r | c:\base
+win32 "C:foo" C:foo | false | C: | foo | foo |  | {"root":"C:","dir":"C:","base":"foo","ext":"","name":"foo"} | <cwd>\deep\er\dir\C:foo | C:foo\r | C:\base\foo
+win32 "\\\\server\\share\\x" \\server\share\x | true | \\server\share\ | x | x |  | {"root":"\\\\server\\share\\","dir":"\\\\server\\share\\","base":"x","ext":"","name":"x"} | \\?\UNC\server\share\x | \\server\share\x\r | \\server\share\x
+win32 "//server/share" \\server\share\ | true | //server/share | share | share |  | {"root":"//server/share","dir":"//server/share","base":"","ext":"","name":""} | \\?\UNC\server\share\ | \\server\share\r | \\server\share\
+win32 "a.txt" a.txt | false | . | a.txt | a.txt | .txt | {"root":"","dir":"","base":"a.txt","ext":".txt","name":"a"} | <cwd>\deep\er\dir\a.txt | a.txt\r | C:\base\a.txt
+win32 ".bashrc" .bashrc | false | . | .bashrc | .bashrc |  | {"root":"","dir":"","base":".bashrc","ext":"","name":".bashrc"} | <cwd>\deep\er\dir\.bashrc | .bashrc\r | C:\base\.bashrc
+win32 "a/b.tar.gz" a\b.tar.gz | false | a | b.tar.gz | b.tar | .gz | {"root":"","dir":"a","base":"b.tar.gz","ext":".gz","name":"b.tar"} | <cwd>\deep\er\dir\a\b.tar.gz | a\b.tar.gz\r | C:\base\a\b.tar.gz
+win32 "/x/y/" \x\y\ | true | /x | y | y |  | {"root":"/","dir":"/x","base":"y","ext":"","name":"y"} | \x\y | \x\y\r | C:\x\y
+win32 "file." file. | false | . | file. | file. | . | {"root":"","dir":"","base":"file.","ext":".","name":"file"} | <cwd>\deep\er\dir\file. | file.\r | C:\base\file.
+win32 "\\\\?\\C:\\x" \\?\C:\x | true | \\?\C:\ | x | x |  | {"root":"\\\\?\\C:\\","dir":"\\\\?\\C:\\","base":"x","ext":"","name":"x"} | \\?\C:\x | \\?\C:\x\r | \\?\C:\x
+win32 "CON" CON | false | . | CON | CON |  | {"root":"","dir":"","base":"CON","ext":"","name":"CON"} | <cwd>\deep\er\dir\CON | CON\r | C:\base\CON
+win32 "a:b" a:b | false | a: | b | b |  | {"root":"a:","dir":"a:","base":"b","ext":"","name":"b"} | <cwd>\deep\er\dir\a:b | a:b\r | a:<cwd>\b
+win32 "C:\\..\\..\\x" C:\x | true | C:\..\.. | x | x |  | {"root":"C:\\","dir":"C:\\..\\..","base":"x","ext":"","name":"x"} | \\?\C:\x | C:\x\r | C:\x
+win32 ..\..\d ..\c\d x
+win32 /x\f.txt /b \ ;
+true true true true a/b {"root":"/","dir":"/a","base":"b.c","ext":".c","name":"b"} n.e /x
+_makeLong,basename,delimiter,dirname,extname,format,isAbsolute,join,matchesGlob,normalize,parse,posix,relative,resolve,sep,toNamespacedPath,win32
+ERR_INVALID_ARG_TYPE The "path" argument must be of type string. Received type number (1)
+ERR_INVALID_ARG_TYPE The "pathObject" argument must be of type object. Received null
+true true true b.txt

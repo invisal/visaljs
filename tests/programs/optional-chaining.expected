@@ -1,0 +1,10 @@
+1 undefined undefined 0
+true undefined true true 20 undefined 0
+undefined undefined undefined
+true {} true
+undefined 0 undefined
+7 undefined
+TypeError
+o.a?.notfn is not a function
+dflt dflt
+3 undefined [ '1', undefined, 'ab' ]

@@ -1,0 +1,17 @@
+{
+  "name": "@visaljs-apps/react-ssr",
+  "version": "0.0.0",
+  "private": true,
+  "description": "React server rendering on node:http, compiled by visaljs",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build server.js -o server",
+    "build:render": "node ../../../cli/src/cli.ts build render.js -o render",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  }
+}

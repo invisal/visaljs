@@ -1,0 +1,19 @@
+PerformanceMark a mark number 0 1 true
+PerformanceMeasure measure true null true
+[ 'a', 'b' ] 1 3
+SyntaxError 12 The "nope" performance mark has not been set DOMException
+PerformanceEntry TypeError ERR_ILLEGAL_CONSTRUCTOR Illegal constructor
+PerformanceMeasure TypeError ERR_ILLEGAL_CONSTRUCTOR Illegal constructor
+Performance TypeError ERR_ILLEGAL_CONSTRUCTOR Illegal constructor
+[ 'b' ]
+0 number true
+true 0
+1 2 d 2
+["name","entryType","startTime","duration","detail"] {
+  name: 'z',
+  entryType: 'mark',
+  startTime: 5,
+  duration: 0,
+  detail: null
+}
+4 4

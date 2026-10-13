@@ -1,0 +1,21 @@
+function  decl ( a,b ) { /* body */ return a + b; }
+function named() { return 1; }
+(x) =>   x * 2
+method(a) { return a; }
+get g() { return 1; }
+set s(v) {}
+["comp" + "uted"]() {}
+class K extends Object {
+  constructor() { super(); }
+  m() { return "m"; }
+  static   sm() { return "sm"; }
+  get v() { return 1; }
+}
+m() { return "m"; }
+sm() { return "sm"; }
+class Empty {}
+function Math_max() {}
+function push() { [native code] }
+function () { [native code] }
+function keys() { [native code] }
+function () { return "héllo ☺"; }

@@ -1,0 +1,101 @@
+---
+// The front page: what visaljs is, then the popular frameworks' binary size and memory against Node
+// and Bun (bench/servers.json). Requests per second stay out: they depend on the machine.
+import { LinkButton } from "@cloudflare/kumo/components/button";
+import BenchCard, { type BenchMetric } from "../components/BenchCard.tsx";
+import UsageCard from "../components/UsageCard.tsx";
+import Layout from "../layouts/Layout.astro";
+import { GUIDE_PUBLISHED } from "../lib/guide-published.ts";
+import { mb, serverCards, type Row } from "../lib/servers.ts";
+
+const REPO = "https://github.com/invisal/visaljs";
+const cards = serverCards(["hono", "express"]);
+const NAMES: Record<string, string> = { express: "Express", hono: "Hono" };
+
+/** How to use: a title, the commands and what they do */
+const usage: [string, string, string][] = [
+  ["Compiling a file", "npx visaljs build app.js\n./app", "Builds app.js and the npm packages it imports into one native binary, ./app."],
+  ["Compiling a project", "npx visaljs build\n./my-app", "In your project's folder: visaljs tries to detect your framework and entry file, and compiles them into one native binary named after the folder."],
+];
+
+/** a bar's length: the value's share of the largest */
+const share = (v: number, max: number) => `${((100 * v) / max).toFixed(2)}%`;
+
+/* each metric's bars share one scale within a card */
+const metrics: { title: string; icon: BenchMetric["icon"]; value: (r: Row) => number | null; format: (n: number) => string }[] = [
+  { title: "Binary size", icon: "size", value: (r) => r.size, format: mb },
+  { title: "Memory under load", icon: "memory", value: (r) => r.memory, format: (k) => `${(k / 1024).toFixed(1)} MB` },
+];
+
+/** a card's metrics, formatted for BenchCard */
+const benchMetrics = (rows: Row[]): BenchMetric[] =>
+  metrics.map((m) => {
+    const values = rows.map((r) => m.value(r));
+    const max = Math.max(...values.map((v) => v ?? 0));
+    return {
+      title: m.title,
+      icon: m.icon,
+      rows: rows.map((r, i) => {
+        const v = values[i] ?? null;
+        return { label: r.label, value: v === null ? null : m.format(v), width: v === null ? null : share(v, max) };
+      }),
+    };
+  });
+---
+
+<Layout title="visaljs: JavaScript to C" page="home" header={false}>
+  <main class="bg-kumo-canvas">
+    <section class="border-b border-kumo-hairline">
+      <div class="mx-auto flex max-w-3xl flex-col items-center gap-6 px-4 py-24 text-center">
+        <h1 class="text-5xl font-bold tracking-tight text-kumo-strong sm:text-6xl">visaljs</h1>
+        <p class="text-xl text-kumo-default">JavaScript in. <span class="text-kumo-link">A native binary out.</span></p>
+        <p class="text-kumo-subtle">
+          A simple ahead-of-time compiler. It reads your JavaScript, turns it into C, and compiles it to a native binary, all in one step.
+        </p>
+        <div class="flex flex-wrap justify-center gap-3">
+          {GUIDE_PUBLISHED && <LinkButton href="/guide/introduction/" variant="primary" size="lg">Read how it works</LinkButton>}
+          <LinkButton href={REPO} variant={GUIDE_PUBLISHED ? "secondary" : "primary"} size="lg">GitHub</LinkButton>
+        </div>
+      </div>
+    </section>
+
+    <section class="mx-auto max-w-6xl px-4 py-16 lg:px-8">
+      <h2 class="text-center text-2xl font-semibold text-kumo-strong">Smaller binaries, less memory</h2>
+      <p class="mx-auto mt-3 max-w-2xl text-center leading-normal text-kumo-subtle">
+        One small binary to copy and run, with nothing else to install. The same Hono and Express servers, built by visaljs, Bun and Node.
+      </p>
+      <div class="mt-8 grid items-start gap-4 md:grid-cols-2">
+        {
+          cards.map((card) => (
+            <BenchCard title={NAMES[card.framework] ?? card.framework} href={`${REPO}/tree/main/tests/apps/${card.app}`} metrics={benchMetrics(card.rows)} />
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="border-t border-kumo-hairline">
+      <div class="mx-auto max-w-6xl px-4 py-16 lg:px-8">
+        <h2 class="text-center text-2xl font-semibold text-kumo-strong">How to use</h2>
+        <p class="mx-auto mt-3 max-w-2xl text-center leading-normal text-kumo-subtle">
+          A single command: point it at your JavaScript, and visaljs does its best to compile it, npm packages included. All you need is Node 22 or later and a C compiler.
+        </p>
+        <div class="mt-8 grid gap-4 md:grid-cols-2">
+          {
+            usage.map(([title, command, text]) => <UsageCard title={title} command={command} text={text} />)
+          }
+        </div>
+      </div>
+    </section>
+
+    <footer class="border-t border-kumo-hairline">
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-kumo-subtle lg:px-8">
+        <span>visaljs: simple ahead-of-time compiler</span>
+        <nav class="flex gap-4">
+          {GUIDE_PUBLISHED && <a href="/guide/introduction/" class="hover:text-kumo-default">Guide</a>}
+          <a href="/node/" class="hover:text-kumo-default">Node API</a>
+          <a href={REPO} class="hover:text-kumo-default">GitHub</a>
+        </nav>
+      </div>
+    </footer>
+  </main>
+</Layout>

@@ -1,0 +1,29 @@
+1 3 d-default e,f
+1 10 4,5
+5
+hé 3
+zero two
+f g null
+null
+n none k=v rs
+m t key=val undefinedundefined
+1
+3
+42 disk
+one1
+two2
+1v
+a,b
+ABdflt true
+2 1
+1 r 1
+xyz
+target a | get a | target b | get b
+1 next,return
+1 undefined next,next,next
+1,2 next,next,next
+TypeError
+TypeError
+ReferenceError
+TypeError
+function

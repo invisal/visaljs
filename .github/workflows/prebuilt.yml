@@ -1,0 +1,51 @@
+# The prebuilt libraries (cli/scripts/prebuilt.ts): every platform's third-party C libraries,
+# cross-compiled with Zig on the Linux runner. By hand from the Actions tab, for a release:
+# download the artifact into build/prebuilt, and the dist build puts them in the package.
+#
+#   gh run download <run-id> -n prebuilt -D build/prebuilt
+#   node cli/scripts/dist.ts && npm publish ./cli/dist
+name: Prebuilt libraries
+
+on:
+  workflow_dispatch:
+
+env:
+  ZIG: 0.16.0
+
+jobs:
+  build:
+    name: Build with Zig
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Zig
+        run: |
+          dir="$RUNNER_TOOL_CACHE/zig-$ZIG"
+          if [ ! -x "$dir/zig" ]; then
+            mkdir -p "$dir"
+            curl -fsSL "https://ziglang.org/download/$ZIG/zig-x86_64-linux-$ZIG.tar.xz" | tar -xJ -C "$dir" --strip-components=1
+          fi
+          echo "$dir" >> "$GITHUB_PATH"
+      - run: zig version
+      - run: npm run prebuilt
+      # Linux x64's, linked by the runner's own compiler: a program using each library runs as Node's does
+      - name: Check linux-x64's
+        env:
+          VISALJS_PREBUILT: ${{ github.workspace }}/build/prebuilt/linux-x64
+          VISALJS_CACHE: ${{ runner.temp }}/visaljs-prebuilt-check
+        run: |
+          rm -rf "$VISALJS_CACHE"
+          for t in zlib crypto-hash tls13; do
+            node cli/src/cli.ts build "tests/programs/$t.js" -o "$RUNNER_TEMP/$t" --quiet
+            "$RUNNER_TEMP/$t" | diff -u "tests/programs/$t.expected" -
+          done
+          if ls "$VISALJS_CACHE" | grep -vE '^(jsrt|jsnode|regexp-compile)-'; then echo "built a library the package has"; exit 1; fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prebuilt
+          path: build/prebuilt/

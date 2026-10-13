@@ -1,0 +1,431 @@
+exports: Assert, AssertionError, CallTracker, deepEqual, deepStrictEqual, doesNotMatch, doesNotReject, doesNotThrow, equal, fail, ifError, match, notDeepEqual, notDeepStrictEqual, notEqual, notStrictEqual, ok, partialDeepStrictEqual, rejects, strict, strictEqual, throws
+strict exports: Assert, AssertionError, CallTracker, deepEqual, deepStrictEqual, doesNotMatch, doesNotReject, doesNotThrow, equal, fail, ifError, match, notDeepEqual, notDeepStrictEqual, notEqual, notStrictEqual, ok, partialDeepStrictEqual, rejects, strict, strictEqual, throws
+same: true true true true true true true
+passing assertions: ok
+ok(0, message): AssertionError [ERR_ASSERTION] operator=== generated=false
+zero is falsy
+--
+ok(): AssertionError [ERR_ASSERTION] operator=== generated=true
+No value argument passed to `assert.ok()`
+--
+ok(false, Error): TypeError [undefined] 
+my own
+--
+equal: AssertionError [ERR_ASSERTION] operator=== generated=true
+1 == 2
+--
+equal message: AssertionError [ERR_ASSERTION] operator=== generated=false
+one is not two
+--
+notEqual: AssertionError [ERR_ASSERTION] operator=!= generated=true
+'1' != 1
+--
+strictEqual numbers: AssertionError [ERR_ASSERTION] operator=strictEqual generated=true
+Expected values to be strictly equal:
+
+1 !== 2
+
+--
+strictEqual 0 and -0: AssertionError [ERR_ASSERTION] operator=strictEqual generated=true
+Expected values to be strictly equal:
++ actual - expected
+
++ 0
+- -0
+
+--
+strictEqual strings: AssertionError [ERR_ASSERTION] operator=strictEqual generated=true
+Expected values to be strictly equal:
++ actual - expected
+
++ 'hello world, this is long'
+- 'hello there, this is long'
+         ^
+
+--
+strictEqual multiline: AssertionError [ERR_ASSERTION] operator=strictEqual generated=true
+Expected values to be strictly equal:
++ actual - expected
+
++ 'a\nb\nc'
+- 'a\nB\nc'
+      ^
+
+--
+strictEqual objects: AssertionError [ERR_ASSERTION] operator=strictEqual generated=true
+Values have same structure but are not reference-equal:
+
+{
+  a: 1
+}
+
+--
+strictEqual types: AssertionError [ERR_ASSERTION] operator=strictEqual generated=true
+Expected values to be strictly equal:
+
+1 !== '1'
+
+--
+notStrictEqual: AssertionError [ERR_ASSERTION] operator=notStrictEqual generated=true
+Expected "actual" to be strictly unequal to: 5
+--
+notStrictEqual object: AssertionError [ERR_ASSERTION] operator=notStrictEqual generated=true
+Expected "actual" not to be reference-equal to "expected":
+
+{
+  a: 1
+}
+
+--
+deepEqual: AssertionError [ERR_ASSERTION] operator=deepEqual generated=true
+Expected values to be loosely deep-equal:
+
+{
+  a: 1
+}
+
+should loosely deep-equal
+
+{
+  a: 2
+}
+--
+notDeepEqual: AssertionError [ERR_ASSERTION] operator=notDeepEqual generated=true
+Expected "actual" not to be loosely deep-equal to:
+
+{
+  a: 1
+}
+--
+deepStrictEqual objects: AssertionError [ERR_ASSERTION] operator=deepStrictEqual generated=true
+Expected values to be strictly deep-equal:
++ actual - expected
+
+  {
+    a: 1,
+    b: [
+      1,
+      2,
++     3
+-     4
+    ],
+    c: {
+      d: 'e'
+    }
+  }
+
+--
+deepStrictEqual long: AssertionError [ERR_ASSERTION] operator=deepStrictEqual generated=true
+Expected values to be strictly deep-equal:
++ actual - expected
+... Skipped lines
+
+  [
+    0,
+    1,
+    2,
+    3,
+...
+    14,
++   15,
+-   -1,
+    16,
+    17,
+    18,
+    19
+  ]
+
+--
+deepStrictEqual types: AssertionError [ERR_ASSERTION] operator=deepStrictEqual generated=true
+Expected values to be strictly deep-equal:
++ actual - expected
+
+  [
++   1,
+-   '1',
+    2
+  ]
+
+--
+deepStrictEqual prototypes: AssertionError [ERR_ASSERTION] operator=deepStrictEqual generated=true
+Expected values to be strictly deep-equal:
++ actual - expected
+
++ [Object: null prototype] {}
+- {}
+
+--
+deepStrictEqual same shape: AssertionError [ERR_ASSERTION] operator=deepStrictEqual generated=true
+Values have same structure but are not reference-equal:
+
+A {}
+
+--
+deepStrictEqual message: AssertionError [ERR_ASSERTION] operator=deepStrictEqual generated=false
+arrays differ
++ actual - expected
+
+  [
++   1
+-   2
+  ]
+
+--
+notDeepStrictEqual: AssertionError [ERR_ASSERTION] operator=notDeepStrictEqual generated=true
+Expected "actual" not to be strictly deep-equal to:
+
+{
+  a: [
+    1
+  ]
+}
+
+--
+partialDeepStrictEqual: AssertionError [ERR_ASSERTION] operator=partialDeepStrictEqual generated=true
+Expected values to be partially and strictly deep-equal:
++ actual - expected
+
+  {
+    a: 1,
++   b: 2
+-   c: 3
+  }
+
+--
+match: AssertionError [ERR_ASSERTION] operator=match generated=true
+The input did not match the regular expression /x/. Input:
+
+'abc'
+
+--
+match non-string: AssertionError [ERR_ASSERTION] operator=match generated=true
+The "string" argument must be of type string. Received type number (123)
+--
+doesNotMatch: AssertionError [ERR_ASSERTION] operator=doesNotMatch generated=true
+The input was expected to not match the regular expression /b/. Input:
+
+'abc'
+
+--
+ifError: AssertionError [ERR_ASSERTION] operator=ifError generated=false
+ifError got unwanted exception: from a callback
+--
+ifError value: AssertionError [ERR_ASSERTION] operator=ifError generated=false
+ifError got unwanted exception: 'oops'
+--
+fail(): AssertionError [ERR_ASSERTION] operator=fail generated=true
+Failed
+--
+fail(message): AssertionError [ERR_ASSERTION] operator=fail generated=false
+boom
+--
+fail(Error): RangeError [undefined] 
+as is
+--
+missing args: TypeError [ERR_MISSING_ARGS] 
+The "actual" and "expected" arguments must be specified
+--
+strict.equal: AssertionError [ERR_ASSERTION] operator=strictEqual generated=true
+Expected values to be strictly equal:
+
+1 !== '1'
+
+--
+strict.deepEqual: AssertionError [ERR_ASSERTION] operator=deepStrictEqual generated=true
+Expected values to be strictly deep-equal:
++ actual - expected
+
+  {
++   a: 1
+-   a: '1'
+  }
+
+--
+throws: none: AssertionError [ERR_ASSERTION] operator=throws generated=false
+Missing expected exception.
+--
+throws: none with message: AssertionError [ERR_ASSERTION] operator=throws generated=false
+Missing expected exception (TypeError): should have thrown
+--
+throws: ok
+throws: wrong class: AssertionError [ERR_ASSERTION] operator=throws generated=true
+The error is expected to be an instance of "RangeError". Received "TypeError"
+
+Error message:
+
+bad
+--
+throws: wrong regexp: AssertionError [ERR_ASSERTION] operator=throws generated=true
+The input did not match the regular expression /good/. Input:
+
+'Error: bad'
+
+--
+throws: wrong object: AssertionError [ERR_ASSERTION] operator=throws generated=true
+Expected values to be strictly deep-equal:
++ actual - expected
+
+  Comparison {
++   code: 'E1',
+-   code: 'E2',
+    message: 'bad'
+  }
+
+--
+throws: validation false: AssertionError [ERR_ASSERTION] operator=throws generated=true
+The "check" validation function is expected to return "true". Received false
+
+Caught error:
+
+Error: bad
+--
+throws: empty object: TypeError [ERR_INVALID_ARG_VALUE] 
+The argument 'error' may not be an empty object. Received {}
+--
+throws: not a function: TypeError [ERR_INVALID_ARG_TYPE] 
+The "fn" argument must be of type function. Received type string ('nope')
+--
+throws: primitive thrown: AssertionError [ERR_ASSERTION] operator=throws generated=true
+Expected values to be strictly deep-equal:
++ actual - expected
+
++ 'a string'
+- {
+-   message: 'x'
+- }
+
+--
+doesNotThrow: AssertionError [ERR_ASSERTION] operator=doesNotThrow generated=false
+Got unwanted exception.
+Actual message: "thrown"
+--
+doesNotThrow message: AssertionError [ERR_ASSERTION] operator=doesNotThrow generated=false
+Got unwanted exception: it threw
+Actual message: "thrown"
+--
+doesNotThrow other class: TypeError [undefined] 
+rethrown
+--
+ambiguous: TypeError [ERR_AMBIGUOUS_ARGUMENT] 
+The "error/message" argument is ambiguous. The error message "same" is identical to the message.
+--
+NaN: strict true, loose true
+0 / -0: strict false, loose true
+cycles: strict true, loose true
+dates: strict true, loose true
+dates differ: strict false, loose false
+regexps: strict true, loose true
+regexp flags: strict false, loose false
+boxed: strict true, loose true
+boxed vs primitive: strict false, loose false
+errors: strict true, loose true
+error messages: strict false, loose false
+typed arrays: strict true, loose true
+typed array kinds: strict false, loose false
+array buffers: strict true, loose true
+sets of objects: strict true, loose true
+maps with object keys: strict true, loose true
+symbol keys: strict true, loose true
+symbol keys differ: strict false, loose true
+sparse: strict true, loose true
+sparse vs undefined: strict false, loose false
+array extra keys: strict false, loose false
+key order: strict true, loose true
+URLs: strict true, loose true
+weak maps: strict false, loose false
+deepStrictEqual cyclic: AssertionError [ERR_ASSERTION] operator=deepStrictEqual generated=true
+Expected values to be strictly deep-equal:
++ actual - expected
+
++ <ref *1> {
++   name: 'a',
++   self: [Circular *1]
+- {
+-   name: 'b',
+-   self: <ref *1> {
+-     name: 'a',
+-     self: [Circular *1]
+-   }
+  }
+
+--
+deepStrictEqual sets: AssertionError [ERR_ASSERTION] operator=deepStrictEqual generated=true
+Expected values to be strictly deep-equal:
++ actual - expected
+
+  Set(3) {
+    1,
+    2,
++   3
+-   4
+  }
+
+--
+deepStrictEqual maps: AssertionError [ERR_ASSERTION] operator=deepStrictEqual generated=true
+Expected values to be strictly deep-equal:
++ actual - expected
+
+  Map(1) {
++   'a' => 1
+-   'a' => 2
+  }
+
+--
+deepStrictEqual getters: AssertionError [ERR_ASSERTION] operator=deepStrictEqual generated=true
+Expected values to be strictly deep-equal:
++ actual - expected
+
+  {
++   x: [Getter: 1]
+-   x: 2
+  }
+
+--
+constructed: AssertionError ERR_ASSERTION Expected values to be strictly equal: 1 2 strictEqual true AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+1 !== 2
+
+AssertionError without options: TypeError [ERR_INVALID_ARG_TYPE] 
+The "options" argument must be of type object. Received undefined
+--
+custom: custom false
+Assert strict equal: AssertionError [ERR_ASSERTION] operator=strictEqual generated=true
+Expected values to be strictly equal:
+
+1 !== '1'
+
+--
+Assert without new: TypeError [ERR_CONSTRUCT_CALL_REQUIRED] 
+Class constructor Assert cannot be invoked without `new`
+--
+Assert bad diff: TypeError [ERR_INVALID_ARG_VALUE] 
+The property 'options.diff' must be one of: 'simple', 'full'. Received 'huge'
+--
+tracked call: 8
+calls: [{"arguments":[4]}]
+report: ["Expected the calls function to be executed 2 time(s) but was executed 1 time(s)."]
+verify: AssertionError [ERR_ASSERTION] operator=undefined generated=false
+Expected the calls function to be executed 2 time(s) but was executed 1 time(s).
+--
+verified
+rejects: resolved: AssertionError [ERR_ASSERTION]
+Missing expected rejection.
+--
+rejects: wrong class: AssertionError [ERR_ASSERTION]
+The error is expected to be an instance of "RangeError". Received "TypeError"
+
+Error message:
+
+x
+--
+rejects: not a promise: TypeError [ERR_INVALID_RETURN_VALUE]
+Expected instance of Promise to be returned from the "promiseFn" function but got type number (5).
+--
+rejects: bad argument: TypeError [ERR_INVALID_ARG_TYPE]
+The "promiseFn" argument must be of type function or an instance of Promise. Received type number (5)
+--
+doesNotReject: AssertionError [ERR_ASSERTION]
+Got unwanted rejection.
+Actual message: "rejected"
+--
+done

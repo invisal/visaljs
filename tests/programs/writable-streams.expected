@@ -1,0 +1,57 @@
+WritableStream { locked: false, state: 'writable' } false
+WritableStreamDefaultWriter {
+  stream: WritableStream { locked: true, state: 'writable' },
+  close: Promise { <pending> },
+  ready: Promise { undefined },
+  desiredSize: 1
+} 1
+sink a
+sink b
+sink close
+WritableStream { locked: true, state: 'closed' } undefined 0
+TypeError [ERR_INVALID_STATE]: Invalid state: WritableStream is locked | TypeError [ERR_INVALID_STATE]: Invalid state: WritableStream is closed
+desired -1
+slow write 1
+slow write 2
+slow write 3
+desired after 2
+false TypeError [ERR_INVALID_STATE]: Invalid state: Writer has been released
+Error: w | Error: w | Error: w WritableStream { locked: true, state: 'errored' }
+abort why
+undefined WritableStream { locked: false, state: 'errored' }
+WritableStreamDefaultController { stream: WritableStream { locked: false, state: 'writable' } } AbortSignal { aborted: false }
+WritableStream { locked: true, state: 'errored' } TypeError: from the controller
+signal aborted: stop
+TransformStream {
+  readable: ReadableStream { locked: false, state: 'readable', supportsBYOB: false },
+  writable: WritableStream { locked: false, state: 'writable' },
+  backpressure: true
+}
+t X
+t Y
+t !
+1
+0 { value: 1, done: false }
+{ value: 'only', done: false } { value: undefined, done: true } TypeError [ERR_INVALID_STATE]: Invalid state: TransformStream has been terminated
+Error: transform failed | Error: transform failed
+[ 'p', 'q', 'closed' ]
+through pp
+through qq
+dest aborted: src
+Error: src
+Error: dest
+false WritableStream { locked: false, state: 'writable' }
+source canceled: enough
+undefined: undefined
+TypeError [ERR_INVALID_ARG_TYPE]: The "sink" argument must be of type object. Received type number (1) | TypeError [ERR_INVALID_ARG_TYPE]: The "sink.write" property must be of type function. Received type number (1)
+TypeError [ERR_INVALID_ARG_TYPE]: The "transformer.transform" property must be of type function. Received type number (1) | TypeError [ERR_ILLEGAL_CONSTRUCTOR]: Illegal constructor
+TypeError [ERR_INVALID_ARG_TYPE]: The "transform.writable" property must be an instance of WritableStream. Received an instance of Object | TypeError [ERR_INVALID_ARG_TYPE]: The "transform.readable" property must be an instance of ReadableStream. Received undefined
+[ 'locked', 'abort', 'close', 'getWriter' ] [
+  'closed',
+  'desiredSize',
+  'ready',
+  'abort',
+  'close',
+  'releaseLock',
+  'write'
+] [ 'readable', 'writable' ]

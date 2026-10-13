@@ -1,0 +1,34 @@
+1 2 42
+true true false
+true 2 true false
+true false 1
+false { value: 1, writable: false, enumerable: false, configurable: false }
+{
+  get: [Function: get double],
+  set: undefined,
+  enumerable: true,
+  configurable: true
+} undefined
+[ '1', '2', 'b', 'a', Symbol(s) ] [ '0', '1', 'length' ]
+true 1 5
+7 undefined
+false false false
+true true false
+false true
+true true hi child
+false true null
+5 this
+bc
+Point { x: 1, y: 2 } true Named { x: 3, y: 4 } true false
+Named 3
+Object [Reflect] {} [object Reflect] function 2 3
+TypeError: Reflect.get called on non-object
+TypeError: Reflect.ownKeys called on non-object
+TypeError: Function.prototype.apply was called on 1, which is a number and not a function
+TypeError: Function.prototype.apply was called on #<Object>, which is an object and not a function
+TypeError: CreateListFromArrayLike called on non-object
+TypeError: 1 is not a constructor
+TypeError: function max() { [native code] } is not a constructor
+TypeError: #<Object> is not a constructor
+TypeError: Property description must be an object: 1
+TypeError: Object prototype may only be an Object or null: 1

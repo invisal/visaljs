@@ -1,0 +1,18 @@
+d o 72 128512 56832 Hello, World!1null
+true true true true 4 8 4 2
+TypeError
+false ab�c abax x   abc ababab 
+RangeError Invalid count value: -1
+a+b-c a+b+c a[b|a|c|$]c aB1abcc
+_a_a_a_ x [ 'a', 'b', 'c' ] [ 'a', 'b', 'c' ] [ 'a', 'b' ] [ '' ] [] [ 'abc' ] []
+Worl ello Wor llo, World
+äöü ß ǆ i̇ ŉ ÄÖÜ SS Ǆ FI ʼN ας ασς σ ας. STRASSE
+2 1 fi true
+RangeError The normalization form should be one of NFC, NFD, NFKC, NFKD.
+x| x |  x| true trimEnd
+HiA 😀A a\n1b x0y
+RangeError Invalid code point -1
+<a name="&quot;q&quot;">x</a> <b>x</b> <font color="red">x</font> <a href="u">x</a> <sub>x</sub> <big>x</big>
+-1 1 0
+[ 'custom', 'x', 3 ] y->z matched q
+length,name,prototype,fromCharCode,fromCodePoint,raw length,constructor,anchor,at,big,blink,bold,charAt,charCodeAt,codePointAt,concat,endsWith,fontcolor,fontsize,fixed,includes,indexOf,isWellFormed,italics,lastIndexOf,link,localeCompare,match,matchAll,normalize,padEnd,padStart,repeat,replace,replaceAll,search,slice,small,split,strike,sub,substr,substring,sup,startsWith,toString,toWellFormed,trim,trimStart,trimLeft,trimEnd,trimRight,toLocaleLowerCase,toLocaleUpperCase,toLowerCase,toUpperCase,valueOf,Symbol(Symbol.iterator)

@@ -1,0 +1,12 @@
+{
+  "binary-trees": { "args": ["16"] },
+  "fannkuch-redux": { "args": ["10"], "unsupported": "an assignment to an undeclared variable in CommonJS throws ReferenceError instead of creating a global" },
+  "fasta": { "args": ["250000"] },
+  "k-nucleotide": { "stdin": { "kernel": "fasta", "args": ["250000"] }, "unsupported": "node:readline isn't provided" },
+  "mandelbrot": { "args": ["1000"], "unsupported": "process.stdout.write of a Uint8Array writes its numbers as text, not its bytes" },
+  "n-body": { "args": ["5000000"], "unsupported": "an assignment to an undeclared variable in CommonJS throws ReferenceError instead of creating a global" },
+  "pidigits": { "args": ["2000"] },
+  "regex-redux": { "stdin": { "kernel": "fasta", "args": ["250000"] } },
+  "reverse-complement": { "stdin": { "kernel": "fasta", "args": ["250000"] }, "unsupported": "process.stdin isn't provided" },
+  "spectral-norm": { "args": ["2000"] }
+}

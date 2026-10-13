@@ -1,0 +1,1085 @@
+// node:net: TCP and Unix domain socket servers and sockets over the host
+// primitives of node/src/host_net.c (libuv), following Node's lib/net.js: a Socket is a Duplex
+// whose reads start and stop with backpressure, whose end() shuts the write side down, and which
+// closes once both sides are done (allowHalfOpen: false ends the write side when the peer's
+// ends). Host names go through dns.lookup; with several addresses, they are tried in turn, each
+// for autoSelectFamilyAttemptTimeout ms (happy eyeballs, as Node's). Socket timeouts are
+// unref'd timers, refreshed by activity. SocketAddress and BlockList are in
+// internal/socketaddress.js.
+// Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
+import {
+  errnoMessage, errnoName, netAddress, netBind, netCallback, netChmod, netClose, netConnect, netGuessHandle, netKeepAlive, netListen,
+  netNoDelay, netOpen, netOpenFd, netReadStart, netReadStop, netRef, netReset, netShutdown, netWrite, timerUnref,
+} from "visaljs:host";
+import { lookup } from "./dns.js";
+import { EventEmitter } from "./events.js";
+import { bindContext } from "./internal/async_context.js";
+import { codeError, invalidArgType, invalidArgValue, notSupported, outOfRange, validateFunction, validateString } from "./internal/errors.js";
+import { isIP, isIPv4, isIPv6 } from "./internal/net.js";
+import { BlockList, SocketAddress } from "./internal/socketaddress.js";
+import { Duplex } from "./stream.js";
+
+export { BlockList, isIP, isIPv4, isIPv6, SocketAddress };
+
+/* host_net.c's events: cb(event, value) */
+const NET_CONNECTION = 0, NET_READ = 1, NET_CONNECT = 2, NET_WRITE = 3, NET_SHUTDOWN = 4, NET_CLOSE = 5;
+const UV_EOF = -4095;
+const UV_EINVAL = -22;
+const TIMEOUT_MAX = 2 ** 31 - 1;
+
+/* a monotonic clock in ms */
+const now = () => {
+  const [seconds, nanoseconds] = process.hrtime();
+  return seconds * 1e3 + nanoseconds / 1e6;
+};
+
+/* ---- Node's error shapes ------------------------------------------------------------------- */
+
+/** `read ECONNRESET` */
+function errnoException(errno, syscall) {
+  const code = errnoName(errno);
+  const error = new Error(syscall + " " + code);
+  error.errno = errno;
+  error.code = code;
+  error.syscall = syscall;
+  return error;
+}
+
+/* " 127.0.0.1:80", " /tmp/a.sock" or "" */
+const hostPort = (address, port) => (port && port > 0 ? " " + address + ":" + port : address ? " " + address : "");
+
+/** `connect ECONNREFUSED 127.0.0.1:1` */
+function exceptionWithHostPort(errno, syscall, address, port) {
+  const code = errnoName(errno);
+  const error = new Error(syscall + " " + code + hostPort(address, port));
+  error.errno = errno;
+  error.code = code;
+  error.syscall = syscall;
+  error.address = address;
+  if (port) error.port = port;
+  return error;
+}
+
+/** `listen EADDRINUSE: address already in use :::3000` */
+function uvExceptionWithHostPort(errno, syscall, address, port) {
+  const code = errnoName(errno);
+  const error = new Error(syscall + " " + code + ": " + errnoMessage(errno) + hostPort(address, port));
+  error.code = code;
+  error.errno = errno;
+  error.syscall = syscall;
+  error.address = address;
+  if (port) error.port = port;
+  return error;
+}
+
+function validatePort(port, name = "Port", allowZero = true) {
+  if ((typeof port !== "number" && typeof port !== "string") || (typeof port === "string" && port.trim().length === 0) ||
+    +port !== (+port >>> 0) || port > 0xffff || (port === 0 && !allowZero)) {
+    const shown = typeof port === "string" ? "type string ('" + port + "')" : typeof port === "number" ? "type number (" + port + ")" : String(port);
+    throw codeError(RangeError, "ERR_SOCKET_BAD_PORT", name + " should be >= 0 and < 65536. Received " + shown + ".");
+  }
+  return +port;
+}
+
+const toNumber = (x) => ((x = Number(x)) >= 0 ? x : false);
+const isPipeName = (s) => typeof s === "string" && toNumber(s) === false;
+
+const normalizedArgs = Symbol("normalizedArgs");
+
+/* connect(options[, cb]), connect(port[, host][, cb]), connect(path[, cb]), and listen's: [options, cb] */
+function normalizeArgs(args) {
+  let options = {};
+  if (args.length > 0) {
+    const arg0 = args[0];
+    if (typeof arg0 === "object" && arg0 !== null) options = arg0;
+    else if (isPipeName(arg0)) options.path = arg0;
+    else {
+      options.port = arg0;
+      if (args.length > 1 && typeof args[1] === "string") options.host = args[1];
+    }
+  }
+  const cb = args[args.length - 1];
+  const normalized = [options, typeof cb === "function" ? cb : null];
+  normalized[normalizedArgs] = true;
+  return normalized;
+}
+
+let autoSelectFamily = true;
+let autoSelectFamilyAttemptTimeout = 250;
+export const getDefaultAutoSelectFamily = () => autoSelectFamily;
+export function setDefaultAutoSelectFamily(value) {
+  if (typeof value !== "boolean") throw invalidArgType("value", "of type boolean", value);
+  autoSelectFamily = value;
+}
+export const getDefaultAutoSelectFamilyAttemptTimeout = () => autoSelectFamilyAttemptTimeout;
+export function setDefaultAutoSelectFamilyAttemptTimeout(value) {
+  if (typeof value !== "number") throw invalidArgType("value", "of type number", value);
+  if (!Number.isInteger(value) || value < 1 || value > 2147483647) throw outOfRange("value", ">= 1 && <= 2147483647", value);
+  autoSelectFamilyAttemptTimeout = value < 10 ? 10 : value;
+}
+
+/* a descriptor as a handle: Node's createHandle */
+function handleForFd(fd, cb) {
+  const type = netGuessHandle(fd);
+  if (type !== "PIPE" && type !== "TCP") throw codeError(TypeError, "ERR_INVALID_FD_TYPE", "Unsupported fd type: " + type);
+  return netOpen(type === "PIPE", bindContext(cb));
+}
+
+function validateBlockList(value, name) {
+  if (value !== undefined && !BlockList.isBlockList(value)) throw invalidArgType(name, "an net.BlockList", value);
+}
+
+const ipBlocked = (ip) => codeError(Error, "ERR_IP_BLOCKED", "IP(" + ip + ") is blocked by net.BlockList");
+
+/* ---- Socket -------------------------------------------------------------------------------- */
+
+function onReadableStreamEnd() {
+  if (!this.allowHalfOpen) this.write = writeAfterFIN;
+}
+
+/* the peer ended and so did we: writing fails, as Node's writeAfterFIN */
+function writeAfterFIN(chunk, encoding, cb) {
+  if (!this.writableEnded) return Duplex.prototype.write.call(this, chunk, encoding, cb);
+  if (typeof encoding === "function") cb = encoding;
+  const er = new Error("This socket has been ended by the other party");
+  er.code = "EPIPE";
+  if (typeof cb === "function") process.nextTick(cb, er);
+  this.destroy(er);
+  return false;
+}
+
+export class Socket extends Duplex {
+  constructor(options) {
+    if (typeof options === "number") options = { fd: options };
+    else options = { ...options };
+    /* Node's: not half-open by default, 'close' emitted by the socket itself, strings written as given */
+    const allowHalfOpen = Boolean(options.allowHalfOpen);
+    super({ ...options, allowHalfOpen, emitClose: false, autoDestroy: true, decodeStrings: false });
+    this.connecting = false;
+    this._hadError = false;
+    this._handle = null;     /* the host handle's id while open */
+    this._isPipe = false;
+    this._host = null;
+    this._peername = null;
+    this._sockname = null;
+    this._pendingData = null;
+    this._pendingEncoding = "";
+    this.server = null;
+    this._server = null;
+    this._reading = false;
+    this._writeCallbacks = [];  /* callbacks of the writes still pending, in order */
+    this._shutdownCallback = null;
+    this._closeCallback = null;
+    this._closingId = -1;
+    this._resetAndClosing = false;
+    this._bytesRead = 0;
+    this._bytesDispatched = 0;
+    this._noDelay = options.noDelay === true;
+    this._keepAlive = options.keepAlive === true ? [true, ~~((options.keepAliveInitialDelay ?? 0) / 1000)] : null;
+    this._unref = false;
+    this._timer = null;         /* the timeout: an unref'd timer, re-armed for the idle time left when it fires */
+    this._timeoutMs = 0;
+    this._lastActive = 0;
+    this._onread = null;
+    this.timeout = undefined;
+    this.autoSelectFamilyAttemptedAddresses = undefined;
+    validateBlockList(options.blockList, "options.blockList");
+    this.blockList = options.blockList;
+    const onread = options.onread;
+    if (onread !== null && typeof onread === "object" && (typeof onread.buffer === "function" || onread.buffer instanceof Uint8Array) &&
+      typeof onread.callback === "function") {
+      this._onread = onread;
+    }
+    this.on("end", onReadableStreamEnd);
+    if (options.handle !== undefined) {
+      const id = options.handle;
+      this._isPipe = !!options._isPipe;
+      this._attach(id);
+      netCallback(id, bindContext((event, value) => this._onEvent(event, value, id)));
+    } else if (options.fd !== undefined) {
+      const fd = options.fd;
+      if (typeof fd !== "number") throw invalidArgType("options.fd", "of type number", fd);
+      let id;
+      id = handleForFd(fd, (event, value) => this._onEvent(event, value, id));
+      this._isPipe = netGuessHandle(fd) === "PIPE";
+      const err = netOpenFd(id, fd);
+      if (err) {
+        netClose(id);
+        throw errnoException(err, "open");
+      }
+      this._attach(id);
+    }
+    if (this._handle !== null && options.readable !== false) {
+      if (options.pauseOnCreate) this._readableState.flowing = false;
+      else if (!options.manualStart) this.read(0);
+    }
+  }
+
+  _attach(id) {
+    this._handle = id;
+    if (this._noDelay) netNoDelay(id, true);
+    if (this._keepAlive) netKeepAlive(id, true, this._keepAlive[1]);
+    if (this._unref) netRef(id, false);
+  }
+
+  /* the handle's events; reads only from the socket's current handle, 'close' from the one it closed */
+  _onEvent(event, value, id) {
+    switch (event) {
+      case NET_READ:
+        if (id === this._handle) this._onRead(value);
+        break;
+      case NET_WRITE: {
+        const cb = this._writeCallbacks.shift();
+        if (cb) cb(value);
+        break;
+      }
+      case NET_SHUTDOWN: {
+        const cb = this._shutdownCallback;
+        this._shutdownCallback = null;
+        if (cb) cb(value);
+        break;
+      }
+      case NET_CLOSE: {
+        if (id !== this._closingId) break;
+        const cb = this._closeCallback;
+        this._closeCallback = null;
+        if (cb) cb();
+        break;
+      }
+    }
+  }
+
+  /* Node's onStreamRead: bytes are pushed (reading stops when the buffer is full), or with
+   * `onread` copied into its buffer; EOF pushes null */
+  _onRead(value) {
+    if (this.destroyed) return;
+    if (typeof value !== "number") {
+      this._bytesRead += value.byteLength;
+      this._unrefTimer();
+      let more;
+      if (this._onread) more = this._deliver(value);
+      else more = this.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
+      if (!more) {
+        this._reading = false;
+        if (this._handle !== null) {
+          const err = netReadStop(this._handle);
+          if (err) this.destroy(errnoException(err, "read"));
+        }
+      }
+      return;
+    }
+    this._reading = false;
+    if (value !== UV_EOF) {
+      this.destroy(errnoException(value, "read"));
+      return;
+    }
+    this.push(null);
+    this.read(0);
+  }
+
+  /* onread: the bytes in the user's buffer, a buffer's worth at a time; false stops reading */
+  _deliver(bytes) {
+    let more = true;
+    for (let at = 0; at < bytes.length;) {
+      const { buffer, callback } = this._onread;
+      const buf = typeof buffer === "function" ? buffer() : buffer;
+      const n = Math.min(buf.length, bytes.length - at);
+      buf.set(bytes.subarray(at, at + n));
+      at += n;
+      if (callback.call(this, n, buf) === false) more = false;
+    }
+    return more;
+  }
+
+  get pending() {
+    return this._handle === null || this.connecting;
+  }
+
+  get readyState() {
+    if (this.connecting) return "opening";
+    if (this.readable && this.writable) return "open";
+    if (this.readable && !this.writable) return "readOnly";
+    if (!this.readable && this.writable) return "writeOnly";
+    return "closed";
+  }
+
+  get bufferSize() {
+    return this._handle !== null ? this.writableLength : undefined;
+  }
+
+  get bytesRead() {
+    return this._bytesRead;
+  }
+
+  get bytesWritten() {
+    let bytes = this._bytesDispatched;
+    const state = this._writableState;
+    for (const el of state.buffered) bytes += typeof el.chunk === "string" ? Buffer.byteLength(el.chunk, el.encoding) : el.chunk.length;
+    const data = this._pendingData;
+    if (data) bytes += typeof data === "string" ? Buffer.byteLength(data, this._pendingEncoding) : data.length;
+    return bytes;
+  }
+
+  /* a pipe's ends have no address object: Node's Pipe has no getpeername/getsockname */
+  _getpeername() {
+    if (this._handle === null || this._isPipe) return {};
+    if (!this._peername) {
+      const a = netAddress(this._handle, true);
+      if (typeof a === "number") return {};
+      this._peername = { address: a[0], family: a[1], port: a[2] };
+    }
+    return this._peername;
+  }
+
+  _getsockname() {
+    if (this._handle === null || this._isPipe) return {};
+    if (!this._sockname) {
+      const a = netAddress(this._handle, false);
+      if (typeof a === "number") return {};
+      this._sockname = { address: a[0], family: a[1], port: a[2] };
+    }
+    return this._sockname;
+  }
+
+  get remoteAddress() {
+    return this._getpeername().address;
+  }
+
+  get remoteFamily() {
+    return this._getpeername().family;
+  }
+
+  get remotePort() {
+    return this._getpeername().port;
+  }
+
+  get localAddress() {
+    return this._getsockname().address;
+  }
+
+  get localFamily() {
+    return this._getsockname().family;
+  }
+
+  get localPort() {
+    return this._getsockname().port;
+  }
+
+  address() {
+    return this._getsockname();
+  }
+
+  setNoDelay(enable) {
+    const on = enable === undefined ? true : !!enable;
+    this._noDelay = on;
+    if (this._handle !== null) netNoDelay(this._handle, on);
+    return this;
+  }
+
+  setKeepAlive(enable, initialDelay) {
+    const on = !!enable;
+    const seconds = ~~((initialDelay ?? 0) / 1000);
+    this._keepAlive = on ? [true, seconds] : null;
+    if (this._handle !== null) netKeepAlive(this._handle, on, seconds);
+    return this;
+  }
+
+  /* setTimeout(msecs[, callback]): 'timeout' after msecs without activity (0 turns it off) */
+  setTimeout(msecs, callback) {
+    if (this.destroyed) return this;
+    this.timeout = msecs;
+    if (typeof msecs !== "number") throw invalidArgType("msecs", "of type number", msecs);
+    if (!(msecs >= 0 && msecs !== Infinity)) throw outOfRange("msecs", "a non-negative finite number", msecs);
+    if (msecs > TIMEOUT_MAX) msecs = TIMEOUT_MAX;
+    this._clearTimeout();
+    if (msecs === 0) {
+      if (callback !== undefined) {
+        validateFunction(callback, "callback");
+        this.removeListener("timeout", callback);
+      }
+    } else {
+      this._timeoutMs = msecs;
+      this._lastActive = now();
+      this._armTimeout(msecs);
+      if (callback !== undefined) {
+        validateFunction(callback, "callback");
+        this.once("timeout", callback);
+      }
+    }
+    return this;
+  }
+
+  _armTimeout(ms) {
+    this._timer = timerUnref(() => this._onTimer(), ms);
+  }
+
+  _onTimer() {
+    this._timer = null;
+    const idle = now() - this._lastActive;
+    if (idle < this._timeoutMs - 1) this._armTimeout(this._timeoutMs - idle);
+    else this.emit("timeout");
+  }
+
+  _clearTimeout() {
+    if (this._timer !== null) clearTimeout(this._timer);
+    this._timer = null;
+    this._timeoutMs = 0;
+  }
+
+  /* activity: the timeout counts from now (Node's timer.refresh(), which re-arms a fired one) */
+  _unrefTimer() {
+    if (this._timeoutMs) {
+      this._lastActive = now();
+      if (this._timer === null) this._armTimeout(this._timeoutMs);
+    }
+  }
+
+  ref() {
+    this._unref = false;
+    if (this._handle !== null) netRef(this._handle, true);
+    return this;
+  }
+
+  unref() {
+    this._unref = true;
+    if (this._handle !== null) netRef(this._handle, false);
+    return this;
+  }
+
+  _read(n) {
+    if (this.connecting || this._handle === null) this.once("connect", () => this._read(n));
+    else if (!this._reading) {
+      this._reading = true;
+      const err = netReadStart(this._handle);
+      if (err) this.destroy(errnoException(err, "read"));
+    }
+  }
+
+  /* Node's _writeGeneric: a write before the connection waits for it; a write the kernel takes at
+   * once calls back synchronously, as Node's does */
+  _write(data, encoding, cb) {
+    if (this.connecting) {
+      this._pendingData = data;
+      this._pendingEncoding = encoding;
+      const onClose = () => cb(codeError(Error, "ERR_SOCKET_CLOSED_BEFORE_CONNECTION", "Socket closed before the connection was established"));
+      this.once("connect", () => {
+        this.off("close", onClose);
+        this._write(data, encoding, cb);
+      });
+      this.once("close", onClose);
+      return;
+    }
+    this._pendingData = null;
+    if (this._handle === null) {
+      cb(codeError(Error, "ERR_SOCKET_CLOSED", "Socket is closed"));
+      return;
+    }
+    this._unrefTimer();
+    const bytes = typeof data === "string" ? Buffer.from(data, encoding) : data;
+    const r = netWrite(this._handle, bytes);
+    if (r < 0) {
+      this.destroy(errnoException(r, "write"), cb);
+      return;
+    }
+    this._bytesDispatched += bytes.length;
+    if (r === 0) {
+      cb();
+      return;
+    }
+    this._writeCallbacks.push((status) => {
+      if (this.destroyed) cb(null);
+      else if (status < 0) cb(errnoException(status, "write"));
+      else {
+        this._unrefTimer();
+        cb();
+      }
+    });
+  }
+
+  /* end(): shut the write side down once the writes are out */
+  _final(cb) {
+    if (this.pending) {
+      this.once("connect", () => this._final(cb));
+      return;
+    }
+    if (this._handle === null) {
+      cb();
+      return;
+    }
+    const err = netShutdown(this._handle);
+    if (err < 0 && errnoName(err) === "ENOTCONN") cb();  /* by name: libuv's code differs by platform */
+    else if (err < 0) cb(errnoException(err, "shutdown"));
+    else this._shutdownCallback = () => cb();
+  }
+
+  _destroy(exception, cb) {
+    this.connecting = false;
+    this._clearTimeout();
+    if (this._handle !== null) {
+      const isException = !!exception;
+      const id = this._handle;
+      this._closeCallback = () => this.emit("close", isException);
+      this._closingId = id;
+      if (this._resetAndClosing) {
+        this._resetAndClosing = false;
+        const err = netReset(id);
+        if (err) {
+          this.emit("error", errnoException(err, "reset"));
+          netClose(id);
+        }
+      } else {
+        netClose(id);
+      }
+      this._handle = null;
+      this._sockname = null;
+      cb(exception);
+    } else {
+      cb(exception);
+      process.nextTick(() => this.emit("close"));
+    }
+    if (this._server) {
+      this._server._connections--;
+      this._server._emitCloseIfDrained();
+    }
+  }
+
+  destroySoon() {
+    if (this.writable) this.end();
+    if (this.writableFinished) this.destroy();
+    else this.once("finish", this.destroy);
+  }
+
+  /* close with a TCP RST instead of a FIN */
+  resetAndDestroy() {
+    if (this._handle !== null) {
+      if (this._isPipe) throw codeError(TypeError, "ERR_INVALID_HANDLE_TYPE", "This handle type cannot be sent");
+      if (this.connecting) this.once("connect", () => this._reset());
+      else this._reset();
+    } else {
+      this.destroy(codeError(Error, "ERR_SOCKET_CLOSED", "Socket is closed"));
+    }
+    return this;
+  }
+
+  _reset() {
+    this._resetAndClosing = true;
+    return this.destroy();
+  }
+
+  end(data, encoding, callback) {
+    Duplex.prototype.end.call(this, data, encoding, callback);
+    return this;
+  }
+
+  connect(...args) {
+    const [options, cb] = args[0] && args[0][normalizedArgs] ? args[0] : normalizeArgs(args);
+    if (this.write !== Socket.prototype.write) this.write = Socket.prototype.write;
+    if (this.destroyed) throw notSupported("reconnecting a destroyed socket");
+    const { path } = options;
+    if (cb !== null) this.once("connect", cb);
+    this._unrefTimer();
+    this.connecting = true;
+    if (path) {
+      validateString(path, "options.path");
+      this._isPipe = true;
+      this._internalConnect(path);
+    } else {
+      this._lookupAndConnect(options);
+    }
+    return this;
+  }
+
+  _lookupAndConnect(options) {
+    const { localAddress, localPort } = options;
+    const host = options.host || "localhost";
+    let { port, autoSelectFamilyAttemptTimeout: attemptTimeout, autoSelectFamily: selectFamily } = options;
+    if (localAddress && !isIP(localAddress)) throw codeError(TypeError, "ERR_INVALID_IP_ADDRESS", "Invalid IP address: " + localAddress);
+    if (localPort !== undefined && typeof localPort !== "number") throw invalidArgType("options.localPort", "of type number", localPort);
+    if (typeof host !== "string") throw invalidArgType("options.host", "of type string", host);
+    if (typeof port !== "undefined") {
+      if (typeof port !== "number" && typeof port !== "string") throw invalidArgType("options.port", "of type number or string", port);
+      port = validatePort(port);
+    }
+    port |= 0;
+    if (selectFamily !== undefined && typeof selectFamily !== "boolean") throw invalidArgType("options.autoSelectFamily", "of type boolean", selectFamily);
+    selectFamily ??= autoSelectFamily;
+    if (attemptTimeout !== undefined) {
+      if (typeof attemptTimeout !== "number") throw invalidArgType("options.autoSelectFamilyAttemptTimeout", "of type number", attemptTimeout);
+      if (attemptTimeout < 10) attemptTimeout = 10;
+    } else {
+      attemptTimeout = autoSelectFamilyAttemptTimeout;
+    }
+    this._host = host;
+    const addressType = isIP(host);
+    if (addressType) {
+      process.nextTick(() => {
+        if (this.connecting) this._internalConnect(host, port, addressType, localAddress, localPort);
+      });
+      return;
+    }
+    let family = options.family ?? 0;
+    if (family === "IPv4") family = 4;
+    else if (family === "IPv6") family = 6;
+    const dnsopts = { family, all: selectFamily && family === 0 };
+    const lookupFn = options.lookup ?? lookup;
+    if (typeof lookupFn !== "function") throw invalidArgType("options.lookup", "of type function", lookupFn);
+    if (!dnsopts.all) {
+      lookupFn(host, dnsopts, (err, ip, addressType) => {
+        this.emit("lookup", err, ip, addressType, host);
+        if (!this.connecting) return;
+        if (err) process.nextTick(() => this.destroy(err));
+        else if (!isIP(ip)) process.nextTick(() => this.destroy(codeError(TypeError, "ERR_INVALID_IP_ADDRESS", "Invalid IP address: " + ip)));
+        else if (addressType !== 4 && addressType !== 6) {
+          process.nextTick(() => this.destroy(codeError(TypeError, "ERR_INVALID_ADDRESS_FAMILY", "Invalid address family: " + addressType + " " + host + ":" + port)));
+        } else {
+          this._unrefTimer();
+          this._internalConnect(ip, port, addressType, localAddress, localPort);
+        }
+      });
+      return;
+    }
+    lookupFn(host, dnsopts, (err, addresses) => {
+      if (!this.connecting) return;
+      if (err) {
+        this.emit("lookup", err, undefined, undefined, host);
+        process.nextTick(() => this.destroy(err));
+        return;
+      }
+      /* the first address's family first, then alternating, each address once */
+      const byFamily = [[], []];
+      let order;
+      for (const { address, family } of addresses) {
+        this.emit("lookup", null, address, family, host);
+        if (!this.connecting) return;
+        if (isIP(address) && (family === 4 || family === 6)) {
+          order ||= family === 6 ? { 6: 0, 4: 1 } : { 4: 0, 6: 1 };
+          const list = byFamily[order[family]];
+          if (!list.some((a) => a.address === address)) list.push({ address, family });
+        }
+      }
+      if (!byFamily[0].length && !byFamily[1].length) {
+        const first = addresses[0];
+        const error = !first || !isIP(first.address)
+          ? codeError(TypeError, "ERR_INVALID_IP_ADDRESS", "Invalid IP address: " + first?.address)
+          : codeError(TypeError, "ERR_INVALID_ADDRESS_FAMILY", "Invalid address family: " + first.family + " " + host + ":" + port);
+        process.nextTick(() => this.destroy(error));
+        return;
+      }
+      const toAttempt = [];
+      for (let i = 0; i < Math.max(byFamily[0].length, byFamily[1].length); i++) {
+        if (i in byFamily[0]) toAttempt.push(byFamily[0][i]);
+        if (i in byFamily[1]) toAttempt.push(byFamily[1][i]);
+      }
+      this._unrefTimer();
+      if (toAttempt.length === 1) {
+        const { address, family } = toAttempt[0];
+        process.nextTick(() => {
+          if (this.connecting) this._internalConnect(address, port, family, localAddress, localPort);
+        });
+        return;
+      }
+      this.autoSelectFamilyAttemptedAddresses = [];
+      const context = { addresses: toAttempt, current: 0, port, localPort, timeout: attemptTimeout, timer: null, errors: [] };
+      process.nextTick(() => this._connectMultiple(context));
+    });
+  }
+
+  /* a new handle bound to the local address, if any, and connecting: 0 or the failure as Node reports it */
+  _open(address, port, addressType, localAddress, localPort, onConnect) {
+    let id;
+    id = netOpen(this._isPipe, bindContext((event, value) => {
+      if (event === NET_CONNECT) {
+        if (this._handle === id) onConnect(value, id);
+      } else {
+        this._onEvent(event, value, id);
+      }
+    }));
+    this._handle = id;
+    if (!this._isPipe && (localAddress || localPort)) {
+      localAddress ||= addressType === 4 ? "0.0.0.0" : "::";
+      const err = netBind(id, localAddress, localPort | 0, 0);
+      if (err) return exceptionWithHostPort(err, "bind", localAddress, localPort);
+    }
+    const err = netConnect(id, address, port);
+    if (err) return exceptionWithHostPort(err, "connect", address, port);
+    return null;
+  }
+
+  _internalConnect(address, port, addressType, localAddress, localPort) {
+    if (!this._isPipe && this.blockList?.check(address, "ipv" + addressType)) {
+      this.destroy(ipBlocked(address));
+      return;
+    }
+    const ex = this._open(address, port, addressType, localAddress, localPort, (status) => this._afterConnect(status, address, port));
+    if (ex) this.destroy(ex);
+  }
+
+  /* happy eyeballs: each address in turn, the next one after `timeout` ms */
+  _connectMultiple(context, canceled) {
+    clearTimeout(context.timer);
+    if (!this.connecting) return;
+    if (canceled || context.current === context.addresses.length) {
+      if (context.errors.length === 0) {
+        this.destroy(codeError(Error, "ERR_SOCKET_CONNECTION_TIMEOUT", "Socket connection timeout"));
+        return;
+      }
+      const error = new AggregateError(context.errors);
+      error.code = context.errors[0].code;
+      this.destroy(error);
+      return;
+    }
+    const { address, family } = context.addresses[context.current++];
+    const { port, localPort } = context;
+    if (this.blockList?.check(address, "ipv" + family)) {
+      this.destroy(ipBlocked(address));
+      return;
+    }
+    this.autoSelectFamilyAttemptedAddresses.push(address + ":" + port);
+    this.emit("connectionAttempt", address, port, family);
+    const failed = (ex) => {
+      context.errors.push(ex);
+      this.emit("connectionAttemptFailed", address, port, family, ex);
+      this._connectMultiple(context);
+    };
+    const localAddress = localPort ? (family === 4 ? "0.0.0.0" : "::") : undefined;
+    const ex = this._open(address, port, family, localAddress, localPort, (status, id) => {
+      clearTimeout(context.timer);
+      if (status === 0) {
+        this._afterConnect(0, address, port);
+        return;
+      }
+      this._handle = null;
+      netClose(id);
+      failed(exceptionWithHostPort(status, "connect", address, port));
+    });
+    if (ex) {
+      netClose(this._handle);
+      this._handle = null;
+      failed(ex);
+      return;
+    }
+    if (context.current < context.addresses.length) {
+      const id = this._handle;
+      context.timer = setTimeout(() => {
+        if (!this.connecting || this._handle !== id) return;
+        this.emit("connectionAttemptTimeout", address, port, family);
+        this._handle = null;
+        netClose(id);
+        this._connectMultiple(context);
+      }, context.timeout);
+    }
+  }
+
+  _afterConnect(status, address, port) {
+    if (this.destroyed) return;
+    this.connecting = false;
+    this._sockname = null;
+    if (status !== 0) {
+      this.destroy(exceptionWithHostPort(status, "connect", address, port));
+      return;
+    }
+    this._attach(this._handle);
+    this._unrefTimer();
+    this.emit("connect");
+    this.emit("ready");
+    if (this.readable && !this.isPaused()) this.read(0);
+  }
+}
+
+export const Stream = Socket;
+
+/* ---- Server -------------------------------------------------------------------------------- */
+
+export class Server extends EventEmitter {
+  constructor(options, connectionListener) {
+    super();
+    if (typeof options === "function") {
+      connectionListener = options;
+      options = {};
+    } else if (options === undefined || options === null) {
+      options = {};
+    } else if (typeof options !== "object") {
+      throw invalidArgType("options", "of type object", options);
+    }
+    if (typeof connectionListener === "function") this.on("connection", connectionListener);
+    this._connections = 0;
+    this._handle = null;
+    this._isPipe = false;
+    this._pipeName = undefined;
+    this._unref = false;
+    this.allowHalfOpen = options.allowHalfOpen || false;
+    this.pauseOnConnect = !!options.pauseOnConnect;
+    this.noDelay = Boolean(options.noDelay);
+    this.keepAlive = Boolean(options.keepAlive);
+    this.keepAliveInitialDelay = ~~((options.keepAliveInitialDelay ?? 0) / 1000);
+    validateBlockList(options.blockList, "options.blockList");
+    this.blockList = options.blockList;
+  }
+
+  get listening() {
+    return this._handle !== null;
+  }
+
+  /* listen([port[, host[, backlog]]][, cb]), listen(path[, backlog][, cb]), listen(options[, cb]),
+   * listen(handle[, backlog][, cb]): a Server's or Socket's, or { fd } */
+  listen(...args) {
+    let [options, cb] = normalizeArgs(args);
+    if (typeof options.callback === "function") cb = options.callback;
+    if (this._handle !== null) throw codeError(Error, "ERR_SERVER_ALREADY_LISTEN", "Listen method has been called more than once without closing.");
+    if (cb !== null) this.once("listening", cb);
+    const backlogFromArgs = toNumber(args.length > 1 && args[1]) || toNumber(args.length > 2 && args[2]);
+    if (options._handle !== undefined && options._handle !== null) options = options._handle;
+    else if (options.handle !== undefined && options.handle !== null) options = options.handle;
+    const flags = (options.ipv6Only ? 1 : 0) | (options.reusePort ? 2 : 0);
+    if (options.signal !== undefined) this._addAbortSignal(options.signal);
+    if (typeof options === "number") {  /* another Server's or Socket's handle */
+      this._setupListen(null, -1, -1, backlogFromArgs, undefined, 0, options);
+      return this;
+    }
+    if (typeof options.fd === "number" && options.fd >= 0) {
+      this._setupListen(null, null, null, backlogFromArgs, options.fd, 0);
+      return this;
+    }
+    if (args.length === 0 || typeof args[0] === "function" || (typeof options.port === "undefined" && "port" in options) || options.port === null) {
+      options.port = 0;
+    }
+    if (typeof options.port === "number" || typeof options.port === "string") {
+      validatePort(options.port, "options.port");
+      const backlog = options.backlog || backlogFromArgs;
+      if (options.host) this._lookupAndListen(options.port | 0, options.host, backlog, flags);
+      else this._setupListen(null, options.port | 0, 4, backlog, undefined, flags);
+      return this;
+    }
+    if (options.path && isPipeName(options.path)) {
+      this._pipeName = options.path;
+      this._setupListen(this._pipeName, -1, -1, options.backlog || backlogFromArgs, undefined, 0);
+      if (this._handle === null) return this;
+      const mode = (options.readableAll === true ? 1 : 0) | (options.writableAll === true ? 2 : 0);
+      if (mode !== 0) {
+        const err = netChmod(this._handle, mode);
+        if (err) {
+          netClose(this._handle);
+          this._handle = null;
+          throw errnoException(err, "uv_pipe_chmod");
+        }
+      }
+      return this;
+    }
+    if (!("port" in options || "path" in options)) throw invalidArgValue("options", 'must have the property "port" or "path"', options);
+    throw invalidArgValue("options", "is invalid", options);
+  }
+
+  _addAbortSignal(signal) {
+    if (signal === null || typeof signal !== "object" || !("aborted" in signal)) throw invalidArgType("options.signal", "an instance of AbortSignal", signal);
+    const onAborted = () => this.close();
+    if (signal.aborted) process.nextTick(onAborted);
+    else {
+      signal.addEventListener("abort", onAborted, { once: true });
+      this.once("close", () => signal.removeEventListener("abort", onAborted));
+    }
+  }
+
+  _lookupAndListen(port, address, backlog, flags) {
+    lookup(address, (err, ip, addressType) => {
+      if (err) this.emit("error", err);
+      else this._setupListen(ip, port, ip ? addressType : 4, backlog, undefined, flags);
+    });
+  }
+
+  /* Node's createServerHandle: a handle, bound; -errno when it can't be */
+  _createHandle(address, port, addressType, fd, flags) {
+    let id;
+    const cb = (event, value) => {
+      if (event === NET_CONNECTION && this._handle === id) this._onConnection(value);
+    };
+    let isTCP = false;
+    if (typeof fd === "number" && fd >= 0) {
+      try {
+        id = handleForFd(fd, cb);
+      } catch {
+        return UV_EINVAL;
+      }
+      this._isPipe = netGuessHandle(fd) === "PIPE";
+      const err = netOpenFd(id, fd);
+      if (err) {
+        netClose(id);
+        return err;
+      }
+    } else if (port === -1 && addressType === -1) {
+      id = netOpen(true, bindContext(cb));
+      this._isPipe = true;
+    } else {
+      id = netOpen(false, bindContext(cb));
+      this._isPipe = false;
+      isTCP = true;
+    }
+    if (address || port || isTCP) {
+      let err;
+      if (!address) {  /* IPv6 first, dual-stack; IPv4 when there's no IPv6 */
+        err = netBind(id, "::", port, flags);
+        if (err) {
+          netClose(id);
+          return this._createHandle("0.0.0.0", port, 4, undefined, 0);
+        }
+      } else {
+        err = netBind(id, address, port, addressType === 6 ? flags : flags & 2);
+      }
+      if (err) {
+        netClose(id);
+        return err;
+      }
+    }
+    return id;
+  }
+
+  /* Node's setupListenHandle */
+  _setupListen(address, port, addressType, backlog, fd, flags, existing) {
+    let id;
+    if (existing !== undefined) {
+      id = existing;
+      netCallback(id, bindContext((event, value) => {
+        if (event === NET_CONNECTION && this._handle === id) this._onConnection(value);
+      }));
+    } else {
+      let rval = null;
+      if (!address && typeof fd !== "number") {
+        rval = this._createHandle("::", port, 6, fd, flags);
+        if (rval < 0) {
+          rval = null;
+          address = "0.0.0.0";
+          addressType = 4;
+        } else {
+          address = "::";
+          addressType = 6;
+        }
+      }
+      if (rval === null) rval = this._createHandle(address, port, addressType, fd, flags);
+      if (rval < 0) {
+        const error = uvExceptionWithHostPort(rval, "listen", address, port);
+        process.nextTick(() => this.emit("error", error));
+        return;
+      }
+      id = rval;
+    }
+    this._handle = id;
+    const err = netListen(id, backlog || 511);
+    if (err) {
+      const ex = uvExceptionWithHostPort(err, "listen", address, port);
+      netClose(id);
+      this._handle = null;
+      process.nextTick(() => this.emit("error", ex));
+      return;
+    }
+    if (this._unref) netRef(id, false);
+    process.nextTick(() => {
+      if (this._handle !== null) this.emit("listening");
+    });
+  }
+
+  _onConnection(value) {
+    if (value < 0) {
+      this.emit("error", errnoException(value, "accept"));
+      return;
+    }
+    if (this.maxConnections != null && this._connections >= this.maxConnections) {
+      if (this._isPipe) this.emit("drop");
+      else {
+        const data = { __proto__: null };
+        const local = netAddress(value, false), remote = netAddress(value, true);
+        if (typeof local !== "number") [data.localAddress, data.localFamily, data.localPort] = local;
+        if (typeof remote !== "number") [data.remoteAddress, data.remoteFamily, data.remotePort] = remote;
+        this.emit("drop", data);
+      }
+      netClose(value);
+      return;
+    }
+    if (this.blockList && !this._isPipe) {
+      const remote = netAddress(value, true);
+      const addressType = typeof remote === "number" ? 0 : isIP(remote[0]);
+      if (addressType && this.blockList.check(remote[0], "ipv" + addressType)) {
+        netClose(value);
+        return;
+      }
+    }
+    const socket = new Socket({
+      handle: value, _isPipe: this._isPipe, allowHalfOpen: this.allowHalfOpen, pauseOnCreate: this.pauseOnConnect, readable: true, writable: true,
+      noDelay: this.noDelay, keepAlive: this.keepAlive, keepAliveInitialDelay: this.keepAliveInitialDelay * 1000,
+    });
+    this._connections++;
+    socket.server = this;
+    socket._server = this;
+    this.emit("connection", socket);
+  }
+
+  /* { address, family, port }, or a pipe's path */
+  address() {
+    if (this._handle !== null) {
+      const a = netAddress(this._handle, false);
+      if (typeof a === "string") return a;
+      return typeof a === "number" ? {} : { address: a[0], family: a[1], port: a[2] };
+    }
+    if (this._pipeName) return this._pipeName;
+    return null;
+  }
+
+  /* close([cb]): stop accepting; 'close' once the open connections end too */
+  close(cb) {
+    if (typeof cb === "function") {
+      if (this._handle === null) this.once("close", () => cb(codeError(Error, "ERR_SERVER_NOT_RUNNING", "Server is not running.")));
+      else this.once("close", cb);
+    }
+    if (this._handle !== null) {
+      netClose(this._handle);
+      this._handle = null;
+    }
+    this._emitCloseIfDrained();
+    return this;
+  }
+
+  _emitCloseIfDrained() {
+    if (this._handle !== null || this._connections) return;
+    process.nextTick(() => this.emit("close"));
+  }
+
+  getConnections(cb) {
+    process.nextTick(cb, null, this._connections);
+    return this;
+  }
+
+  ref() {
+    this._unref = false;
+    if (this._handle !== null) netRef(this._handle, true);
+    return this;
+  }
+
+  unref() {
+    this._unref = true;
+    if (this._handle !== null) netRef(this._handle, false);
+    return this;
+  }
+
+  [Symbol.asyncDispose]() {
+    if (this._handle === null) return Promise.resolve();
+    return new Promise((resolve, reject) => this.close((err) => (err ? reject(err) : resolve())));
+  }
+}
+
+export function createServer(options, connectionListener) {
+  return new Server(options, connectionListener);
+}
+
+/* connect(port[, host][, cb]), connect(path[, cb]), connect(options[, cb]) */
+export function connect(...args) {
+  const normalized = normalizeArgs(args);
+  const [options] = normalized;
+  const socket = new Socket(options);
+  if (options.timeout) socket.setTimeout(options.timeout);
+  return socket.connect(normalized);
+}
+
+export const createConnection = connect;
+
+export default {
+  BlockList, SocketAddress, isIP, isIPv4, isIPv6, Socket, Stream, Server, connect, createConnection, createServer,
+  getDefaultAutoSelectFamily, setDefaultAutoSelectFamily, getDefaultAutoSelectFamilyAttemptTimeout, setDefaultAutoSelectFamilyAttemptTimeout,
+};
