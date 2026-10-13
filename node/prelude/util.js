@@ -33,14 +33,13 @@ export const formatWithOptions = utilFormatWithOptions;
 export const TextEncoder = globalThis.TextEncoder;
 export const TextDecoder = globalThis.TextDecoder;
 
-/* ANSI escape codes, as Node's internal/util/inspect.js matches them */
+/* ANSI escape codes, as Node's internal/util/inspect.js matches them: an OSC sequence (a terminal
+   hyperlink: ESC ] … BEL) whole, or a CSI sequence */
 const ansi = new RegExp(
-  "[\\u001B\\u009B][[\\]()#;?]*" +
-  "(?:(?:(?:(?:;[-a-zA-Z\\d\\/\\#&.:=?%@~_]+)*" +
-  "|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/\\#&.:=?%@~_]*)*)?" +
-  "(?:\\u0007|\\u001B\\u005C|\\u009C))" +
-  "|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?" +
-  "[\\dA-PR-TZcf-nq-uy=><~]))", "g",
+  "(?:\\u001B\\][\\s\\S]*?(?:\\u0007|\\u001B\\u005C|\\u009C))" +
+  "|[\\u001B\\u009B][[\\]()#;?]*" +
+  "(?:\\d{1,4}(?:[;:]\\d{0,4})*)?" +
+  "[\\dA-PR-TZcf-nq-uy=><~]", "g",
 );
 
 const kCustomPromisifiedSymbol = Symbol.for("nodejs.util.promisify.custom");
@@ -96,6 +95,7 @@ promisify.custom = kCustomPromisifiedSymbol;
 /** The string without its ANSI escape codes (colors, cursor movements, …). */
 export function stripVTControlCharacters(str) {
   validateString(str, "str");
+  if (!str.includes("\u001B") && !str.includes("\u009B")) return str;  /* no escape introducer */
   return str.replace(ansi, "");
 }
 

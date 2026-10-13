@@ -617,19 +617,28 @@ BUILTIN(signal_timeout) {
 /* AbortSignal.any(signals): aborted when any of them is */
 BUILTIN(signal_any) {
     UNUSED_ARGS;
-    JSValue list = ARG(0);
-    JSValueArray *signals = js_is_object(list) ? js_list_from_array_like(ctx, list) : NULL;
-    if (!signals) {
-        if (js_has_exception(ctx)) return JS_EXCEPTION;
-        return js_throw_invalid_arg_type(ctx, "signals", "an instance of Array", list);
-    }
-    for (uint32_t i = 0; i < signals->cell.aux; i++) {
-        if (!as_signal(signals->values[i])) {
-            char name[32];
-            snprintf(name, sizeof name, "signals[%u]", i);
-            return js_throw_invalid_arg_type(ctx, name, "an instance of AbortSignal", signals->values[i]);
+    /* WebIDL's sequence<AbortSignal>, as Node converts it: an iterable object, each value a signal */
+    JSValue iterable = ARG(0);
+    JSValue method = js_is_object(iterable) ? js_get_value(ctx, iterable, JS_SYMBOL(iterator)) : JS_UNDEFINED;
+    if (js_is_exception(method)) return method;
+    if (!js_is_callable(method))
+        return js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE", "signals cannot be converted to sequence.");
+    JSValue list = js_new_array(ctx, 4);
+    JSValue rec = js_iter_start(ctx, iterable);
+    if (js_is_exception(rec)) return rec;
+    for (uint32_t i = 0;; i++) {
+        JSValue v = js_iter_next(ctx, rec);
+        if (js_is_exception(v)) return v;
+        if (js_is_empty(v)) break;
+        if (!as_signal(v)) {
+            JSValue err = js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE", "signals[%u] is not of type AbortSignal.", i);
+            js_iter_close_throw(ctx, rec);
+            return err;
         }
+        if (js_array_append(ctx, list, v) < 0) return JS_EXCEPTION;
     }
+    JSValueArray *signals = js_list_from_array_like(ctx, list);
+    if (!signals) return JS_EXCEPTION;
     JSValue result = new_signal(ctx);
     for (uint32_t i = 0; i < signals->cell.aux; i++) {
         AbortSignalObject *s = as_signal(signals->values[i]);

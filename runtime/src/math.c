@@ -9,6 +9,7 @@
 
 #include "ieee754.h"
 #include "internal.h"
+#include "js_buffer.h"
 #include "js_convert.h"
 #include "js_exception.h"
 #include "js_ops.h"
@@ -58,6 +59,10 @@ MATH1(math_exp, js_ieee754_exp)
 MATH1(math_expm1, js_ieee754_expm1)
 MATH1(math_floor, floor)
 MATH1(math_fround, js_fround)
+
+/* Math.f16round: the nearest half-precision float, as Float16Array stores it */
+static double js_f16round(double x) { return js_from_float16(js_to_float16(x)); }
+MATH1(math_f16round, js_f16round)
 MATH1(math_log, js_ieee754_log)
 MATH1(math_log1p, js_ieee754_log1p)
 MATH1(math_log10, js_ieee754_log10)
@@ -232,6 +237,7 @@ static const JSBuiltin math_entries[] = {
     JS_BUILTIN_NUMBER("PI", 3.141592653589793, 0),
     JS_BUILTIN_NUMBER("SQRT1_2", 0.7071067811865476, 0),
     JS_BUILTIN_NUMBER("SQRT2", 1.4142135623730951, 0),
+    JS_BUILTIN_FN("f16round", math_f16round, 1),  /* after the constants, where V8 13.6 adds it */
     JS_BUILTIN_SYMBOL_STRING(toStringTag, "Math", JS_PROP_CONFIGURABLE),
 };
 

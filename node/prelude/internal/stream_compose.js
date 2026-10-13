@@ -60,7 +60,6 @@ function compose(...streams) {
   const readable = !!tail._readableState && tail.readable !== false;
   let ondrain = null;
   let onfinish = null;
-  let onreadable = null;
   let onclose = null;
   const d = new Duplex({
     writableObjectMode: !!head.writableObjectMode,
@@ -96,25 +95,18 @@ function compose(...streams) {
     });
   }
   if (readable) {
-    tail.on("readable", () => {
-      const cb = onreadable;
-      onreadable = null;
-      if (cb) cb();
+    /* the last stream's chunks as it emits them, paused while the Duplex's buffer is full (Node
+       24's; 22's read() drained it, joining the chunks) */
+    d._read = () => {
+      tail.resume();
+    };
+    tail.on("data", (chunk) => {
+      if (!d.push(chunk)) tail.pause();
     });
     tail.on("end", () => d.push(null));
-    d._read = () => {
-      for (;;) {
-        const chunk = tail.read();
-        if (chunk === null) {
-          onreadable = d._read;
-          return;
-        }
-        if (!d.push(chunk)) return;
-      }
-    };
   }
   d._destroy = (err, callback) => {
-    onreadable = ondrain = onfinish = null;
+    ondrain = onfinish = null;
     if (tail.destroyed) callback(err);
     else {
       onclose = callback;
