@@ -15,6 +15,7 @@
 #include "js_buffer.h"
 #include "js_convert.h"
 #include "js_exception.h"
+#include "js_host.h"
 #include "js_ops.h"
 #include "js_promise.h"
 #include "js_web.h"
@@ -51,6 +52,14 @@ static JSValue dom_error(JSContext *ctx, const char *name, const char *message) 
 
 static JSValue op_failed(JSContext *ctx) {
     return dom_error(ctx, "OperationError", "The operation failed for an operation-specific reason");
+}
+
+/* A key usage the algorithm doesn't allow: "Unsupported key usage for AES-GCM key" (Node 24's
+ * wording, the algorithm's name) */
+static JSValue usage_error(JSContext *ctx, const char *algorithm) {
+    char m[96];
+    snprintf(m, sizeof m, "Unsupported key usage for %s key", algorithm);
+    return dom_error(ctx, "SyntaxError", m);
 }
 
 static JSValue array_buffer_of(JSContext *ctx, const uint8_t *p, size_t n) {
@@ -213,7 +222,7 @@ static int arg_enum(Call *c, JSValue v, const char *const *values, int count, co
     size_t n = js_view_to_utf8(js_string_view(c->ctx, s), shown, sizeof shown - 1);
     shown[n < sizeof shown - 1 ? n : sizeof shown - 1] = 0;
     return fail(js_throw_node_error(c->ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_VALUE",
-                                    "Failed to execute '%s' on 'SubtleCrypto': %s value '%s' is not a valid enum value of type %s.",
+                                    "Failed to execute '%s' on 'SubtleCrypto': %s '%s' is not a valid enum value of type %s.",
                                     c->op, where, shown, type));
 }
 
@@ -235,7 +244,7 @@ static JSValue arg_usages(Call *c, JSValue v, int i, uint16_t *mask) {
     if (js_is_exception(method)) return method;
     if (!js_is_callable(method))
         return js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE",
-                                   "Failed to execute '%s' on 'SubtleCrypto': %s argument can not be converted to sequence.", c->op,
+                                   "Failed to execute '%s' on 'SubtleCrypto': %s argument cannot be converted to sequence.", c->op,
                                    ORDINALS[i]);
     JSValue out = js_new_array(ctx, 4);
     JSValue rec = js_iter_start(ctx, v);
@@ -246,7 +255,7 @@ static JSValue arg_usages(Call *c, JSValue v, int i, uint16_t *mask) {
         if (js_is_exception(u)) return u;
         if (js_is_empty(u)) break;
         char where[64];
-        snprintf(where, sizeof where, "%s argument, index %u", ORDINALS[i], n);
+        snprintf(where, sizeof where, "%s argument[%u]", ORDINALS[i], n);
         int k = arg_enum(c, u, USAGES, 8, "KeyUsage", where);
         if (k < 0) {
             js_iter_close_throw(ctx, rec);
@@ -291,7 +300,7 @@ static int arg_jwk(Call *c, JSValue v, JWK *j) {
     if (js_is_nullish(v)) return 0;
     if (!js_is_object(v))
         return fail(js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE",
-                                        "Failed to execute '%s' on 'SubtleCrypto': 2nd argument can not be converted to a dictionary",
+                                        "Failed to execute '%s' on 'SubtleCrypto': 2nd argument cannot be converted to a dictionary",
                                         c->op));
     for (int i = 0; i < JWK_COUNT; i++) {
         JSValue m = js_get_value(ctx, v, js_atom_from_cstr(ctx, JWK_NAMES[i]));
@@ -304,8 +313,8 @@ static int arg_jwk(Call *c, JSValue v, JWK *j) {
             if (js_is_exception(method)) return -1;
             if (!js_is_callable(method))
                 return fail(js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE",
-                                                "Failed to execute '%s' on 'SubtleCrypto': 'key_ops' of 'JsonWebKey' (2nd argument) "
-                                                "can not be converted to sequence.", c->op));
+                                                "Failed to execute '%s' on 'SubtleCrypto': key_ops in 2nd argument "
+                                                "cannot be converted to sequence.", c->op));
             JSValue ops = js_new_array(ctx, 4), rec = js_iter_start(ctx, m);
             if (js_is_exception(rec)) return -1;
             for (;;) {
@@ -467,8 +476,9 @@ static void params_free(Params *p) {
 static uint8_t params_alg(const Params *p) { return REGISTRY[p->entry].alg; }
 
 static JSValue throw_member(JSContext *ctx, const char *code, Dict d, Member m, const char *what) {
-    return js_throw_node_error(ctx, JS_TYPE_ERROR, code, "Failed to normalize algorithm: '%s' of '%s' (passed algorithm) %s",
-                               MEMBER_NAMES[m], DICTS[d].name, what);
+    (void)d;  /* Node 24 names only the member */
+    return js_throw_node_error(ctx, JS_TYPE_ERROR, code, "Failed to normalize algorithm: %s in passed algorithm %s",
+                               MEMBER_NAMES[m], what);
 }
 
 /* An [EnforceRange] integer member of at most `max`. 0, or -1. */
@@ -494,7 +504,7 @@ static int algorithm_name(JSContext *ctx, JSValue alg, char *name, size_t cap) {
         if (js_is_exception(n)) return -1;
         if (js_is_undefined(n))
             return fail(js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_MISSING_OPTION",
-                                            "Failed to normalize algorithm: passed algorithm can not be converted to 'Algorithm' "
+                                            "Failed to normalize algorithm: passed algorithm cannot be converted to 'Algorithm' "
                                             "because 'name' is required in 'Algorithm'."));
     }
     JSValue s = js_to_string(ctx, n);
@@ -530,7 +540,7 @@ static int normalize(JSContext *ctx, JSValue alg, Op op, Params *p) {
         if (js_is_undefined(v)) {
             if (DICTS[d].required & (1u << i))
                 return fail(js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_MISSING_OPTION",
-                                                "Failed to normalize algorithm: passed algorithm can not be converted to '%s' "
+                                                "Failed to normalize algorithm: passed algorithm cannot be converted to '%s' "
                                                 "because '%s' is required in '%s'.", DICTS[d].name, MEMBER_NAMES[m], DICTS[d].name));
             continue;
         }
@@ -610,20 +620,20 @@ static JSValue hash_object(JSContext *ctx, const JSHashAlg *hash) {
 
 static bool has_any_not_in(uint16_t mask, uint16_t allowed) { return (mask & ~allowed) != 0; }
 
-/* HMAC: the key's object, as Node orders it: { name, hash, length } on import, { name, length,
- * hash } when generated. */
-static JSValue hmac_algorithm(JSContext *ctx, const JSHashAlg *hash, uint32_t length, bool generated) {
+/* HMAC: the key's object, as Node 24 orders it: { name, length, hash } */
+static JSValue hmac_algorithm(JSContext *ctx, const JSHashAlg *hash, uint32_t length) {
     JSValue o = js_new_object(ctx);
     put(ctx, o, "name", str(ctx, "HMAC"));
-    if (generated) put(ctx, o, "length", js_number(length));
+    put(ctx, o, "length", js_number(length));
     put(ctx, o, "hash", hash_object(ctx, hash));
-    if (!generated) put(ctx, o, "length", js_number(length));
     return o;
 }
 
 static JSValue import_hmac(JSContext *ctx, int format, JSValue key_data, const JWK *jwk, Params *p, bool extractable, JSValue usages,
                            uint16_t mask) {
-    if (has_any_not_in(mask, JS_USAGE_SIGN | JS_USAGE_VERIFY)) return dom_error(ctx, "SyntaxError", "Unsupported key usage for an HMAC key");
+    /* HmacImportParams' normalization comes first */
+    if (p->has_length && p->length == 0) return dom_error(ctx, "DataError", "HmacImportParams.length cannot be 0");
+    if (has_any_not_in(mask, JS_USAGE_SIGN | JS_USAGE_VERIFY)) return dom_error(ctx, "SyntaxError", "Unsupported key usage for HMAC key");
     Bytes raw = { 0 };
     if (format == FORMAT_RAW) {
         bytes_copy(&raw, key_data);
@@ -650,17 +660,21 @@ static JSValue import_hmac(JSContext *ctx, int format, JSValue key_data, const J
         return dom_error(ctx, "NotSupportedError", m);
     }
     uint32_t length = (uint32_t)raw.n * 8;
-    if (length == 0 || (p->has_length && p->length == 0)) {
+    if (length == 0) {
         bytes_free(&raw);
         return dom_error(ctx, "DataError", "Zero-length key is not supported");
     }
-    if (p->has_length && p->length != length) {
-        bytes_free(&raw);
-        return dom_error(ctx, "NotSupportedError", "Unsupported algorithm.length");
+    if (p->has_length) {  /* in whole bytes the key's; past a byte boundary, the key cut to that many bits */
+        if ((p->length + 7) / 8 != raw.n) {
+            bytes_free(&raw);
+            return dom_error(ctx, "DataError", "Invalid key length");
+        }
+        if (p->length % 8) raw.p[raw.n - 1] &= (uint8_t)(0xFF << (8 - p->length % 8));
+        length = p->length;
     }
     JSValue data = js_new_secret_key(ctx, raw.p, raw.n);
     bytes_free(&raw);
-    return js_new_crypto_key(ctx, data, JS_WEB_HMAC, p->hash, length, hmac_algorithm(ctx, p->hash, length, false), usages, mask,
+    return js_new_crypto_key(ctx, data, JS_WEB_HMAC, p->hash, length, hmac_algorithm(ctx, p->hash, length), usages, mask,
                              extractable);
 }
 
@@ -717,7 +731,7 @@ static JSValue aes_algorithm(JSContext *ctx, const char *name, uint32_t length) 
 static JSValue import_aes(JSContext *ctx, int format, JSValue key_data, const JWK *jwk, Params *p, bool extractable, JSValue usages,
                           uint16_t mask) {
     uint8_t alg = params_alg(p);
-    if (has_any_not_in(mask, aes_usages(alg))) return dom_error(ctx, "SyntaxError", "Unsupported key usage for an AES key");
+    if (has_any_not_in(mask, aes_usages(alg))) return usage_error(ctx, p->name);
     Bytes raw = { 0 };
     if (format == FORMAT_RAW) {
         bytes_copy(&raw, key_data);
@@ -853,8 +867,7 @@ static JSValue import_asym(JSContext *ctx, int format, JSValue key_data, const J
     }
     bool is_public = format == FORMAT_SPKI || format == FORMAT_RAW || (format == FORMAT_JWK && js_is_undefined(jwk->m[JWK_D]));
     if (has_any_not_in(mask, asym_usages(alg, is_public))) {
-        snprintf(m, sizeof m, "Unsupported key usage for a%s %s key", is_rsa_alg(alg) ? "n" : "", name);
-        return dom_error(ctx, "SyntaxError", m);
+        return usage_error(ctx, name);
     }
     JSValue data = JS_UNDEFINED;
     if (format == FORMAT_SPKI || format == FORMAT_PKCS8) {
@@ -869,8 +882,7 @@ static JSValue import_asym(JSContext *ctx, int format, JSValue key_data, const J
         js_buffer_source_bytes(key_data, &bp, &bn);
         JSKeyPart parts[JS_KEY_PARTS] = { { 0 } };
         if (is_okp_alg(alg)) {
-            snprintf(m, sizeof m, "%s raw keys must be exactly 32-bytes", name);
-            if (bn != 32) return dom_error(ctx, "DataError", m);
+            if (bn != 32) return dom_error(ctx, "DataError", "Invalid keyData");
             parts[JS_EC_PUB].p = bp, parts[JS_EC_PUB].n = 32;
         } else {
             if (!js_ec_point_uncompressed(curve, bp, bn, point)) return dom_error(ctx, "DataError", "Invalid keyData");
@@ -1013,7 +1025,7 @@ static JSValue generate_asym(JSContext *ctx, Params *p, bool extractable, uint16
         for (size_t i = 0; i < en; i++) exponent = exponent << 8 | e[i];
         uint16_t allowed = alg == JS_WEB_RSA_OAEP ? JS_USAGE_ENCRYPT | JS_USAGE_DECRYPT | JS_USAGE_WRAP_KEY | JS_USAGE_UNWRAP_KEY
                                                   : JS_USAGE_SIGN | JS_USAGE_VERIFY;
-        if (has_any_not_in(mask, allowed)) return dom_error(ctx, "SyntaxError", "Unsupported key usage for a RSA key");
+        if (has_any_not_in(mask, allowed)) return usage_error(ctx, name);
         if (js_key_generate_rsa(ctx, false, p->modulus_length, exponent, &priv)) return op_failed(ctx);
     } else {
         int curve = is_okp_alg(alg) ? okp_curve(alg) : JS_EC_X25519;
@@ -1021,9 +1033,7 @@ static JSValue generate_asym(JSContext *ctx, Params *p, bool extractable, uint16
             curve = js_ec_curve_by_jwk(p->named_curve);
             if (curve < 0) return dom_error(ctx, "NotSupportedError", "Unrecognized namedCurve");
         }
-        char m[64];
-        snprintf(m, sizeof m, "Unsupported key usage for an %s key", name);
-        if (has_any_not_in(mask, asym_usages(alg, true) | asym_usages(alg, false))) return dom_error(ctx, "SyntaxError", m);
+        if (has_any_not_in(mask, asym_usages(alg, true) | asym_usages(alg, false))) return usage_error(ctx, name);
         if (js_key_generate_ec(ctx, curve, &priv)) return op_failed(ctx);
     }
     uint16_t pub_mask, priv_mask;
@@ -1041,7 +1051,7 @@ static JSValue generate_asym(JSContext *ctx, Params *p, bool extractable, uint16
 /* importKey's steps after the `this` check, for subtle.importKey and deriveKey. */
 static JSValue import_key(JSContext *ctx, uint32_t argc, const JSValue *argv) {
     Call c = { ctx, "importKey" };
-    if (argc < 4) return throw_missing_args(&c, 4, argc);
+    if (argc < 5) return throw_missing_args(&c, 5, argc);
     int format = arg_format(&c, argv[0], 0);
     if (format < 0) return JS_EXCEPTION;
     JWK jwk;
@@ -1110,7 +1120,7 @@ static JSValue export_key(JSContext *ctx, uint32_t argc, const JSValue *argv) {
         snprintf(m, sizeof m, "%s key export is not supported", k->alg == JS_WEB_PBKDF2 ? "PBKDF2" : "HKDF");
         return dom_error(ctx, "NotSupportedError", m);
     }
-    if (!k->extractable) return dom_error(ctx, "InvalidAccessException", "key is not extractable");
+    if (!k->extractable) return dom_error(ctx, "InvalidAccessError", "key is not extractable");
     if (is_asym_alg(k->alg)) return export_asym(ctx, format, k);
     JSKeyData *d = js_key_data(k->data);
     if (format == FORMAT_RAW) return array_buffer_of(ctx, d->bytes, d->len);
@@ -1135,6 +1145,66 @@ BUILTIN(subtle_export_key) {
     return settled(ctx, export_key(ctx, argc, argv));
 }
 
+/* ---- Node 24's experimental methods: getPublicKey, and ML-KEM's encapsulation ---------------- */
+
+/* Node's emitExperimentalWarning: once per feature */
+static void experimental(JSContext *ctx, bool *warned, const char *feature) {
+    if (*warned) return;
+    *warned = true;
+    char m[96];
+    snprintf(m, sizeof m, "%s is an experimental feature and might change at any time", feature);
+    js_emit_warning(ctx, str(ctx, m), "ExperimentalWarning", NULL);
+}
+
+/* getPublicKey(key, keyUsages): the public key of a private one, extractable */
+static JSValue get_public_key(JSContext *ctx, uint32_t argc, const JSValue *argv) {
+    static bool warned;
+    experimental(ctx, &warned, "The getPublicKey Web Crypto API method");
+    Call c = { ctx, "getPublicKey" };
+    if (argc < 2) return throw_missing_args(&c, 2, argc);
+    JSCryptoKey *k = arg_key(&c, argv[0], 0);
+    if (!k) return JS_EXCEPTION;
+    uint16_t mask;
+    JSValue usages = arg_usages(&c, argv[1], 1, &mask);
+    if (js_is_exception(usages)) return usages;
+    int type = js_key_data(k->data)->type;
+    if (type != JS_KEY_PRIVATE)
+        return dom_error(ctx, type == JS_KEY_SECRET ? "NotSupportedError" : "InvalidAccessError", "key must be a private key");
+    JSValue data = js_key_public(ctx, k->data);
+    return js_new_crypto_key(ctx, data, k->alg, k->hash, k->length, k->algorithm, usages, mask, true);
+}
+
+/* encapsulateBits/Key and decapsulateBits/Key: only ML-KEM has them, which visaljs doesn't provide,
+ * so every algorithm is one Node doesn't recognize for them. `need` arguments, the key at `key_at`. */
+static JSValue kem_method(JSContext *ctx, const char *op, bool *warned, uint32_t need, int key_at, uint32_t argc, const JSValue *argv) {
+    char feature[64];
+    snprintf(feature, sizeof feature, "The %s Web Crypto API method", op);
+    experimental(ctx, warned, feature);
+    Call c = { ctx, op };
+    if (argc < need) return throw_missing_args(&c, need, argc);
+    if (arg_algorithm(&c, argv[0], 0) < 0) return JS_EXCEPTION;
+    if (!arg_key(&c, argv[key_at], key_at)) return JS_EXCEPTION;
+    return dom_error(ctx, "NotSupportedError", "Unrecognized algorithm name");
+}
+
+#define KEM_METHOD(fn, op, need, key_at)                                       \
+    BUILTIN(fn) {                                                              \
+        (void)callee, (void)new_target;                                        \
+        static bool warned;                                                    \
+        if (!is_subtle(this_val)) return rejected(ctx, js_throw_invalid_this(ctx, "SubtleCrypto")); \
+        return settled(ctx, kem_method(ctx, op, &warned, need, key_at, argc, argv)); \
+    }
+KEM_METHOD(subtle_encapsulate_bits, "encapsulateBits", 2, 1)
+KEM_METHOD(subtle_encapsulate_key, "encapsulateKey", 5, 1)
+KEM_METHOD(subtle_decapsulate_bits, "decapsulateBits", 3, 1)
+KEM_METHOD(subtle_decapsulate_key, "decapsulateKey", 6, 1)
+
+BUILTIN(subtle_get_public_key) {
+    (void)callee, (void)new_target;
+    if (!is_subtle(this_val)) return rejected(ctx, js_throw_invalid_this(ctx, "SubtleCrypto"));
+    return settled(ctx, get_public_key(ctx, argc, argv));
+}
+
 static JSValue generate_key(JSContext *ctx, uint32_t argc, const JSValue *argv) {
     Call c = { ctx, "generateKey" };
     if (argc < 3) return throw_missing_args(&c, 3, argc);
@@ -1155,25 +1225,27 @@ static JSValue generate_key(JSContext *ctx, uint32_t argc, const JSValue *argv) 
     uint8_t alg = params_alg(&p);
     uint32_t length;
     if (alg == JS_WEB_HMAC) {
+        /* HmacKeyGenParams' normalization first; any other length, in bits, is the key's */
+        if (p.has_length && p.length == 0) return dom_error(ctx, "OperationError", "HmacKeyGenParams.length cannot be 0");
         length = p.has_length ? p.length : (uint32_t)p.hash->block_len * 8;
-        if (has_any_not_in(mask, JS_USAGE_SIGN | JS_USAGE_VERIFY)) return dom_error(ctx, "SyntaxError", "Unsupported key usage for an HMAC key");
-        if (length == 0) return dom_error(ctx, "DataError", "Zero-length key is not supported");
-        if (length % 8) return dom_error(ctx, "NotSupportedError", "Unsupported algorithm.length");
+        if (has_any_not_in(mask, JS_USAGE_SIGN | JS_USAGE_VERIFY)) return dom_error(ctx, "SyntaxError", "Unsupported key usage for HMAC key");
     } else {
         length = p.length;
         if (length != 128 && length != 192 && length != 256)
             return dom_error(ctx, "OperationError", "AES key length must be 128, 192, or 256 bits");
-        if (has_any_not_in(mask, aes_usages(alg))) return dom_error(ctx, "SyntaxError", "Unsupported key usage for an AES key");
+        if (has_any_not_in(mask, aes_usages(alg))) return usage_error(ctx, p.name);
     }
     JSValue usages = usages_array(ctx, given);
     if (js_is_exception(usages)) return usages;
-    uint8_t *bytes = malloc(length / 8);
+    size_t n = (length + 7) / 8;
+    uint8_t *bytes = malloc(n);
     if (!bytes) js_fatal("out of memory in crypto");
-    js_crypto_random(bytes, length / 8);
-    JSValue data = js_new_secret_key(ctx, bytes, length / 8);
+    js_crypto_random(bytes, n);
+    if (length % 8) bytes[n - 1] &= (uint8_t)(0xFF << (8 - length % 8));
+    JSValue data = js_new_secret_key(ctx, bytes, n);
     free(bytes);
     if (js_array_length(js_as_object(usages)) == 0) return dom_error(ctx, "SyntaxError", "Usages cannot be empty when creating a key.");
-    JSValue algorithm = alg == JS_WEB_HMAC ? hmac_algorithm(ctx, p.hash, length, true) : aes_algorithm(ctx, p.name, length);
+    JSValue algorithm = alg == JS_WEB_HMAC ? hmac_algorithm(ctx, p.hash, length) : aes_algorithm(ctx, p.name, length);
     return js_new_crypto_key(ctx, data, alg, p.hash, length, algorithm, usages, mask, extractable);
 }
 
@@ -1271,15 +1343,19 @@ BUILTIN(subtle_verify) {
 /* ---- deriveBits and deriveKey ------------------------------------------------------------------ */
 
 /* WebIDL's unsigned long (no [EnforceRange]): modulo 2^32. */
-static int to_ulong(JSContext *ctx, JSValue v, uint32_t *out) {
+/* An [EnforceRange] unsigned long argument: finite, and in range once truncated. 0, or -1. */
+static int arg_ulong_enforced(Call *c, JSValue v, int i, uint32_t *out) {
     double x;
-    if (js_to_number(ctx, &x, v) < 0) return -1;
-    if (!isfinite(x) || x == 0) {
-        *out = 0;
-        return 0;
-    }
-    x = fmod(trunc(x), 4294967296.0);
-    if (x < 0) x += 4294967296.0;
+    if (js_to_number(c->ctx, &x, v) < 0) return -1;
+    if (!isfinite(x))
+        return fail(js_throw_node_error(c->ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE",
+                                        "Failed to execute '%s' on 'SubtleCrypto': %s argument is not a finite number.", c->op,
+                                        ORDINALS[i]));
+    x = trunc(x);
+    if (x < 0 || x > 4294967295.0)
+        return fail(js_throw_node_error(c->ctx, JS_TYPE_ERROR, "ERR_OUT_OF_RANGE",
+                                        "Failed to execute '%s' on 'SubtleCrypto': %s argument is outside the expected range of 0 to "
+                                        "4294967295.", c->op, ORDINALS[i]));
     *out = (uint32_t)x;
     return 0;
 }
@@ -1288,12 +1364,9 @@ static int to_ulong(JSContext *ctx, JSValue v, uint32_t *out) {
 static JSValue ecdh_bits(JSContext *ctx, Params *p, JSCryptoKey *k, bool has_length, uint32_t length) {
     JSCryptoKey *pub = p->public_key;
     JSKeyData *pd = js_key_data(pub->data), *d = js_key_data(k->data);
-    char m[64];
     if (pd->type != JS_KEY_PUBLIC) return dom_error(ctx, "InvalidAccessError", "algorithm.public must be a public key");
-    if (pub->alg != k->alg) {
-        snprintf(m, sizeof m, "algorithm.public must be an %s key", web_alg_name(k->alg));
-        return dom_error(ctx, "InvalidAccessError", m);
-    }
+    if (pub->alg != params_alg(p)) return dom_error(ctx, "InvalidAccessError", "key algorithm mismatch");
+    if (pub->alg != k->alg) return dom_error(ctx, "InvalidAccessError", "The public and private keys must be of the same type");
     if (pd->curve != d->curve) return dom_error(ctx, "InvalidAccessError", "Named curve mismatch");
     uint8_t secret[66];
     size_t n;
@@ -1333,7 +1406,7 @@ static JSValue subtle_derive_bits_steps(JSContext *ctx, uint32_t argc, const JSV
     if (!k) return JS_EXCEPTION;
     bool has_length = argc > 2 && !js_is_nullish(argv[2]);
     uint32_t length = 0;
-    if (has_length && to_ulong(ctx, argv[2], &length) < 0) return JS_EXCEPTION;
+    if (has_length && arg_ulong_enforced(&c, argv[2], 2, &length) < 0) return JS_EXCEPTION;
     Params p;
     if (normalize(ctx, argv[0], OP_DERIVE_BITS, &p) < 0) {
         params_free(&p);
@@ -1483,7 +1556,7 @@ static JSValue aes_cipher(JSContext *ctx, bool encrypt, JSCryptoKey *k, Params *
             return dom_error(ctx, "OperationError", m);
         }
         size_t tag_n = tag_bits / 8;
-        if (!encrypt && data->n < tag_n) return dom_error(ctx, "OperationError", "The provided data is too small.");
+        if (!encrypt && data->n < tag_n) return op_failed(ctx);
         if (p->iv.n < 12) return op_failed(ctx);
         const JSCipherAlg *alg = js_cipher_aes(JS_CIPHER_GCM, d->len);
         ok = encrypt ? run_cipher(alg, true, d, p->iv.p, p->iv.n, (long)tag_n, &p->additional_data, NULL, 0, data->p, data->n, &out)
@@ -1504,8 +1577,14 @@ static JSValue aes_cipher(JSContext *ctx, bool encrypt, JSCryptoKey *k, Params *
 
 /* cipherOrWrap: the key must be for the algorithm and allow the use. */
 static JSValue cipher_or_wrap(JSContext *ctx, bool encrypt, Params *p, JSCryptoKey *k, const Bytes *data, uint16_t usage) {
-    if (params_alg(p) != k->alg || !(k->usage_mask & usage))
-        return dom_error(ctx, "InvalidAccessError", "The requested operation is not valid for the provided key");
+    if (params_alg(p) != k->alg) return dom_error(ctx, "InvalidAccessError", "Key algorithm mismatch");
+    if (!(k->usage_mask & usage)) {
+        const char *op = usage == JS_USAGE_ENCRYPT ? "encrypt" : usage == JS_USAGE_DECRYPT ? "decrypt"
+                         : usage == JS_USAGE_WRAP_KEY ? "wrapKey" : "unwrapKey";
+        char m[48];
+        snprintf(m, sizeof m, "Unable to use this key to %s", op);
+        return dom_error(ctx, "InvalidAccessError", m);
+    }
     if (k->alg == JS_WEB_RSA_OAEP) {  /* encrypting with the public key, decrypting with the private one */
         JSKeyData *d = js_key_data(k->data);
         if (d->type != (encrypt ? JS_KEY_PUBLIC : JS_KEY_PRIVATE))
@@ -1688,6 +1767,11 @@ static const JSBuiltin subtle_proto[] = {  /* Node's order and lengths */
     WEBIDL_OPERATION("exportKey", subtle_export_key, 2),
     WEBIDL_OPERATION("wrapKey", subtle_wrap_key, 4),
     WEBIDL_OPERATION("unwrapKey", subtle_unwrap_key, 7),
+    WEBIDL_OPERATION("getPublicKey", subtle_get_public_key, 2),
+    WEBIDL_OPERATION("encapsulateBits", subtle_encapsulate_bits, 2),
+    WEBIDL_OPERATION("encapsulateKey", subtle_encapsulate_key, 5),
+    WEBIDL_OPERATION("decapsulateBits", subtle_decapsulate_bits, 3),
+    WEBIDL_OPERATION("decapsulateKey", subtle_decapsulate_key, 6),
 };
 
 void js_crypto_install_subtle(JSContext *ctx, JSObject *global) {

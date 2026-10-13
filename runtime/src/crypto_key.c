@@ -76,8 +76,21 @@ JSCryptoKey *js_as_crypto_key(JSValue v) {
     return js_is_object(v) && js_as_object(v)->shape->cls == &crypto_key_class ? (JSCryptoKey *)js_as_object(v) : NULL;
 }
 
+/* A key's usages, as Node 24 lists them: once each, in KeyUsage's order, whatever order (and
+ * repeats) they were given in */
+static JSValue usages_of_mask(JSContext *ctx, uint16_t mask) {
+    static const char *const NAMES[] = { "encrypt", "decrypt", "sign", "verify", "deriveKey", "deriveBits", "wrapKey", "unwrapKey" };
+    JSValue a = js_new_array(ctx, 2);
+    for (int i = 0; i < 8; i++)
+        if (mask & (1u << i) && js_array_append(ctx, a, js_new_string_cstr(ctx, NAMES[i])) < 0) return JS_EXCEPTION;
+    return a;
+}
+
 JSValue js_new_crypto_key(JSContext *ctx, JSValue data, uint8_t alg, const JSHashAlg *hash, uint32_t length, JSValue algorithm,
                           JSValue usages, uint16_t mask, bool extractable) {
+    (void)usages;
+    usages = usages_of_mask(ctx, mask);
+    if (js_is_exception(usages)) return usages;
     JSCryptoKey *k = (JSCryptoKey *)js_alloc_object(ctx, JS_CELL_OBJECT,
                                                     js_shape_root(ctx, &crypto_key_class, ctx->intrinsics[JS_INTRINSIC_CRYPTO_KEY_PROTOTYPE], 0));
     js_init_slot(&k->data, data);

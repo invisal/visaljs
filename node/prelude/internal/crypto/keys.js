@@ -1,5 +1,5 @@
-// node:crypto's keys: KeyObject and its subclasses, as Node's lib/internal/crypto/keys.js
-// defines them (the same symbols, so they inspect as Node's do), over the runtime's key handles,
+// node:crypto's keys: KeyObject and its subclasses, as Node 24's lib/internal/crypto/keys.js
+// defines them (their slots hidden, so they inspect as {} as Node's do), over the runtime's key handles,
 // which CryptoKey shares. PEM (base64 and its labels) and JWK (base64url and its members) are
 // here; DER is the runtime's.
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
@@ -16,6 +16,11 @@ const kAsymmetricKeyType = Symbol("kAsymmetricKeyType");
 const kAsymmetricKeyDetails = Symbol("kAsymmetricKeyDetails");
 
 const later = (fn) => setTimeout(fn, 0);
+/* a slot of the key's: not enumerable, as Node 24's private fields aren't seen */
+const slot = (o, key, value) => {
+  Object.defineProperty(o, key, { value, enumerable: false, configurable: false, writable: false });
+  return value;
+};
 const isStringOrBuffer = (v) => typeof v === "string" || isArrayBufferView(v) || isAnyArrayBuffer(v);
 
 /* ---- errors ------------------------------------------------------------------------------------ */
@@ -24,7 +29,7 @@ const keyObjectType = (actual, expected) =>
   codeError(TypeError, "ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE", `Invalid key object type ${actual}, expected ${expected}.`);
 const incompatible = (encoding, why) =>
   codeError(Error, "ERR_CRYPTO_INCOMPATIBLE_KEY_OPTIONS", `The selected key encoding ${encoding} ${why}.`);
-const invalidJwk = () => codeError(TypeError, "ERR_CRYPTO_INVALID_JWK", "Invalid JWK data");
+const invalidJwk = (message = "Invalid JWK data") => codeError(TypeError, "ERR_CRYPTO_INVALID_JWK", message);
 
 /* the runtime's error codes for a key it couldn't decode or encode */
 function keyError(code) {
@@ -98,12 +103,19 @@ export class KeyObject {
   constructor(type, handle) {
     if (type !== "secret" && type !== "public" && type !== "private") throw invalidArgValue("type", "is invalid", type);
     if (typeof handle !== "object" || handle === null || !isKeyHandle(handle)) throw invalidArgType("handle", "of type object", handle);
-    this[kKeyType] = type;
-    Object.defineProperty(this, kHandle, { value: handle, enumerable: false, configurable: false, writable: false });
+    slot(this, kKeyType, type);
+    slot(this, kHandle, handle);
   }
 
   get type() {
     return this[kKeyType];
+  }
+
+  /* Node 24: on KeyObject, for every type */
+  toCryptoKey(algorithm, extractable, keyUsages) {
+    if (this.type === "secret") return cryptoToCryptoKey("raw", cryptoKeySecretBytes(this[kHandle]), algorithm, extractable, keyUsages);
+    const der = cryptoKeyExport(this[kHandle], this.type === "public" ? 0 : 2);
+    return cryptoToCryptoKey(this.type === "public" ? "spki" : "pkcs8", der, algorithm, extractable, keyUsages);
   }
 
   static from(key) {
@@ -135,10 +147,6 @@ class SecretKeyObject extends KeyObject {
     }
     return cryptoKeySecretBytes(this[kHandle]);
   }
-
-  toCryptoKey(algorithm, extractable, keyUsages) {
-    return cryptoToCryptoKey("raw", cryptoKeySecretBytes(this[kHandle]), algorithm, extractable, keyUsages);
-  }
 }
 
 /* asymmetricKeyDetails: Node's normalized form of the key's details */
@@ -169,7 +177,7 @@ function keyDetails(handle) {
 
 class AsymmetricKeyObject extends KeyObject {
   get asymmetricKeyType() {
-    return this[kAsymmetricKeyType] ||= cryptoKeyInfo(this[kHandle])[1];
+    return this[kAsymmetricKeyType] ?? slot(this, kAsymmetricKeyType, cryptoKeyInfo(this[kHandle])[1]);
   }
 
   get asymmetricKeyDetails() {
@@ -178,16 +186,12 @@ class AsymmetricKeyObject extends KeyObject {
       case "rsa-pss":
       case "ec":
       case "dsa":
-        return this[kAsymmetricKeyDetails] ||= keyDetails(this[kHandle]);
+        return { ...(this[kAsymmetricKeyDetails] ?? slot(this, kAsymmetricKeyDetails, keyDetails(this[kHandle]))) };
       default:
         return {};
     }
   }
 
-  toCryptoKey(algorithm, extractable, keyUsages) {
-    const der = cryptoKeyExport(this[kHandle], this.type === "public" ? 0 : 2);
-    return cryptoToCryptoKey(this.type === "public" ? "spki" : "pkcs8", der, algorithm, extractable, keyUsages);
-  }
 }
 
 class PublicKeyObject extends AsymmetricKeyObject {
@@ -232,8 +236,9 @@ function wrapHandle(handle) {
 const SPKI = 0, PKCS1 = 1, PKCS8 = 2, SEC1 = 3, CERT = 4;
 const ENCODING_NAMES = { pkcs1: PKCS1, spki: SPKI, pkcs8: PKCS8, sec1: SEC1 };
 
-function option(name, objName) {
-  return objName === undefined ? `options.${name}` : `options.${objName}.${name}`;
+/* an option's name in messages: options.format, or under a prefix (Node 24's), key.format */
+function option(name, prefix) {
+  return prefix === undefined ? `options.${name}` : `${prefix}.${name}`;
 }
 
 function parseKeyFormat(formatStr, defaultFormat, optionName) {
@@ -348,50 +353,56 @@ function exportJwk(handle, isPrivate) {
   throw codeError(Error, "ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE", "Unsupported JWK Key Type.");
 }
 
-function fromParts(kind, isPrivate, crv, parts) {
+function fromParts(kind, isPrivate, crv, parts, message = "Invalid JWK data") {
   const handle = cryptoKeyFromParts(kind, isPrivate, crv, parts);
-  if (typeof handle === "number") throw handle === 3 ? notSupported("This curve") : invalidJwk();
+  if (typeof handle === "number") throw handle === 3 ? notSupported("This curve") : invalidJwk(message);
   return handle;
 }
 
+/* A JWK's key, checked as Node 24's native import checks it: one of its messages for each
+   failure. A JWK with "d" is a private key's, whichever is wanted. */
 function keyFromJwk(key, isPublic) {
+  const handle = jwkHandle(key, isPublic);
+  /* a private JWK where a public key is wanted: its public half */
+  return isPublic && key.d !== undefined ? cryptoKeyPublic(handle) : handle;
+}
+
+function jwkHandle(key, isPublic) {
   validateObject(key, "key");
-  validateOneOf(key.kty, "key.kty", ["RSA", "EC", "OKP"]);
+  if (typeof key.kty !== "string") throw invalidJwk("Invalid JWK format");
   const b64 = (s) => Buffer.from(s, "base64");
+  const str = (v) => typeof v === "string";
+  const isPrivate = key.d !== undefined;
+  const noPrivate = () => invalidJwk("JWK does not contain private key material");
   if (key.kty === "OKP") {
-    validateString(key.crv, "key.crv");
-    validateOneOf(key.crv, "key.crv", ["Ed25519", "Ed448", "X25519", "X448"]);
-    validateString(key.x, "key.x");
-    if (!isPublic) validateString(key.d, "key.d");
-    const data = isPublic ? b64(key.x) : b64(key.d);
-    if (key.crv !== "X25519" && key.crv !== "Ed25519") throw notSupported(key.crv + " keys");
-    if (data.byteLength !== 32) throw invalidJwk();
+    const size = { Ed25519: 32, X25519: 32, Ed448: 57, X448: 56 }[key.crv];
+    if (size === undefined || !str(key.x) || b64(key.x).byteLength !== size) throw invalidJwk("Invalid JWK OKP key");
+    if (isPrivate && (!str(key.d) || b64(key.d).byteLength !== size)) throw invalidJwk("Invalid JWK OKP key");
+    if (!isPublic && !isPrivate) throw noPrivate();
+    if (size !== 32) throw notSupported(key.crv + " keys");
     const kind = key.crv.toLowerCase();
-    return isPublic ? fromParts(kind, false, undefined, [data]) : fromParts(kind, true, undefined, [undefined, data]);
+    return isPrivate ? fromParts(kind, true, undefined, [undefined, b64(key.d)]) : fromParts(kind, false, undefined, [b64(key.x)]);
   }
   if (key.kty === "EC") {
-    validateString(key.crv, "key.crv");
-    validateOneOf(key.crv, "key.crv", ["P-256", "secp256k1", "P-384", "P-521"]);
-    validateString(key.x, "key.x");
-    validateString(key.y, "key.y");
-    if (!isPublic) validateString(key.d, "key.d");
+    if (!str(key.crv)) throw invalidJwk("Invalid JWK EC key");
+    if (!["P-256", "secp256k1", "P-384", "P-521"].includes(key.crv)) throw codeError(TypeError, "ERR_CRYPTO_INVALID_CURVE", "Invalid EC curve name");
+    if (!str(key.x) || !str(key.y) || (isPrivate && !str(key.d))) throw invalidJwk("Invalid JWK EC key");
     const size = CURVE_SIZES[key.crv];
     const x = b64(key.x);
     const y = b64(key.y);
-    if (size !== undefined && (x.length !== size || y.length !== size)) throw invalidJwk();
+    if (size !== undefined && (x.length !== size || y.length !== size)) throw invalidJwk("Invalid JWK EC key");
+    if (!isPublic && !isPrivate) throw noPrivate();
     const point = Buffer.concat([Buffer.from([4]), x, y]);
-    return isPublic ? fromParts("ec", false, key.crv, [point]) : fromParts("ec", true, key.crv, [point, b64(key.d)]);
+    return isPrivate ? fromParts("ec", true, key.crv, [point, b64(key.d)]) : fromParts("ec", false, key.crv, [point]);
   }
-  validateString(key.n, "key.n");
-  validateString(key.e, "key.e");
-  const names = ["n", "e"];
-  if (!isPublic) {
-    for (const name of ["d", "p", "q", "dp", "dq", "qi"]) {
-      validateString(key[name], "key." + name);
-      names.push(name);
-    }
+  if (key.kty === "RSA") {
+    const names = ["n", "e"];
+    if (isPrivate) names.push("d", "p", "q", "dp", "dq", "qi");
+    if (!names.every((name) => str(key[name]))) throw invalidJwk("Invalid JWK RSA key");
+    if (!isPublic && !isPrivate) throw noPrivate();
+    return fromParts("rsa", isPrivate, undefined, names.map((name) => b64(key[name])), "Invalid JWK RSA key");
   }
-  return fromParts("rsa", !isPublic, undefined, names.map((name) => b64(key[name])));
+  throw invalidJwk(`${key.kty} is not a supported JWK key type`);
 }
 
 /* ---- createSecretKey, createPublicKey, createPrivateKey ---------------------------------------- */
@@ -406,7 +417,7 @@ const CREATE_PUBLIC = 0, CREATE_PRIVATE = 1, CONSUME_PUBLIC = 2, CONSUME_PRIVATE
 
 /* a KeyObject (or CryptoKey) given where an asymmetric key is wanted */
 function handleOfKeyObject(key, ctx) {
-  if (ctx === CREATE_PRIVATE) throw invalidArgType("key", "of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView", key);
+  if (ctx === CREATE_PRIVATE) throw invalidArgType("key", "of type string or an instance of ArrayBuffer, Buffer, TypedArray, DataView, or URL", key);
   if (key.type !== "private") {
     if (ctx === CONSUME_PRIVATE || ctx === CREATE_PUBLIC) throw keyObjectType(key.type, "private");
     if (key.type !== "public") throw keyObjectType(key.type, "private or public");
@@ -437,12 +448,13 @@ function prepareAsymmetricKey(key, ctx) {
     if (!isStringOrBuffer(data)) {
       throw invalidArgType("key.key", "of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView", data);
     }
-    const { format: fmt, type } = parseKeyEncoding(key, undefined, wantPrivate ? false : undefined);
+    const { format: fmt, type } = parseKeyEncoding(key, undefined, wantPrivate ? false : undefined, "key");
     const bytes = typeof data === "string" && fmt === "der" ? Buffer.from(data, encoding ?? "utf8") : data;
     return { key: parseKey(bytes, fmt, type, wantPrivate) };
   }
+  /* Node 24 lists URL where a private key is wanted (an OpenSSL store's; not visaljs's yet) */
   const expected = ctx === CREATE_PRIVATE
-    ? "of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView"
+    ? "of type string or an instance of ArrayBuffer, Buffer, TypedArray, DataView, or URL"
     : "of type string or an instance of ArrayBuffer, Buffer, TypedArray, DataView, KeyObject, or CryptoKey";
   throw invalidArgType("key", expected, key);
 }
@@ -519,11 +531,11 @@ function pairEncodings(keyType, options) {
   let pub, priv;
   if (publicKeyEncoding != null) {
     if (typeof publicKeyEncoding !== "object") throw invalidArgValue("options.publicKeyEncoding", "is invalid", publicKeyEncoding);
-    pub = publicKeyEncoding.format === "jwk" ? { format: "jwk" } : parseKeyEncoding(publicKeyEncoding, keyType, true, "publicKeyEncoding");
+    pub = publicKeyEncoding.format === "jwk" ? { format: "jwk" } : parseKeyEncoding(publicKeyEncoding, keyType, true, "options.publicKeyEncoding");
   }
   if (privateKeyEncoding != null) {
     if (typeof privateKeyEncoding !== "object") throw invalidArgValue("options.privateKeyEncoding", "is invalid", privateKeyEncoding);
-    priv = privateKeyEncoding.format === "jwk" ? { format: "jwk" } : parseKeyEncoding(privateKeyEncoding, keyType, false, "privateKeyEncoding");
+    priv = privateKeyEncoding.format === "jwk" ? { format: "jwk" } : parseKeyEncoding(privateKeyEncoding, keyType, false, "options.privateKeyEncoding");
     if (priv.cipher != null) throw notSupported("Encrypting a private key");
   }
   return { pub, priv };

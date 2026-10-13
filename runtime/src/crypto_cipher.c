@@ -636,12 +636,19 @@ int js_cipher_final(JSCipherCtx *c, JSBytesOut *out) {
         return 0;
     }
     case JS_CIPHER_CCM:
+        /* no update (Node 24, OpenSSL 3.5): encrypting, the tag of the empty message, unless another
+           length was promised; decrypting, nothing, the tag unchecked */
         if (c->encrypt) {
-            if (!updated) return JS_CIPHER_ERR_TAG_NOT_SET;
+            if (!updated) {
+                if (c->ccm_length_set && c->ccm_length != 0) return JS_CIPHER_ERR_AUTH;
+                int e = ccm_run(c, ZEROS, 0, out);
+                if (e) return e;
+            }
             c->tag_ready = true;
             return 0;
         }
-        return !updated || c->auth_failed ? JS_CIPHER_ERR_AUTH : 0;
+        if (!updated) return 0;
+        return c->auth_failed ? JS_CIPHER_ERR_AUTH : 0;
     case JS_CIPHER_CHACHA20_POLY1305: {
         uint8_t tag[16];
         chapoly_tag(c, tag);

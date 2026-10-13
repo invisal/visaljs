@@ -9,6 +9,9 @@ import { isAnyArrayBuffer, isArrayBufferView, validateNumber } from "./util.js";
 
 const later = (fn) => setTimeout(fn, 0);
 const derivingFailed = () => new Error("Deriving bits failed");
+/* PBKDF2 and HKDF over SHAKE: OpenSSL 3.5 refuses an extendable-output function, with this error */
+const isXof = (digest) => typeof digest === "string" && /^shake(128|256)$/i.test(digest);
+const kdfFailed = (digest) => (isXof(digest) ? new Error("error:1C8000B7:Provider routines::xof digests not allowed") : derivingFailed());
 const invalidDigest = (digest) => codeError(TypeError, "ERR_CRYPTO_INVALID_DIGEST", "Invalid digest: " + digest);
 
 function validateIntegerIn(value, name, min, max) {
@@ -41,7 +44,7 @@ function checkPbkdf2(password, salt, iterations, keylen, digest) {
 function runPbkdf2({ password, salt, iterations, keylen, digest }) {
   const result = cryptoPbkdf2(digest, password, salt, iterations, keylen);
   if (result === null) throw invalidDigest(digest);
-  if (result === false) throw derivingFailed();
+  if (result === false) throw kdfFailed(digest);
   return result;
 }
 
@@ -58,7 +61,7 @@ export function pbkdf2(password, salt, iterations, keylen, digest, callback) {
   validateFunction(callback, "callback");
   const result = cryptoPbkdf2(digest, args.password, args.salt, iterations, keylen);
   if (result === null) throw invalidDigest(digest);
-  later(() => (result === false ? callback(derivingFailed()) : callback(null, result)));
+  later(() => (result === false ? callback(kdfFailed(digest)) : callback(null, result)));
 }
 
 /* ---- HKDF -------------------------------------------------------------------------------------- */
@@ -92,7 +95,7 @@ function runHkdf({ hash, key, salt, info, length }) {
 
 export function hkdfSync(hash, key, salt, info, length) {
   const result = runHkdf(checkHkdf(hash, key, salt, info, length));
-  if (result === false) throw derivingFailed();
+  if (result === false) throw kdfFailed(hash);
   return result;
 }
 
@@ -100,13 +103,14 @@ export function hkdf(hash, key, salt, info, length, callback) {
   const args = checkHkdf(hash, key, salt, info, length);
   validateFunction(callback, "callback");
   const result = runHkdf(args);
-  later(() => (result === false ? callback(derivingFailed()) : callback(null, result)));
+  later(() => (result === false ? callback(kdfFailed(hash)) : callback(null, result)));
 }
 
 /* ---- scrypt ------------------------------------------------------------------------------------ */
 
 const defaults = { N: 16384, r: 8, p: 1, maxmem: 32 << 20 };
-const invalidParameter = () => codeError(Error, "ERR_CRYPTO_SCRYPT_INVALID_PARAMETER", "Invalid scrypt parameter");
+/* Node 24: an option given under both its names */
+const optionPair = (a, b) => codeError(TypeError, "ERR_INCOMPATIBLE_OPTION_PAIR", `Option "${a}" cannot be used in combination with option "${b}"`);
 
 function checkScrypt(password, salt, keylen, options) {
   password = bytesOf(password, "password");
@@ -120,7 +124,7 @@ function checkScrypt(password, salt, keylen, options) {
       validateUint32(N, "N");
     }
     if (options.cost !== undefined) {
-      if (hasN) throw invalidParameter();
+      if (hasN) throw optionPair("N", "cost");
       N = options.cost;
       validateUint32(N, "cost");
     }
@@ -130,7 +134,7 @@ function checkScrypt(password, salt, keylen, options) {
       validateUint32(r, "r");
     }
     if (options.blockSize !== undefined) {
-      if (hasR) throw invalidParameter();
+      if (hasR) throw optionPair("r", "blockSize");
       r = options.blockSize;
       validateUint32(r, "blockSize");
     }
@@ -140,7 +144,7 @@ function checkScrypt(password, salt, keylen, options) {
       validateUint32(p, "p");
     }
     if (options.parallelization !== undefined) {
-      if (hasP) throw invalidParameter();
+      if (hasP) throw optionPair("p", "parallelization");
       p = options.parallelization;
       validateUint32(p, "parallelization");
     }
