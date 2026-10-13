@@ -19,15 +19,27 @@ const knownTimersById = new Map();
 /* every armed Timeout: a number that names one whose primitive wasn't taken clears nothing */
 export const armed = new Map();
 
-function emitWarning(message) {
-  if (typeof process.emitWarning === "function") process.emitWarning(message, "TimeoutOverflowWarning");
+function emitWarning(message, type) {
+  if (typeof process.emitWarning === "function") process.emitWarning(message, type);
 }
+
+/* Node 24 also warns, once each, about a negative delay and one that isn't a number */
+let warnedNegativeNumber = false;
+let warnedNotNumber = false;
 
 /* the delay as Node takes it: 1 when below 1 ms, not a number or past 2^31 - 1 */
 export function duration(after) {
   after *= 1;
   if (!(after >= 1 && after <= TIMEOUT_MAX)) {
-    if (after > TIMEOUT_MAX) emitWarning(`${after} does not fit into a 32-bit signed integer.\nTimeout duration was set to 1.`);
+    if (after > TIMEOUT_MAX) {
+      emitWarning(`${after} does not fit into a 32-bit signed integer.\nTimeout duration was set to 1.`, "TimeoutOverflowWarning");
+    } else if (after < 0 && !warnedNegativeNumber) {
+      warnedNegativeNumber = true;
+      emitWarning(`${after} is a negative number.\nTimeout duration was set to 1.`, "TimeoutNegativeWarning");
+    } else if (Number.isNaN(after) && !warnedNotNumber) {
+      warnedNotNumber = true;
+      emitWarning(`${after} is not a number.\nTimeout duration was set to 1.`, "TimeoutNaNWarning");
+    }
     after = 1;
   }
   return after;

@@ -144,6 +144,24 @@ class Hdr {
     return Math.sqrt(total / this.totalCount);
   }
 
+  /* Node 24's skewness and excess kurtosis: the standardized third and fourth moments over each
+     bucket's median, 0 below 3 (4) values or with no variance */
+  moment(order) {
+    if (this.totalCount < order) return 0;
+    const mean = this.mean();
+    let m2 = 0, mk = 0;
+    for (const [value, count] of this.recorded()) {  /* Node's histogram.cc, operation for operation */
+      const dev = this.medianEquivalent(value) - mean;
+      const d2 = dev * dev;
+      m2 += count * d2;
+      mk += order === 3 ? count * d2 * dev : count * d2 * d2;
+    }
+    const n = this.totalCount;
+    const variance = m2 / n;
+    if (variance === 0) return 0;
+    return order === 3 ? (mk / n) / (variance * Math.sqrt(variance)) : (mk / n) / (variance * variance) - 3;
+  }
+
   valueAtPercentile(percentile) {
     const requested = Math.min(percentile, 100);
     let countAtPercentile = Math.trunc((requested / 100) * this.totalCount + 0.5);
@@ -201,12 +219,56 @@ class Hdr {
 }
 
 const kHdr = Symbol("kHdr");
+const kRecord = Symbol("kRecord");
 
 /** A histogram's figures (Node's Histogram). */
 class Histogram {
-  constructor(hdr) {
+  /* Node 24's exponentially weighted moving average of what's recorded, when a half-life is set:
+     alpha = 1 - 2^(-1/halfLife); with a threshold, the share above it too */
+  #ewma = { alpha: 0, threshold: 0, initialized: false, mean: 0, variance: 0, errorRate: 0 };
+
+  constructor(hdr, halfLife = 0, threshold = 0) {
     this[kHdr] = hdr;
     this.exceedsCount = 0;
+    if (halfLife > 0) this.#ewma.alpha = 1 - Math.exp(-Math.log(2) / halfLife);
+    this.#ewma.threshold = threshold;
+  }
+
+  /** Records a value (count times), counting it as exceeding when out of range. */
+  [kRecord](value, count = 1) {
+    if (!this[kHdr].record(value, count)) {
+      this.exceedsCount += count;
+      return;
+    }
+    const e = this.#ewma;
+    if (e.alpha <= 0) return;
+    if (!e.initialized) {
+      e.initialized = true;
+      e.mean = value;
+      e.variance = 0;
+      if (e.threshold > 0) e.errorRate = value > e.threshold ? 1 : 0;
+      return;
+    }
+    const diff = value - e.mean;
+    e.mean += e.alpha * diff;
+    e.variance = (1 - e.alpha) * (e.variance + e.alpha * diff * diff);
+    if (e.threshold > 0) e.errorRate += e.alpha * ((value > e.threshold ? 1 : 0) - e.errorRate);
+  }
+
+  get ewmaMean() {
+    return this.#ewma.initialized ? this.#ewma.mean : 0;
+  }
+  get ewmaStddev() {
+    return this.#ewma.initialized ? Math.sqrt(this.#ewma.variance) : 0;
+  }
+  get ewmaErrorRate() {
+    return this.#ewma.initialized ? this.#ewma.errorRate : 0;
+  }
+  get kurtosis() {
+    return this[kHdr].moment(4);
+  }
+  get skewness() {
+    return this[kHdr].moment(3);
   }
 
   get count() {
@@ -259,12 +321,14 @@ class Histogram {
   reset() {
     this[kHdr].reset();
     this.exceedsCount = 0;
+    Object.assign(this.#ewma, { initialized: false, mean: 0, variance: 0, errorRate: 0 });
   }
 
   toJSON() {
     return {
       count: this.count, min: this.min, max: this.max, mean: this.mean, exceeds: this.exceeds, stddev: this.stddev,
-      percentiles: Object.fromEntries(this.percentiles),
+      skewness: this.skewness, kurtosis: this.kurtosis, ewmaMean: this.ewmaMean, ewmaStddev: this.ewmaStddev,
+      ewmaErrorRate: this.ewmaErrorRate, percentiles: Object.fromEntries(this.percentiles),
     };
   }
 }
@@ -277,7 +341,7 @@ class RecordableHistogram extends Histogram {
     if (typeof val === "bigint") val = Number(val);
     else if (typeof val !== "number") throw invalidArgType("val", "of type number", val);
     if (!(val >= 1 && val <= MAX_SAFE)) throw outOfRange("val", ">= 1 && <= 9007199254740991", val);
-    if (!this[kHdr].record(val)) this.exceedsCount++;
+    this[kRecord](val);
   }
 
   /** The time since the last call (ns): nothing on the first. */
@@ -286,7 +350,7 @@ class RecordableHistogram extends Histogram {
     const now = s * 1e9 + ns;
     if (this.#previous !== 0) {
       const delta = now - this.#previous;
-      if (delta >= 1 && !this[kHdr].record(delta)) this.exceedsCount++;
+      if (delta >= 1) this[kRecord](delta);
     }
     this.#previous = now;
   }
@@ -311,7 +375,7 @@ function integerOption(options, name, fallback, min) {
   return n;
 }
 
-/** createHistogram({ lowest = 1, highest = Number.MAX_SAFE_INTEGER, figures = 3 }). */
+/** createHistogram({ lowest = 1, highest = Number.MAX_SAFE_INTEGER, figures = 3, halfLife = 0, threshold = 0 }). */
 function createHistogram(options = {}) {
   if (options === null || typeof options !== "object") throw invalidArgType("options", "of type object", options);
   const lowest = integerOption(options, "lowest", 1, 1);
@@ -319,7 +383,13 @@ function createHistogram(options = {}) {
   const figures = options.figures ?? 3;
   if (typeof figures !== "number") throw invalidArgType("options.figures", "of type number", figures);
   if (!Number.isInteger(figures) || figures < 1 || figures > 5) throw outOfRange("options.figures", ">= 1 && <= 5", figures);
-  return new RecordableHistogram(new Hdr(lowest, highest, figures));
+  /* Node 24: the moving average's half-life (in values) and threshold */
+  const { halfLife = 0, threshold = 0 } = options;
+  if (typeof halfLife !== "number") throw invalidArgType("options.halfLife", "of type number", halfLife);
+  if (halfLife < 0) throw outOfRange("options.halfLife", ">= 0", halfLife);
+  if (typeof threshold !== "number") throw invalidArgType("options.threshold", "of type number", threshold);
+  if (threshold < 0) throw outOfRange("options.threshold", ">= 0", threshold);
+  return new RecordableHistogram(new Hdr(lowest, highest, figures), halfLife, threshold);
 }
 
 /** monitorEventLoopDelay's: the event loop's delay sampled every resolution ms, in ns. */
@@ -339,7 +409,7 @@ class IntervalHistogram extends Histogram {
     this.#timer = globalThis.setInterval(() => {
       const [s, ns] = process.hrtime();
       const now = s * 1e9 + ns;
-      if (this.#previous !== 0 && !this[kHdr].record(now - this.#previous)) this.exceedsCount++;
+      if (this.#previous !== 0) this[kRecord](now - this.#previous);
       this.#previous = now;
     }, this.#resolution);
     this.#timer.unref?.();

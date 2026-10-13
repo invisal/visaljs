@@ -288,7 +288,7 @@ JSValue js_dynamic_import(JSContext *ctx, JSValue specifier, JSValue options, co
         JSValue with = js_get(ctx, js_as_object(options), js_atom_from_cstr(ctx, "with"), options);
         if (js_is_exception(with)) return reject_pending(ctx, promise);
         if (!js_is_undefined(with)) {
-            if (!js_is_object(with)) return reject_type_error(ctx, promise, "The 'assert' option must be an object");
+            if (!js_is_object(with)) return reject_type_error(ctx, promise, "The 'with' option must be an object");  /* V8 13.6's */
             JSValue keys = js_own_keys(ctx, js_as_object(with));
             if (js_is_exception(keys)) return reject_pending(ctx, promise);
             JSValueArray *list = (JSValueArray *)js_as_cell(keys);
@@ -301,7 +301,7 @@ JSValue js_dynamic_import(JSContext *ctx, JSValue specifier, JSValue options, co
                 if (!has || !(desc.attrs & JS_PROP_ENUMERABLE)) continue;
                 JSValue v = js_get(ctx, js_as_object(with), key, with);
                 if (js_is_exception(v)) return reject_pending(ctx, promise);
-                if (!js_is_string(v)) return reject_type_error(ctx, promise, "Import assertion value must be a string");
+                if (!js_is_string(v)) return reject_type_error(ctx, promise, "Import attribute value must be a string");
             }
         }
     }

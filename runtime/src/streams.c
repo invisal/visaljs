@@ -464,14 +464,18 @@ JSValue js_new_readable_stream(JSContext *ctx, const JSStreamSource *source, JSV
     return js_rs_new(ctx, source, data, high_water_mark, JS_UNDEFINED, JS_UNDEFINED);
 }
 
-JSValue js_readable_stream_of_bytes(JSContext *ctx, JSValue chunk) {
+/* A closed stream of one chunk (none when undefined): a byte stream, or not */
+static JSValue stream_of(JSContext *ctx, JSValue chunk, bool bytes) {
     JSValue sv = new_stream(ctx, ctx->intrinsics[JS_INTRINSIC_READABLE_STREAM_PROTOTYPE], 0, JS_UNDEFINED);
-    as_stream(sv)->bytes = 1;
+    as_stream(sv)->bytes = bytes;
     ControllerObject *k = controller_of(as_stream(sv));
     k->started = 1;
     if (!js_is_undefined(chunk) && enqueue(ctx, k, chunk) < 0) return JS_EXCEPTION;
     return close_controller(ctx, k) < 0 ? JS_EXCEPTION : sv;
 }
+
+JSValue js_readable_stream_of_bytes(JSContext *ctx, JSValue chunk) { return stream_of(ctx, chunk, true); }
+JSValue js_readable_stream_of_chunk(JSContext *ctx, JSValue chunk) { return stream_of(ctx, chunk, false); }
 
 /* ---- ReadableStream.prototype --------------------------------------------------------------- */
 

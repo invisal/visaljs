@@ -81,7 +81,8 @@ function firstDifference(what: string, expected: string, actual: string): string
 }
 
 /** node:test's report without what can't match: each duration, and Node's test locations
- *  (file:line:column) and V8 stack frames, which a compiled program doesn't know. */
+ *  (file:line:column) and V8 stack frames, which a compiled program doesn't know. TAP's and spec's
+ *  (Node 24's default). */
 export function normalizeTestReport(text: string): string {
   const out: string[] = [];
   let stackIndent = -1;
@@ -95,9 +96,38 @@ export function normalizeTestReport(text: string): string {
       stackIndent = stack[1]!.length;
       continue;
     }
-    out.push(line.replace(/(duration_ms:? )[\d.e+-]+/, "$1…"));
+    if (/^test at .+:\d+:\d+$/.test(line)) continue;  /* spec: a failure's location */
+    if (/^\s+at .+/.test(line)) {  /* spec: a stack frame; the last carries the " {" of the error's properties */
+      if (line.endsWith(" {") && out.length) out[out.length - 1] += " {";
+      continue;
+    }
+    out.push(line.replace(/(duration_ms:? )[\d.e+-]+/, "$1…").replace(/\(([\d.e+-]+)ms\)/g, "(…ms)"));
   }
-  return out.join("\n");
+  return unbracketErrors(out).join("\n");
+}
+
+/** An error inspected without stack frames is in brackets, [Name: message] (a compiled program's
+ *  always are): the error as Node shows it with frames, once they're dropped. */
+function unbracketErrors(lines: string[]): string[] {
+  const out = [...lines];
+  for (let i = 0; i < out.length; i++) {
+    const open = /^(\s*)\[((?:\w*Error|\w*Exception)\b.*)$/.exec(out[i]!);
+    if (!open) continue;
+    const [, indent, rest] = open;
+    const closing = /\](?: \{)?$/;
+    if (closing.test(rest!)) {  /* on one line */
+      out[i] = indent + rest!.replace(/\]( \{)?$/, "$1");
+      continue;
+    }
+    for (let j = i + 1; j < out.length; j++) {
+      if (out[j] === `${indent}]` || out[j] === `${indent}] {`) {
+        out[i] = indent + rest;
+        out[j] = out[j]!.replace("]", "");
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 export async function differential(file: string, outDir: string): Promise<Outcome> {

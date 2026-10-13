@@ -1,7 +1,7 @@
 // node:test's reporters: Node's tap and spec reporters (lib/internal/
-// test_runner/reporter/tap.js, spec.js, utils.js; MIT; Node v22.22.2), ported from streams to
-// objects that turn each test event into text. tap is the default when stdout isn't a terminal,
-// spec when it is, as in Node. Errors carry no stack frames and tests no location: a compiled
+// test_runner/reporter/tap.js, spec.js, utils.js; MIT; spec as Node v24.21.0's), ported from streams to
+// objects that turn each test event into text. spec is the default, as in Node 24 (tap is
+// node:test/reporters'). Errors carry no stack frames and tests no location: a compiled
 // program knows neither (Node prints the test's file:line:column and V8's frames).
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import { utilInspect as inspect } from "visaljs:host";
@@ -274,9 +274,11 @@ const reporterUnicodeSymbolMap = {
   "test:fail": "✖ ",
   "test:pass": "✔ ",
   "test:diagnostic": "ℹ ",
+  "test:log": "ℹ ",
   "test:coverage": "ℹ ",
   "arrow:right": "▶ ",
   "hyphen:minus": "﹣ ",
+  "warning:alert": "⚠ ",
 };
 
 function specIndent(nesting) {
@@ -285,7 +287,6 @@ function specIndent(nesting) {
 
 export class SpecReporter {
   #stack = [];
-  #reported = [];
   #failedTests = [];
   #colors = colorsFor(process.stderr);
   #inspectOptions = { __proto__: null, colors: colorsFor(process.stdout).hasColors, breakLength: Infinity };
@@ -296,37 +297,42 @@ export class SpecReporter {
 
   #colorMap(type) {
     const c = this.#colors;
-    return { "test:fail": c.red, "test:pass": c.green, "test:diagnostic": c.blue, info: c.blue, warn: c.yellow, error: c.red }[type];
+    return { "test:fail": c.red, "test:pass": c.green, "test:diagnostic": c.blue, "test:log": c.blue, info: c.blue, warn: c.yellow, error: c.red }[type];
   }
 
   #formatError(error, indent) {
-    if (!error) return "";
     const err = error.code === "ERR_TEST_FAILURE" ? error.cause : error;
     const message = inspectWithNoCustomRetry(err, this.#inspectOptions).split(/\r?\n/).join(`\n${indent}  `);
     return `\n${indent}  ${message}\n`;
   }
 
-  #formatTestReport(type, data, prefix = "", indent = "", hasChildren = false, showErrorDetails = true) {
+  /* Node 24's utils.js formatTestReport */
+  #formatTestReport(type, data, showErrorDetails = true, prefix = "", indent = "") {
     const colors = this.#colors;
     let color = this.#colorMap(type) ?? colors.white;
     let symbol = reporterUnicodeSymbolMap[type] ?? " ";
-    const { skip, todo } = data;
+    const { skip, todo, expectFailure } = data;
     const duration_ms = data.details?.duration_ms ? ` ${colors.gray}(${data.details.duration_ms}ms)${colors.white}` : "";
-    let title = `${data.name}${duration_ms}`;
+    const replayed = data.details?.passed_on_attempt !== undefined
+      ? ` ${colors.gray}(passed on attempt ${data.details.passed_on_attempt})${colors.white}`
+      : "";
+    let title = `${data.name}${duration_ms}${replayed}`;
 
     if (skip !== undefined) {
       title += ` # ${typeof skip === "string" && skip.length ? skip : "SKIP"}`;
-    } else if (todo !== undefined) {
-      title += ` # ${typeof todo === "string" && todo.length ? todo : "TODO"}`;
-    }
-
-    const error = showErrorDetails ? this.#formatError(data.details?.error, indent) : "";
-    const err = hasChildren ? (!error || data.details?.error?.failureType === "subtestsFailed" ? "" : `\n${error}`) : error;
-
-    if (skip !== undefined) {
       color = colors.gray;
       symbol = reporterUnicodeSymbolMap["hyphen:minus"];
+    } else if (todo !== undefined) {
+      title += ` # ${typeof todo === "string" && todo.length ? todo : "TODO"}`;
+      if (type === "test:fail") {
+        color = colors.yellow;
+        symbol = reporterUnicodeSymbolMap["warning:alert"];
+      }
+    } else if (expectFailure !== undefined) {
+      title += " # EXPECTED FAILURE";
     }
+
+    const err = showErrorDetails && data.details?.error ? this.#formatError(data.details.error, indent) : "";
     return `${prefix}${indent}${color}${symbol}${title}${colors.white}${err}`;
   }
 
@@ -352,16 +358,10 @@ export class SpecReporter {
       // Report all the parent `test:start` events
       const parent = this.#stack.pop();
       const msg = parent.data;
-      this.#reported.unshift(msg);
       prefix += `${specIndent(msg.nesting)}${reporterUnicodeSymbolMap["arrow:right"]}${msg.name}\n`;
     }
-    let hasChildren = false;
-    if (this.#reported[0] && this.#reported[0].nesting === data.nesting && this.#reported[0].name === data.name) {
-      this.#reported.shift();
-      hasChildren = true;
-    }
     const indentation = specIndent(data.nesting);
-    return `${this.#formatTestReport(type, data, prefix, indentation, hasChildren, false)}\n`;
+    return `${this.#formatTestReport(type, data, false, prefix, indentation)}\n`;
   }
 
   handle({ type, data }) {
@@ -379,8 +379,9 @@ export class SpecReporter {
       case "test:stderr":
       case "test:stdout":
         return data.message;
-      case "test:diagnostic": {
-        const diagnosticColor = this.#colorMap(data.level) || this.#colorMap("test:diagnostic");
+      case "test:diagnostic":
+      case "test:log": {
+        const diagnosticColor = this.#colorMap(data.level) || this.#colorMap(type);
         return `${diagnosticColor}${specIndent(data.nesting)}${reporterUnicodeSymbolMap[type]}${data.message}${this.#colors.white}\n`;
       }
       case "test:summary":
