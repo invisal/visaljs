@@ -5,8 +5,10 @@ import { LinkButton } from "@cloudflare/kumo/components/button";
 import BenchCard, { type BenchMetric } from "../components/BenchCard.tsx";
 import UsageCard from "../components/UsageCard.tsx";
 import Layout from "../layouts/Layout.astro";
+import { nodeCompat, type Status } from "../lib/compat.ts";
 import { GUIDE_PUBLISHED } from "../lib/guide-published.ts";
 import { mb, serverCards, type Row } from "../lib/servers.ts";
+import { Badge } from "@cloudflare/kumo/components/badge";
 
 const REPO = "https://github.com/invisal/visaljs";
 const cards = serverCards(["hono", "express"]);
@@ -14,17 +16,63 @@ const NAMES: Record<string, string> = { express: "Express", hono: "Hono" };
 
 /** How to use: a title, the commands and what they do */
 const usage: [string, string, string][] = [
-  ["Compiling a file", "npx visaljs build app.js\n./app", "Builds app.js and the npm packages it imports into one native binary, ./app."],
-  ["Compiling a project", "npx visaljs build\n./my-app", "In your project's folder: visaljs tries to detect your framework and entry file, and compiles them into one native binary named after the folder."],
+  [
+    "Compiling a file",
+    "npx visaljs build app.js\n./app",
+    "Builds app.js and the npm packages it imports into one native binary, ./app.",
+  ],
+  [
+    "Compiling a project",
+    "npx visaljs build\n./my-app",
+    "In your project's folder: visaljs tries to detect your framework and entry file, and compiles them into one native binary named after the folder.",
+  ],
+];
+
+/* Node compatibility (node/compat.json): every built-in module by name, shaded by how much of it works */
+const compat = nodeCompat();
+const { modules: moduleCount, exports: exportCount } = compat.summary;
+const exportShare =
+  Math.round((1000 * exportCount.implemented) / exportCount.total) / 10;
+/** a module's badge opacity: supported, partly, or not yet (a module of stubs only counts as not yet) */
+const OPACITY: Record<Status, string> = {
+  complete: "opacity-100",
+  partial: "opacity-60",
+  stub: "opacity-30",
+  missing: "opacity-30",
+};
+const RANK: Record<Status, number> = {
+  complete: 0,
+  partial: 1,
+  stub: 2,
+  missing: 2,
+};
+/* the supported first, then the partly, then the rest; by name within each */
+const nodeModules = Object.entries(compat.modules).sort(
+  ([an, a], [bn, b]) => RANK[a.status] - RANK[b.status] || an.localeCompare(bn),
+);
+const legend: [string, string][] = [
+  [OPACITY.complete, "Supported"],
+  [OPACITY.partial, "Partially"],
+  [OPACITY.missing, "Not yet"],
 ];
 
 /** a bar's length: the value's share of the largest */
 const share = (v: number, max: number) => `${((100 * v) / max).toFixed(2)}%`;
 
 /* each metric's bars share one scale within a card */
-const metrics: { title: string; icon: BenchMetric["icon"]; value: (r: Row) => number | null; format: (n: number) => string }[] = [
+const metrics: {
+  title: string;
+  icon: BenchMetric["icon"];
+  value: (r: Row) => number | null;
+  format: (n: number) => string;
+}[] = [
   { title: "Binary size", icon: "size", value: (r) => r.size, format: mb },
-  { title: "Memory under load", icon: "memory", value: (r) => r.memory, format: (k) => `${(k / 1024).toFixed(1)} MB` },
+  {
+    title: "Memory under load",
+    icon: "memory",
+    value: (r) => r.memory,
+    format: (k) => `${(k / 1024).toFixed(1)} MB`,
+  },
 ];
 
 /** a card's metrics, formatted for BenchCard */
@@ -37,7 +85,11 @@ const benchMetrics = (rows: Row[]): BenchMetric[] =>
       icon: m.icon,
       rows: rows.map((r, i) => {
         const v = values[i] ?? null;
-        return { label: r.label, value: v === null ? null : m.format(v), width: v === null ? null : share(v, max) };
+        return {
+          label: r.label,
+          value: v === null ? null : m.format(v),
+          width: v === null ? null : share(v, max),
+        };
       }),
     };
   });
@@ -46,52 +98,143 @@ const benchMetrics = (rows: Row[]): BenchMetric[] =>
 <Layout title="visaljs: JavaScript to C" page="home" header={false}>
   <main class="bg-kumo-canvas">
     <section class="border-b border-kumo-hairline">
-      <div class="mx-auto flex max-w-3xl flex-col items-center gap-6 px-4 py-24 text-center">
-        <h1 class="text-5xl font-bold tracking-tight text-kumo-strong sm:text-6xl">visaljs</h1>
-        <p class="text-xl text-kumo-default">JavaScript in. <span class="text-kumo-link">A native binary out.</span></p>
+      <div
+        class="mx-auto flex max-w-3xl flex-col items-center gap-6 px-4 py-24 text-center"
+      >
+        <h1
+          class="text-5xl font-bold tracking-tight text-kumo-strong sm:text-6xl"
+        >
+          visaljs
+        </h1>
+        <p class="text-xl text-kumo-default">
+          JavaScript in. <span class="text-kumo-link">A native binary out.</span
+          >
+        </p>
         <p class="text-kumo-subtle">
-          A simple ahead-of-time compiler. It reads your JavaScript, turns it into C, and compiles it to a native binary, all in one step.
+          A simple ahead-of-time compiler. It reads your JavaScript, turns it
+          into C, and compiles it to a native binary, all in one step.
         </p>
         <div class="flex flex-wrap justify-center gap-3">
-          {GUIDE_PUBLISHED && <LinkButton href="/guide/introduction/" variant="primary" size="lg">Read how it works</LinkButton>}
-          <LinkButton href={REPO} variant={GUIDE_PUBLISHED ? "secondary" : "primary"} size="lg">GitHub</LinkButton>
+          {
+            GUIDE_PUBLISHED && (
+              <LinkButton
+                href="/guide/introduction/"
+                variant="primary"
+                size="lg"
+              >
+                Read how it works
+              </LinkButton>
+            )
+          }
+          <LinkButton
+            href={REPO}
+            variant={GUIDE_PUBLISHED ? "secondary" : "primary"}
+            size="lg">GitHub</LinkButton
+          >
         </div>
       </div>
     </section>
 
     <section class="mx-auto max-w-6xl px-4 py-16 lg:px-8">
-      <h2 class="text-center text-2xl font-semibold text-kumo-strong">Smaller binaries, less memory</h2>
-      <p class="mx-auto mt-3 max-w-2xl text-center leading-normal text-kumo-subtle">
-        One small binary to copy and run, with nothing else to install. The same Hono and Express servers, built by visaljs, Bun and Node.
+      <h2 class="text-center text-2xl font-semibold text-kumo-strong">
+        Smaller binaries, less memory
+      </h2>
+      <p
+        class="mx-auto mt-3 max-w-2xl text-center leading-normal text-kumo-subtle"
+      >
+        One small binary to copy and run, with nothing else to install. The same
+        Hono and Express servers, built by visaljs, Bun and Node.
       </p>
       <div class="mt-8 grid items-start gap-4 md:grid-cols-2">
         {
           cards.map((card) => (
-            <BenchCard title={NAMES[card.framework] ?? card.framework} href={`${REPO}/tree/main/tests/apps/${card.app}`} metrics={benchMetrics(card.rows)} />
+            <BenchCard
+              title={NAMES[card.framework] ?? card.framework}
+              href={`${REPO}/tree/main/tests/apps/${card.app}`}
+              metrics={benchMetrics(card.rows)}
+            />
           ))
         }
       </div>
     </section>
 
     <section class="border-t border-kumo-hairline">
+      <div
+        class="mx-auto grid max-w-6xl gap-10 px-4 py-16 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:px-8"
+      >
+        <div>
+          <h2 class="text-2xl font-semibold text-kumo-strong">
+            Node compatibility
+          </h2>
+          <p class="mt-3 leading-normal text-kumo-subtle">
+            Use Node {compat.node.split(".")[0]}'s built-in modules in your
+            compiled program.
+          </p>
+          <div
+            class="mt-6 text-5xl font-bold tracking-tight text-kumo-strong tabular-nums"
+          >
+            {exportShare}%
+          </div>
+          <p class="mt-2 text-sm text-kumo-default">
+            <span class="font-semibold text-kumo-strong tabular-nums"
+              >{moduleCount.complete}/{moduleCount.total}</span
+            > modules fully supported
+          </p>
+          <div class="mt-6 flex flex-wrap gap-2">
+            {
+              legend.map(([opacity, label]) => (
+                <Badge variant="secondary" className={opacity}>{label}</Badge>
+              ))
+            }
+          </div>
+        </div>
+        <ul class="flex flex-wrap content-start gap-2 font-mono">
+          {
+            nodeModules.map(([name, c]) => (
+              <li>
+                <Badge variant="secondary" className={OPACITY[c.status]}>{name}</Badge>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </section>
+
+    <section class="border-t border-kumo-hairline">
       <div class="mx-auto max-w-6xl px-4 py-16 lg:px-8">
-        <h2 class="text-center text-2xl font-semibold text-kumo-strong">How to use</h2>
-        <p class="mx-auto mt-3 max-w-2xl text-center leading-normal text-kumo-subtle">
-          A single command: point it at your JavaScript, and visaljs does its best to compile it, npm packages included. All you need is Node 22 or later and a C compiler.
+        <h2 class="text-center text-2xl font-semibold text-kumo-strong">
+          How to use
+        </h2>
+        <p
+          class="mx-auto mt-3 max-w-2xl text-center leading-normal text-kumo-subtle"
+        >
+          A single command: point it at your JavaScript, and visaljs does its
+          best to compile it, npm packages included. All you need is Node 22 or
+          later and a C compiler.
         </p>
         <div class="mt-8 grid gap-4 md:grid-cols-2">
           {
-            usage.map(([title, command, text]) => <UsageCard title={title} command={command} text={text} />)
+            usage.map(([title, command, text]) => (
+              <UsageCard title={title} command={command} text={text} />
+            ))
           }
         </div>
       </div>
     </section>
 
     <footer class="border-t border-kumo-hairline">
-      <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-kumo-subtle lg:px-8">
+      <div
+        class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-kumo-subtle lg:px-8"
+      >
         <span>visaljs: simple ahead-of-time compiler</span>
         <nav class="flex gap-4">
-          {GUIDE_PUBLISHED && <a href="/guide/introduction/" class="hover:text-kumo-default">Guide</a>}
+          {
+            GUIDE_PUBLISHED && (
+              <a href="/guide/introduction/" class="hover:text-kumo-default">
+                Guide
+              </a>
+            )
+          }
           <a href="/node/" class="hover:text-kumo-default">Node API</a>
           <a href={REPO} class="hover:text-kumo-default">GitHub</a>
         </nav>
