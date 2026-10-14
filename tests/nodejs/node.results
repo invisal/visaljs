@@ -22,7 +22,9 @@ test-buffer-generic-methods.js
 test-buffer-includes.js
 test-buffer-inheritance.js
 test-buffer-inspect.js
+test-buffer-isascii.js
 test-buffer-isencoding.js
+test-buffer-isutf8.js
 test-buffer-iterator.js
 test-buffer-new.js
 test-buffer-no-negative-allocation.js
@@ -70,6 +72,8 @@ test-event-emitter-subclass.js
 test-event-emitter-symbols.js
 test-events-list.js
 test-events-uncaught-exception-stack.js
+test-fetch-mock.js
+test-fetch.mjs
 test-path-basename.js
 test-path-dirname.js
 test-path-extname.js
@@ -89,6 +93,8 @@ test-querystring-escape.js
 test-querystring-maxKeys-non-finite.js
 test-querystring-multichar-separator.js
 test-string-decoder-end.js
+test-structuredClone-domexception.js
+test-structuredClone-global.js
 test-timers-api-refs.js
 test-timers-args.js
 test-timers-clear-null-does-not-throw-error.js

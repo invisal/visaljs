@@ -865,6 +865,33 @@ BUILTIN(function_ctor) {
     return js_throw_type_error(ctx, "Function() constructor needs eval, which isn't supported");
 }
 
+/* %GeneratorFunction%, %AsyncFunction% and %AsyncGeneratorFunction% (§27.3.1, §27.7.1, §27.4.1): a
+ * kind of function's constructor, which compiles source text as Function() does, so throws as it
+ * does. Not globals: reached as a function's prototype's constructor, as `instanceof` needs. */
+#define FUNCTION_KIND_CTOR(fn, name)                                                                 \
+    BUILTIN(fn) {                                                                                    \
+        UNUSED_ARGS;                                                                                 \
+        return js_throw_type_error(ctx, name "() constructor needs eval, which isn't supported");    \
+    }
+FUNCTION_KIND_CTOR(generator_function_ctor, "GeneratorFunction")
+FUNCTION_KIND_CTOR(async_function_ctor, "AsyncFunction")
+FUNCTION_KIND_CTOR(async_generator_function_ctor, "AsyncGeneratorFunction")
+
+/* The constructor of a kind of function, its prototype `proto`: [[Prototype]] %Function%, its
+ * `prototype` fixed, proto's `constructor` it (not writable, configurable). */
+void js_define_function_kind_ctor(JSContext *ctx, JSValue proto, int kind) {
+    static const struct { const char *name; JSNativeFn fn; } KINDS[] = {
+        { "GeneratorFunction", generator_function_ctor },
+        { "AsyncFunction", async_function_ctor },
+        { "AsyncGeneratorFunction", async_generator_function_ctor },
+    };
+    JSValue ctor = js_new_native(ctx, KINDS[kind].fn, js_atom_from_cstr(ctx, KINDS[kind].name), 1, JS_FN_STRICT | JS_FN_CONSTRUCTOR);
+    JSValue function = js_get_value(ctx, ctx->intrinsics[JS_INTRINSIC_FUNCTION_PROTOTYPE], JS_ATOM(constructor));
+    if (js_is_object(function) && js_set_prototype_of(ctx, js_as_object(ctor), function) < 0) js_discard(js_take_exception(ctx));
+    js_define_data(ctx, js_as_object(ctor), JS_ATOM(prototype), proto, 0);
+    js_define_data(ctx, js_as_object(proto), JS_ATOM(constructor), ctor, JS_PROP_CONFIGURABLE);
+}
+
 /* eval (§19.2.1): a non-string comes back as is; source text would need compiling at run time.
  * Present so code can reference it (get-intrinsic lists %eval%). */
 CORE(global_eval) {

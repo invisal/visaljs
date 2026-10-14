@@ -174,7 +174,11 @@ await showAsync("lchmod", () => fsp.lchmod("tree/a.js", 0o644));
     };
     fs.writeFileSync("polled.txt", "x");
     fs.watchFile("polled.txt", { interval: 20 }, listener);
-    setTimeout(() => fs.writeFileSync("polled.txt", "xyz"), 100);
+    /* replaced whole (a rename), so the poller never sees it truncated, half written */
+    setTimeout(() => {
+      fs.writeFileSync("polled.tmp", "xyz");
+      fs.renameSync("polled.tmp", "polled.txt");
+    }, 100);
   });
   print("watchFile: " + polled);
 }

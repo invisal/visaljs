@@ -192,7 +192,7 @@ const stringifyParams = MIMEParams.prototype.toString;
 Object.defineProperty(MIMEParams.prototype, Symbol.iterator, { configurable: true, value: MIMEParams.prototype.entries, writable: true });
 Object.defineProperty(MIMEParams.prototype, "toJSON", { configurable: true, value: stringifyParams, writable: true });
 
-class MIMEType {
+export class MIMEType {
   #type;
   #subtype;
   #parameters;

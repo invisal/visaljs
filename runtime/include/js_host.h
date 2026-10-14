@@ -26,10 +26,14 @@ JSValue js_host_cwd(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t a
 /* buffer.c: node:buffer's INSPECT_MAX_BYTES, as it is set. */
 JSValue js_host_buffer_inspect_max_bytes(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
 
+/* web.c: an object's internal class, for structuredClone. */
+JSValue js_host_clone_class(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
+
 /* fetch.c: fetch()'s primitives (node/prelude/internal/fetch.js): a Headers' list as sent, a
  * request's body as sent, and a fetched Response. */
 JSValue js_host_fetch_header_list(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
 JSValue js_host_fetch_request_body(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
 JSValue js_host_fetch_response(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
+JSValue js_host_fetch_form_data_hooks(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
 
 #endif /* JS_HOST_H */

@@ -132,6 +132,11 @@ static bool class_named(JSValue v, const char *name) {
     return js_is_object(v) && strcmp(js_as_object(v)->shape->cls->name, name) == 0;
 }
 
+/* FormData (node/prelude/internal/form_data.js, linked into programs that name it) registers
+ * its body's serializer and formData()'s parser here (fetchFormDataHooks); until then a FormData
+ * is an ordinary object to a body, and formData() rejects. */
+static JSValue form_data_serialize, form_data_parse;  /* EMPTY (zero) until set: not callable */
+
 /* Extract a body (§5.3 "extract"): its bytes or stream, and the Content-Type it implies (EMPTY
  * for none). 0, or -1. */
 static int extract(JSContext *ctx, JSCell *owner, Body *b, JSValue init, JSValue *content_type) {
@@ -156,6 +161,26 @@ static int extract(JSContext *ctx, JSCell *owner, Body *b, JSValue init, JSValue
     } else if (js_buffer_source_bytes(init, &p, &n)) {
         bytes = u8_of(ctx, p, n);
     } else {
+        if (js_is_object(init) && js_is_callable(form_data_serialize)) {
+            /* a FormData: [the multipart body as a Blob, its Content-Type], else undefined */
+            JSValue parts = js_call(ctx, form_data_serialize, JS_UNDEFINED, 1, &init);
+            if (js_is_exception(parts)) return -1;
+            if (js_is_array(parts)) {
+                JSValue blob = js_get_index(ctx, parts, js_int32(0)), type = js_get_index(ctx, parts, js_int32(1));
+                if (js_is_exception(blob) || js_is_exception(type)) return -1;
+                if (js_is_blob(blob)) {
+                    const uint8_t *data;
+                    size_t size;
+                    JSValue blob_type;
+                    js_blob_bytes(blob, &data, &size, &blob_type);
+                    bytes = u8_of(ctx, data, size);
+                    if (js_is_exception(bytes)) return -1;
+                    js_store(ctx, owner, &b->bytes, bytes);
+                    *content_type = type;
+                    return 0;
+                }
+            }
+        }
         bool params = class_named(init, "URLSearchParams");
         JSValue s = js_to_string(ctx, init);
         if (js_is_exception(s)) return -1;
@@ -487,11 +512,29 @@ CONSUMER(request_array_buffer, request_consume, AS_ARRAY_BUFFER)
 CONSUMER(request_bytes, request_consume, AS_BYTES)
 CONSUMER(request_blob, request_consume, AS_BLOB)
 
-BUILTIN(form_data_unsupported) {
+/* formData(): the body's bytes, parsed by FormData's module as the Content-Type says */
+static JSValue form_data(JSContext *ctx, JSCell *owner, Body *b, JSValue headers) {
+    if (!js_is_callable(form_data_parse)) {
+        JSValue e = js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_VISALJS_UNSUPPORTED", "formData() (named only at run time)");
+        (void)e;
+        return rejected(ctx, js_take_exception(ctx));
+    }
+    JSValue type = js_headers_get(ctx, headers, "content-type");
+    if (js_is_exception(type)) return rejected(ctx, js_take_exception(ctx));
+    JSValue args[2] = { consume(ctx, owner, b, headers, AS_BYTES), type };
+    JSValue parsed = js_call(ctx, form_data_parse, JS_UNDEFINED, 2, args);
+    return js_is_exception(parsed) ? rejected(ctx, js_take_exception(ctx)) : parsed;
+}
+
+BUILTIN(request_form_data) {
     UNUSED_ARGS;
-    JSValue e = js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_VISALJS_UNSUPPORTED", "formData() is not supported yet");
-    (void)e;
-    return rejected(ctx, js_take_exception(ctx));
+    RequestObject *r = as_request(this_val);
+    if (!r) {
+        JSValue e = js_throw_invalid_this(ctx, "Request");
+        (void)e;
+        return rejected(ctx, js_take_exception(ctx));
+    }
+    return form_data(ctx, &r->obj.cell, &r->body, r->headers);
 }
 
 static void field(JSContext *ctx, JSValue o, const char *name, JSValue v) {
@@ -701,6 +744,16 @@ static JSValue response_consume(JSContext *ctx, JSValue this_val, int kind) {
     return consume(ctx, &r->obj.cell, &r->body, r->headers, kind);
 }
 
+BUILTIN(response_form_data) {
+    UNUSED_ARGS;
+    ResponseObject *r = as_response(this_val);
+    if (!r) {
+        JSValue e = js_throw_invalid_this(ctx, "Response");
+        (void)e;
+        return rejected(ctx, js_take_exception(ctx));
+    }
+    return form_data(ctx, &r->obj.cell, &r->body, r->headers);
+}
 CONSUMER(response_text, response_consume, AS_TEXT)
 CONSUMER(response_json, response_consume, AS_JSON)
 CONSUMER(response_array_buffer, response_consume, AS_ARRAY_BUFFER)
@@ -751,7 +804,7 @@ static const JSBuiltin request_proto[] = {
     WEBIDL_OPERATION("arrayBuffer", request_array_buffer, 0),
     WEBIDL_OPERATION("text", request_text, 0),
     WEBIDL_OPERATION("json", request_json, 0),
-    WEBIDL_OPERATION("formData", form_data_unsupported, 0),
+    WEBIDL_OPERATION("formData", request_form_data, 0),
     WEBIDL_OPERATION("bytes", request_bytes, 0),
 };
 
@@ -776,7 +829,7 @@ static const JSBuiltin response_proto[] = {
     WEBIDL_OPERATION("arrayBuffer", response_array_buffer, 0),
     WEBIDL_OPERATION("text", response_text, 0),
     WEBIDL_OPERATION("json", response_json, 0),
-    WEBIDL_OPERATION("formData", form_data_unsupported, 0),
+    WEBIDL_OPERATION("formData", response_form_data, 0),
     WEBIDL_OPERATION("bytes", response_bytes, 0),
 };
 
@@ -835,6 +888,20 @@ JSValue js_host_fetch_response(JSContext *ctx, JSValue callee, JSValue this_val,
         js_store(ctx, &r->obj.cell, &r->body.stream, ARG(3));
     }
     return rv;
+}
+
+/* fetchFormDataHooks(serialize, parse): FormData's module's body serializer and formData() parser */
+JSValue js_host_fetch_form_data_hooks(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    UNUSED_ARGS;
+    static bool rooted;
+    if (!rooted) {
+        js_add_root(ctx->rt, &form_data_serialize);
+        js_add_root(ctx->rt, &form_data_parse);
+        rooted = true;
+    }
+    form_data_serialize = ARG(0);
+    form_data_parse = ARG(1);
+    return JS_UNDEFINED;
 }
 
 static void install_fetch(JSContext *ctx, JSObject *global) {
