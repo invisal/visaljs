@@ -64,6 +64,20 @@ JSContext *js_uv_context(void) { return loop_ctx; }
 
 void js_uv_set_flush(void (*fn)(void)) { flush_hook = fn; }
 
+void js_uv_nest(int delta) { call_depth += delta; }
+
+bool js_uv_drain(void) {
+    if (failed) return false;
+    if (call_depth > 0) return true;
+    if (js_run_microtasks(loop_ctx) < 0) {
+        failed = loop_ctx->rt->failure;
+        uv_stop(loop);
+        return false;
+    }
+    flush();
+    return true;
+}
+
 bool js_uv_call(JSValue fn, uint32_t argc, JSValue *argv, JSValue *result) {
     if (failed) return false;
     JSContext *ctx = loop_ctx;

@@ -23,3 +23,5 @@ test-timers-immediate-queue-throw.js     domain
 test-stream-ispaused.js                  Function() constructor
 # not provided: http2
 test-stream-pipeline-http2.js            http2
+# async_hooks' resource events (init/before/after) aren't emitted
+test-stream-writable-samecb-singletick.js  async_hooks.createHook TickObject

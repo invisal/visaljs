@@ -91,6 +91,9 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "process_events.js"), reached: (code) => /\bprocess\b/.test(code) && EMITTER_METHOD.test(code) },
   /* its signal events and kill(), apart: they link libuv */
   { file: join(preludeDir, "internal", "process_signals.js"), reached: (code) => /\bprocess\b/.test(code) && /["'`]SIG[A-Z0-9]+["'`]|\.kill\b/.test(code) },
+  /* process.stdout and stderr as Writables: when the program's own code, or a package's, names
+   * them and uses streams (pipes into them, listens on them, ends them) */
+  { file: join(preludeDir, "internal", "process_stdio.js"), reached: (_code, program) => /\b(?:stdout|stderr)\b/.test(program) && STDIO_STREAM_USE.test(program) },
   /* process.stdin, made when first read: when the program's own code, or a package's, names it */
   { file: join(preludeDir, "internal", "process_stdin.js"), reached: (_code, program) => /\bstdin\b/.test(program) },
   /* node:tty's ReadStream: it links node:net and libuv */
@@ -162,6 +165,7 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
 const FETCH = /(?<![.\w$#])fetch\s*\(|[=(,]\s*fetch\s*[;,)\n]|\btypeof\s+fetch\b|\b(?:globalThis|global|self)\s*(?:\.\s*fetch\b|\[\s*["'`]fetch["'`])/;
 /* a Readable's operators: the distinctive ones by name, the others with node:stream named */
 const STREAM_OPERATORS = /\.\s*(?:flatMap|toArray|drop|take|asIndexedPairs)\s*\(|\bReadable\b[\s\S]*\.\s*(?:map|filter|forEach|reduce|some|every|find)\s*\(/;
+const STDIO_STREAM_USE = /\.\s*(?:pipe|on|once|end|cork|uncork|destroy|removeListener|addListener|prependListener)\s*\(|\b(?:pipeline|finished)\b|\bwritable(?:Length|HighWaterMark|NeedDrain|Ended|Finished)\b/;
 const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";
 const PROCESS_COMMON = "title|ppid|release|config|ref|unref|abort|report|domain|assert|binding|finalization";
 

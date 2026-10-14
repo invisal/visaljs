@@ -312,7 +312,14 @@ static bool parse_input(Conn *c, ssize_t n, const char *bytes) {
 }
 
 /* A socket's bytes, before JS sees them. */
-static bool hook_read(void *data, ssize_t n, const char *bytes) { return parse_input(data, n, bytes); }
+/* a socket's read, parsed in C: its callbacks (a body and its end) run before the microtasks and
+ * nextTicks do, as in Node, where one read is one callback scope */
+static bool hook_read(void *data, ssize_t n, const char *bytes) {
+    js_uv_nest(1);
+    bool ok = parse_input(data, n, bytes);
+    js_uv_nest(-1);
+    return js_uv_drain() && ok;
+}
 
 static void hook_close(void *data) { release_conn(data); }
 
@@ -550,12 +557,22 @@ JSValue js_host_http_feed(JSContext *ctx, JSValue callee, JSValue this_val, uint
     (void)callee, (void)this_val, (void)new_target;
     Conn *c = argc > 0 && js_is_int32(argv[0]) && js_as_int32(argv[0]) < 0 ? conn_of(js_as_int32(argv[0])) : NULL;
     if (!c) return JS_FALSE;
-    if (argc < 2 || js_is_null(argv[1]) || js_is_undefined(argv[1])) return js_bool(parse_input(c, UV_EOF, NULL));
+    /* called from JS: the parser's callbacks run in it, so no microtask or nextTick runs between
+     * two of them (a body and its end come in the same turn, as in Node) */
+    if (argc < 2 || js_is_null(argv[1]) || js_is_undefined(argv[1])) {
+        js_uv_nest(1);
+        bool ok = parse_input(c, UV_EOF, NULL);
+        js_uv_nest(-1);
+        return js_bool(ok);
+    }
     uint8_t *bytes;
     size_t n;
     if (!js_buffer_source_bytes(argv[1], &bytes, &n)) return js_throw_type_error(ctx, "httpFeed: bytes expected");
     if (n == 0) return JS_TRUE;
-    return js_bool(parse_input(c, (ssize_t)n, (const char *)bytes));
+    js_uv_nest(1);
+    bool ok = parse_input(c, (ssize_t)n, (const char *)bytes);
+    js_uv_nest(-1);
+    return js_bool(ok);
 }
 
 /* httpFedClose(conn): its parser and writer go */
