@@ -29,6 +29,7 @@ jobs:
       ctest: ${{ steps.diff.outputs.ctest }}
       nodejs: ${{ steps.diff.outputs.nodejs }}
       apps: ${{ steps.diff.outputs.apps }}
+      code: ${{ steps.diff.outputs.code }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -44,6 +45,7 @@ jobs:
             echo "ctest=true" >> "$GITHUB_OUTPUT"
             echo "nodejs=true" >> "$GITHUB_OUTPUT"
             echo "apps=true" >> "$GITHUB_OUTPUT"
+            echo "code=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files=$(git diff --name-only "$BASE" HEAD)
@@ -54,6 +56,10 @@ jobs:
           echo "ctest=$(echo "$files" | grep -qE '^runtime/|^\.github/workflows/ci\.yml$' && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "nodejs=$(echo "$files" | grep -qE "$code|^cli/|^tests/nodejs/" && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "apps=$(echo "$files" | grep -qE "$code|^cli/|^tests/apps/|^tests/differential/http\.ts$" && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          # the other way around: anything but the docs, the website, the benchmarks and the other
+          # workflows (a path nobody listed runs the tests)
+          docs='(^|/)[A-Z_]+\.md$|^\.github/(PULL_REQUEST_TEMPLATE/|pull_request_template\.md$)|^web/|^bench/|^\.github/workflows/(nightly|prebuilt)\.yml$|^LICENSE$'
+          echo "code=$(echo "$files" | grep -vE "$docs" | grep -q . && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
   lint:
     name: Lint and typecheck
@@ -72,12 +78,11 @@ jobs:
     # The compiler's, CLI's and test tooling's unit tests, and the differential tests (programs and
     # the app servers against Node). tests/programs runs in the programs jobs.
     name: Unit and differential tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          # the test262 runner's own tests read its harness files
-          submodules: true
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -88,12 +93,15 @@ jobs:
       # the runtime's and the host's libraries, compiled once before the tests build programs in
       # parallel: after a change to them, the first test to build would pay for it, and time out
       - run: node cli/src/cli.ts build tests/programs/host-modules.js -o warm-up --quiet
-      - run: npm run test:compiler -- --exclude "tests/programs/**"
+      # the test262 runner's own tests (tests/runner) read its harness files: they run with test262
+      - run: npm run test:compiler -- --exclude "tests/programs/**" --exclude "tests/runner/**"
 
   node22:
     # Programs behave like the Node in .nvmrc, but the compiler itself runs on Node 22 or later
     # (README): it builds and runs a program on 22.
     name: Compiler on Node 22
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -157,6 +165,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # the runner's own tests, with the harness files the checkout brings: once, on the first shard
+      - if: matrix.shard == 1
+        run: npx vitest run tests/runner
       - run: npm run test262 -- --update --shard=${{ matrix.shard }}/${{ strategy.job-total }}
       - uses: actions/upload-artifact@v7
         with:
