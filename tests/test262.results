@@ -6438,8 +6438,12 @@ built-ins/AsyncFromSyncIteratorPrototype/throw/throw-undefined.js sloppy
 built-ins/AsyncFromSyncIteratorPrototype/throw/throw-undefined.js strict
 built-ins/AsyncFunction/AsyncFunction-is-extensible.js sloppy
 built-ins/AsyncFunction/AsyncFunction-is-extensible.js strict
+built-ins/AsyncFunction/AsyncFunction-is-subclass.js sloppy
+built-ins/AsyncFunction/AsyncFunction-is-subclass.js strict
 built-ins/AsyncFunction/AsyncFunction-length.js sloppy
 built-ins/AsyncFunction/AsyncFunction-length.js strict
+built-ins/AsyncFunction/AsyncFunction-name.js sloppy
+built-ins/AsyncFunction/AsyncFunction-name.js strict
 built-ins/AsyncFunction/AsyncFunction-prototype.js sloppy
 built-ins/AsyncFunction/AsyncFunction-prototype.js strict
 built-ins/AsyncFunction/AsyncFunction.js sloppy
@@ -6448,6 +6452,10 @@ built-ins/AsyncFunction/AsyncFunctionPrototype-is-extensible.js sloppy
 built-ins/AsyncFunction/AsyncFunctionPrototype-is-extensible.js strict
 built-ins/AsyncFunction/AsyncFunctionPrototype-is-not-callable.js sloppy
 built-ins/AsyncFunction/AsyncFunctionPrototype-is-not-callable.js strict
+built-ins/AsyncFunction/AsyncFunctionPrototype-prototype.js sloppy
+built-ins/AsyncFunction/AsyncFunctionPrototype-prototype.js strict
+built-ins/AsyncFunction/AsyncFunctionPrototype-to-string.js sloppy
+built-ins/AsyncFunction/AsyncFunctionPrototype-to-string.js strict
 built-ins/AsyncFunction/instance-has-name.js sloppy
 built-ins/AsyncFunction/instance-has-name.js strict
 built-ins/AsyncFunction/instance-length.js sloppy
@@ -6460,8 +6468,12 @@ built-ins/AsyncGeneratorFunction/extensibility.js sloppy
 built-ins/AsyncGeneratorFunction/extensibility.js strict
 built-ins/AsyncGeneratorFunction/length.js sloppy
 built-ins/AsyncGeneratorFunction/length.js strict
+built-ins/AsyncGeneratorFunction/name.js sloppy
+built-ins/AsyncGeneratorFunction/name.js strict
 built-ins/AsyncGeneratorFunction/prototype/Symbol.toStringTag.js sloppy
 built-ins/AsyncGeneratorFunction/prototype/Symbol.toStringTag.js strict
+built-ins/AsyncGeneratorFunction/prototype/constructor.js sloppy
+built-ins/AsyncGeneratorFunction/prototype/constructor.js strict
 built-ins/AsyncGeneratorFunction/prototype/extensibility.js sloppy
 built-ins/AsyncGeneratorFunction/prototype/extensibility.js strict
 built-ins/AsyncGeneratorFunction/prototype/not-callable.js sloppy
@@ -9777,8 +9789,12 @@ built-ins/GeneratorFunction/extensibility.js sloppy
 built-ins/GeneratorFunction/extensibility.js strict
 built-ins/GeneratorFunction/length.js sloppy
 built-ins/GeneratorFunction/length.js strict
+built-ins/GeneratorFunction/name.js sloppy
+built-ins/GeneratorFunction/name.js strict
 built-ins/GeneratorFunction/prototype/Symbol.toStringTag.js sloppy
 built-ins/GeneratorFunction/prototype/Symbol.toStringTag.js strict
+built-ins/GeneratorFunction/prototype/constructor.js sloppy
+built-ins/GeneratorFunction/prototype/constructor.js strict
 built-ins/GeneratorFunction/prototype/extensibility.js sloppy
 built-ins/GeneratorFunction/prototype/extensibility.js strict
 built-ins/GeneratorFunction/prototype/not-callable.js sloppy
@@ -18650,6 +18666,8 @@ built-ins/Object/prototype/toString/symbol-tag-non-str-bigint.js sloppy
 built-ins/Object/prototype/toString/symbol-tag-non-str-bigint.js strict
 built-ins/Object/prototype/toString/symbol-tag-non-str-builtin.js sloppy
 built-ins/Object/prototype/toString/symbol-tag-non-str-builtin.js strict
+built-ins/Object/prototype/toString/symbol-tag-non-str-proxy-function.js sloppy
+built-ins/Object/prototype/toString/symbol-tag-non-str-proxy-function.js strict
 built-ins/Object/prototype/toString/symbol-tag-non-str.js sloppy
 built-ins/Object/prototype/toString/symbol-tag-non-str.js strict
 built-ins/Object/prototype/toString/symbol-tag-override-bigint.js sloppy
@@ -56068,6 +56086,8 @@ language/statements/async-generator/yield-spread-arr-single.js sloppy
 language/statements/async-generator/yield-spread-arr-single.js strict
 language/statements/async-generator/yield-spread-obj.js sloppy
 language/statements/async-generator/yield-spread-obj.js strict
+language/statements/async-generator/yield-star-async-from-sync-iterator-inaccessible.js sloppy
+language/statements/async-generator/yield-star-async-from-sync-iterator-inaccessible.js strict
 language/statements/async-generator/yield-star-async-next.js sloppy
 language/statements/async-generator/yield-star-async-next.js strict
 language/statements/async-generator/yield-star-async-return.js sloppy
