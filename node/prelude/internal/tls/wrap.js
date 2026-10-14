@@ -324,21 +324,11 @@ export class TLSSocket extends Socket {
     if (state & TLS_NEW_SESSION && !this._tlsOptions.isServer) this._onNewSession();
     if (state & TLS_FAILED && !this._tlsClosed) {
       this._tlsClosed = true;
-      this._onTlsError(this._failure(err));
+      this._onTlsError(tlsFailure(err));
     } else if (state & TLS_PEER_CLOSED) {
       this._peerEnded();
     }
     return taken;
-  }
-
-  /* OpenSSL 3 reads a first record that isn't TLS ("HTTP/1.1 400 …") as too long where BoringSSL
-   * sees its version: Node's code is OpenSSL's */
-  _failure(err) {
-    const b = this._firstBytes;
-    if (Array.isArray(err) && err[2] === "WRONG_VERSION_NUMBER" && !this._secureEstablished && b && b.length >= 5 && ((b[3] << 8) | b[4]) > 16384 + 2048) {
-      return sslError(0x0A0000C6, "packet length too long");
-    }
-    return tlsFailure(err);
   }
 
   /* a session the server gave (a TLS 1.3 ticket comes after the handshake): 'session', once the
@@ -409,9 +399,6 @@ export class TLSSocket extends Socket {
   _onCipher(bytes) {
     if (this.destroyed) return;
     this._unrefTimer();
-    if (!this._secureEstablished && (!this._firstBytes || this._firstBytes.length < 5)) {
-      this._firstBytes = Buffer.concat([this._firstBytes ?? Buffer.alloc(0), bytes]).subarray(0, 5);
-    }
     if (this._tlsOptions.isServer && this._conn === null) {
       this._hello = this._hello ? Buffer.concat([this._hello, bytes]) : Buffer.from(bytes);
       if (this._helloPending) return;

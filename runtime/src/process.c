@@ -336,6 +336,13 @@ void js_emit_warning(JSContext *ctx, JSValue message, const char *type, const ch
     fputs(prefix, stderr);
     js_write_output(ctx, 2, message);
     fputc('\n', stderr);
+    /* after the first warning, Node's hint (it names node, whose flags it is) */
+    static bool hinted;
+    if (!hinted) {
+        hinted = true;
+        fprintf(stderr, "(Use `node %s ...` to show where the warning was created)\n",
+                strcmp(type, "DeprecationWarning") == 0 ? "--trace-deprecation" : "--trace-warnings");
+    }
 }
 
 /* emitWarning(warning, type | { type, code }, code): "(node:PID) Warning: …" on stderr. */

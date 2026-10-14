@@ -158,7 +158,7 @@ function checkPeer(state, key) {
   const pub = toBig(key);
   const p = toBig(state.p);
   if (pub <= 1n) throw codeError(RangeError, "ERR_CRYPTO_INVALID_KEYLEN", "Supplied key is too small");
-  if (pub >= p - 1n) throw codeError(RangeError, "ERR_CRYPTO_INVALID_KEYTYPE", "Unspecified validation error");
+  if (pub >= p - 1n) throw codeError(RangeError, "ERR_CRYPTO_INVALID_KEYLEN", "Supplied key is too large");  /* Node 24 (OpenSSL 3.5) */
 }
 
 function dhComputeSecret(key, inEnc, outEnc) {
