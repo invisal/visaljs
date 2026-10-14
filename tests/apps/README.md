@@ -17,7 +17,27 @@ npm run start                     # or run it under Node, to compare
 ```
 
 `npm run apps:install` (at the root) installs every app. A new app needs a
-`package.json` whose `"main"` is its entry file, with a `build` script like the others'.
+`package.json` whose `"main"` is its entry file, with a `build` script like the others', and a
+check in [`check.ts`](check.ts) (`APP_CHECKS`): the script refuses to run without one.
+
+**Checks.** [`check.ts`](check.ts) compiles apps and runs each against Node. A server must answer
+the same requests with the same bytes; a command-line program must print the same output, write the
+same files and exit with the same status. There are two tiers:
+
+| Tier | Apps | CI |
+|---|---|---|
+| `fast` | `http-hello`, `express`, `hono`, `zod` | The cross-platform check: every pull request that can change a binary, on Linux, macOS and Windows (Windows with Zig, not yet required to pass) |
+| `full` | Every app | Nightly ([`nightly.yml`](../../.github/workflows/nightly.yml)) |
+
+```sh
+node tests/apps/check.ts                 # the fast tier
+node tests/apps/check.ts --tier=full     # every app
+node tests/apps/check.ts typescript      # the apps named
+```
+
+`express-postgres` and `mysql` run against the database from their `compose.yaml` (`npm run db` in
+the app), or `VISALJS_POSTGRES_URL` / `VISALJS_MYSQL_URL`. The check drops their tables before each
+side runs. Without a database they're skipped; with `--require-databases` (as in CI), that's a failure.
 
 **Binary sizes.** `npm run bench:size` builds every app (or those named:
 `npm run bench:size -- hono express`) with visaljs, as Node's single executable application and

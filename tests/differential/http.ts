@@ -10,10 +10,10 @@ export interface Server {
   port: number;
 }
 
-/** Starts `command` with $PORT set, and resolves once it prints its first line. */
-export function start(command: string, args: string[], port: number, cwd: string): Promise<Server> {
+/** Starts `command` with $PORT (and `env`) set, and resolves once it prints its first line. */
+export function start(command: string, args: string[], port: number, cwd: string, env: Record<string, string> = {}): Promise<Server> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, env: { ...process.env, NODE_ENV: "production", PORT: String(port) }, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, { cwd, env: { ...process.env, NODE_ENV: "production", PORT: String(port), ...env }, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     const timer = setTimeout(() => reject(new Error(`${command} didn't start:\n${output}`)), 20000);
     const onData = (d: Buffer) => {

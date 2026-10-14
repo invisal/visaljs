@@ -1,5 +1,6 @@
 # Nightly, on main: what is too slow to run on every pull request commit (ci.yml): the program
-# tests under GC stress, and the benchmarks (servers, kernels, GC). Skipped when main has no
+# tests under GC stress, every app (the full tier of tests/apps/check.ts), and the benchmarks
+# (servers, kernels, GC). Skipped when main has no
 # commit since the last night; run it by hand from the Actions tab (workflow_dispatch) to check a
 # branch.
 #
@@ -148,3 +149,44 @@ jobs:
           VISALJS_GC_CHECKS: stress
           JS_GC_STRESS_INTERVAL: "100"
           VISALJS_PROGRAMS_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+
+  apps:
+    # Every app compiled and checked against Node (tests/apps/check.ts --tier=full), express-postgres
+    # and mysql against their databases: service containers, as their compose.yaml. The fast tier
+    # runs on every pull request (ci.yml, the cross-platform check).
+    # Locally: node tests/apps/check.ts --tier=full
+    name: Apps, full tier
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U app" --health-interval 2s --health-timeout 5s --health-retries 30
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_USER: app
+          MYSQL_PASSWORD: app
+          MYSQL_DATABASE: app
+          MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+        ports:
+          - 3306:3306
+        options: --health-cmd "mysqladmin ping -h 127.0.0.1" --health-interval 2s --health-timeout 5s --health-retries 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: node tests/apps/check.ts --tier=full --require-databases
+        env:
+          VISALJS_POSTGRES_URL: postgres://app:app@localhost:5432/app
+          VISALJS_MYSQL_URL: mysql://app:app@127.0.0.1:3306/app
