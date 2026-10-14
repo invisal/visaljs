@@ -41,6 +41,8 @@ options:
   -j, --jobs <n>     compile at most n C files at once (default: one per processor, memory permitting)
   --embed-source     embed the source text: Function.prototype.toString returns it
   --all-builtins     install every built-in, not only those the program names
+  --all-features     link every optional part of the Node modules (node:stream's pipeline,
+                     FormData, Brotli…), not only those the program's code names
   --node-env <name>  the value of process.env.NODE_ENV, fixed at build time (default: production);
                      empty: read from the environment at run time
   --no-bundle        skip the bundler: the input is one ES module (a bundle)
@@ -77,6 +79,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
         jobs: { type: "string", short: "j" },
         "embed-source": { type: "boolean" },
         "all-builtins": { type: "boolean" },
+        "all-features": { type: "boolean" },
         "node-env": { type: "string" },
         "no-bundle": { type: "boolean" },
         "no-framework-build": { type: "boolean" },
@@ -134,6 +137,7 @@ interface BuildOptions {
   jobs?: string | undefined;
   "embed-source"?: boolean | undefined;
   "all-builtins"?: boolean | undefined;
+  "all-features"?: boolean | undefined;
   "node-env"?: string | undefined;
   "no-bundle"?: boolean | undefined;
   "no-framework-build"?: boolean | undefined;
@@ -205,7 +209,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   if (bundled) {
     try {
       const b = await report.step("📦", "Rolling the modules into a single file", () => bundle(entry, hosts, (message, where) => report.warn(message, where),
-        { ...frameworkExtras, nodeEnv }),
+        { ...frameworkExtras, nodeEnv, allFeatures: options["all-features"] === true }),
         (b) => `Rolled ${count(b.modules, "module")} into a single file (${size(Buffer.byteLength(b.code))})` +
           (b.required.length ? `; for a require() at run time: ${b.required.join(", ")}` : ""));
       source = b.code;

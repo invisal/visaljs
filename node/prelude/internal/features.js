@@ -9,7 +9,7 @@ export const features = Object.create(null);
 /** A feature's implementation, or ERR_VISALJS_UNSUPPORTED. */
 export function feature(name) {
   const f = features[name];
-  if (f === undefined) throw notSupported(`${name} (named only at run time)`);
+  if (f === undefined) throw notSupported(`${name} (named only at run time: build with --all-features to link it)`);
   return f;
 }
 
