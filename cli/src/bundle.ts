@@ -31,6 +31,8 @@ export interface BundleExtras {
   requires?: string[];
   /** `process.env.NODE_ENV`'s value, fixed at build time; undefined: read at run time. */
   nodeEnv?: string | undefined;
+  /** Every implicit module, not only those the program's code reaches (--all-features). */
+  allFeatures?: boolean;
 }
 
 export async function bundle(entry: string, hosts: readonly HostPackage[], warn: (message: string, where: string) => void,
@@ -42,7 +44,7 @@ export async function bundle(entry: string, hosts: readonly HostPackage[], warn:
    * (registered in the host's table first): bundled again, with them run first (the warnings
    * were given) */
   const program = programCode(b.code, dirname(resolve(entry)), hosts);
-  const implicit = hosts.flatMap((h) => h.implicitModules ?? []).filter((m) => m.reached(b.code, program)).map((m) => m.file);
+  const implicit = hosts.flatMap((h) => h.implicitModules ?? []).filter((m) => extras.allFeatures === true || m.reached(b.code, program)).map((m) => m.file);
   const required = hosts.some((h) => h.requireTable) ? [...requiredPackages(b.code, entry, extras.requires ?? []), ...namedBuiltins(program)] : [];
   if (required.length) implicit.unshift(REQUIRE_TABLE);
   return implicit.length ? rollup(implicit, () => {}, required) : b;
