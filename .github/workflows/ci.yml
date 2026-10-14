@@ -1,7 +1,8 @@
 # Every pull request commit: lint + typecheck, the compiler's, CLI's and differential tests, the
 # runtime's unit tests in all six configurations, the programs, Node's tests and the full test262,
-# the long ones in shards. Nightly (nightly.yml): the programs under GC stress and the benchmarks.
-# Every job runs on GitHub's runners.
+# the long ones in shards, and the fast tier of the apps on Linux, macOS and Windows (the full tier
+# when tests/apps changes). Nightly (nightly.yml): the programs under GC stress, the full tier of
+# the apps and the benchmarks. Every job runs on GitHub's runners.
 name: CI
 
 # Pull requests only: a merge to main brings commits their pull request already tested, and a
@@ -27,6 +28,8 @@ jobs:
       programs: ${{ steps.diff.outputs.programs }}
       ctest: ${{ steps.diff.outputs.ctest }}
       nodejs: ${{ steps.diff.outputs.nodejs }}
+      apps: ${{ steps.diff.outputs.apps }}
+      apps-full: ${{ steps.diff.outputs.apps-full }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -41,6 +44,8 @@ jobs:
             echo "programs=true" >> "$GITHUB_OUTPUT"
             echo "ctest=true" >> "$GITHUB_OUTPUT"
             echo "nodejs=true" >> "$GITHUB_OUTPUT"
+            echo "apps=true" >> "$GITHUB_OUTPUT"
+            echo "apps-full=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files=$(git diff --name-only "$BASE" HEAD)
@@ -50,6 +55,9 @@ jobs:
           echo "programs=$(echo "$files" | grep -qE "$code|^cli/|^tests/programs/|^vitest\.config\.ts$" && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "ctest=$(echo "$files" | grep -qE '^runtime/|^\.github/workflows/ci\.yml$' && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "nodejs=$(echo "$files" | grep -qE "$code|^cli/|^tests/nodejs/" && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          apps='^tests/apps/|^tests/differential/http\.ts$|^\.github/workflows/apps-full\.yml$'
+          echo "apps=$(echo "$files" | grep -qE "$code|^cli/|$apps" && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "apps-full=$(echo "$files" | grep -qE "$apps|^\.github/workflows/ci\.yml$" && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
   compiler:
     name: Lint, typecheck, compiler tests
@@ -246,3 +254,47 @@ jobs:
       - run: npx vitest run tests/programs
         env:
           VISALJS_PROGRAMS_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+
+  apps:
+    # The fast tier of the apps (tests/apps/check.ts): http-hello, express, hono and zod, each
+    # compiled and checked against Node, on each platform. Windows builds with Zig (the README:
+    # MSVC isn't supported), and doesn't fail the run until it passes.
+    # Locally: node tests/apps/check.ts
+    name: Apps, fast tier (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.apps == 'true'
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      ZIG: 0.16.0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install Zig
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TOOL_CACHE\zig-$env:ZIG"
+          if (-not (Test-Path "$dir\zig.exe")) {
+            Invoke-WebRequest "https://ziglang.org/download/$env:ZIG/zig-x86_64-windows-$env:ZIG.zip" -OutFile "$env:RUNNER_TEMP\zig.zip"
+            Expand-Archive "$env:RUNNER_TEMP\zig.zip" -DestinationPath "$env:RUNNER_TEMP\zig"
+            Move-Item (Get-ChildItem "$env:RUNNER_TEMP\zig")[0].FullName $dir
+          }
+          Add-Content $env:GITHUB_PATH $dir
+          Add-Content $env:GITHUB_ENV "CC=zig cc"
+      - run: npm ci
+      - run: node tests/apps/check.ts --tier=fast
+
+  apps-full:
+    # Every app, when tests/apps changes (nightly runs it too): apps-full.yml.
+    name: Apps, full tier
+    needs: changes
+    if: needs.changes.outputs.apps-full == 'true'
+    uses: ./.github/workflows/apps-full.yml

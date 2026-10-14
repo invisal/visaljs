@@ -1,5 +1,6 @@
 # Nightly, on main: what is too slow to run on every pull request commit (ci.yml): the program
-# tests under GC stress, and the benchmarks (servers, kernels, GC). Skipped when main has no
+# tests under GC stress, the full tier of the apps (apps-full.yml), and the benchmarks (servers,
+# kernels, GC). Skipped when main has no
 # commit since the last night; run it by hand from the Actions tab (workflow_dispatch) to check a
 # branch.
 #
@@ -148,3 +149,10 @@ jobs:
           VISALJS_GC_CHECKS: stress
           JS_GC_STRESS_INTERVAL: "100"
           VISALJS_PROGRAMS_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+
+  apps-full:
+    # Every app compiled and checked against Node, with their databases: apps-full.yml.
+    name: Apps, full tier
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    uses: ./.github/workflows/apps-full.yml
