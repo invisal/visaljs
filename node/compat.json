@@ -10,9 +10,9 @@
       "total": 58
     },
     "exports": {
-      "implemented": 1131,
+      "implemented": 1132,
       "stubbed": 33,
-      "missing": 120,
+      "missing": 119,
       "total": 1284
     }
   },
@@ -1144,6 +1144,7 @@
         "initgroups",
         "kill",
         "loadEnvFile",
+        "memoryUsage",
         "nextTick",
         "openStdin",
         "pid",
@@ -1174,7 +1175,6 @@
         "debugPort",
         "domain",
         "finalization",
-        "memoryUsage",
         "moduleLoadList",
         "ppid",
         "release",

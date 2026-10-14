@@ -93,6 +93,7 @@ test-path.js
 test-querystring-escape.js
 test-querystring-maxKeys-non-finite.js
 test-querystring-multichar-separator.js
+test-stream-aliases-legacy.js
 test-stream-auto-destroy.js
 test-stream-await-drain-writers-in-synchronously-recursion-write.js
 test-stream-backpressure.js
@@ -103,7 +104,9 @@ test-stream-compose.js
 test-stream-construct.js
 test-stream-decoder-objectmode.js
 test-stream-destroy-event-order.js
+test-stream-drop-take.js
 test-stream-duplex-end.js
+test-stream-duplex-from.js
 test-stream-duplex-props.js
 test-stream-duplex-readable-end.js
 test-stream-duplex-readable-writable.js
@@ -115,8 +118,12 @@ test-stream-err-multiple-callback-construction.js
 test-stream-error-once.js
 test-stream-event-names.js
 test-stream-events-prepend.js
+test-stream-filter.js
+test-stream-flatMap.js
+test-stream-forEach.js
 test-stream-inheritance.js
 test-stream-iterator-helpers-test262-tests.mjs
+test-stream-map.js
 test-stream-objectmode-undefined.js
 test-stream-once-readable-pipe.js
 test-stream-passthrough-drain.js
@@ -135,6 +142,7 @@ test-stream-pipe-flow.js
 test-stream-pipe-manual-resume.js
 test-stream-pipe-multiple-pipes.js
 test-stream-pipe-needDrain.js
+test-stream-pipe-objectmode-to-non-objectmode.js
 test-stream-pipe-same-destination-twice.js
 test-stream-pipe-unpipe-streams.js
 test-stream-pipe-without-listenerCount.js
@@ -181,11 +189,15 @@ test-stream-readable-resume-hwm.js
 test-stream-readable-resumeScheduled.js
 test-stream-readable-setEncoding-existing-buffers.js
 test-stream-readable-setEncoding-null.js
+test-stream-readable-to-web.mjs
 test-stream-readable-unpipe-resume.js
 test-stream-readable-unshift.js
 test-stream-readable-with-unimplemented-_read.js
 test-stream-readableListening-state.js
+test-stream-reduce.js
 test-stream-set-default-hwm.js
+test-stream-some-find-every.mjs
+test-stream-toArray.js
 test-stream-toWeb-allows-server-response.js
 test-stream-transform-callback-twice.js
 test-stream-transform-constructor-set-methods.js
@@ -202,6 +214,7 @@ test-stream-unpipe-event.js
 test-stream-unshift-empty-chunk.js
 test-stream-unshift-read-race.js
 test-stream-writable-aborted.js
+test-stream-writable-change-default-encoding.js
 test-stream-writable-clear-buffer.js
 test-stream-writable-constructor-set-methods.js
 test-stream-writable-decoded-encoding.js

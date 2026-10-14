@@ -90,7 +90,7 @@ function recordedNodeExports(compat: Compat): Record<string, string[]> {
 async function visaljsExports(): Promise<Record<string, ReturnType<typeof exportsOf>>> {
   /* node:inspector and node:inspector/promises throw when they load (no inspector in a compiled
    * program): nothing to count */
-  const names = Object.keys(modules).filter((name) => name !== "inspector" && name !== "inspector/promises").sort();
+  const names = Object.keys(modules).filter((name) => !name.startsWith("_") && name !== "inspector" && name !== "inspector/promises").sort();
   const dir = mkdtempSync(join(tmpdir(), "visaljs-compat-"));
   try {
     const probe = join(dir, "probe.mjs");
@@ -118,7 +118,8 @@ async function visaljsExports(): Promise<Record<string, ReturnType<typeof export
 }
 
 function coverage(node: Record<string, string[]>, ours: Record<string, ReturnType<typeof exportsOf>>, notes: Record<string, string>, version: string): Compat {
-  for (const name of Object.keys(ours)) if (!node[name]) throw new Error(`node:${name} is provided but Node ${version} has no such module`);
+  /* the legacy _stream_* names are left out, as Node's other `_` modules are */
+  for (const name of Object.keys(ours)) if (!name.startsWith("_") && !node[name]) throw new Error(`node:${name} is provided but Node ${version} has no such module`);
   for (const name of Object.keys(notes)) if (!node[name]) throw new Error(`compat.notes.json: no module ${name}`);
   const result: Compat["modules"] = {};
   const summary: Compat["summary"] = {
