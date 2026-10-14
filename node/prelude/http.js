@@ -387,7 +387,8 @@ export class ServerResponse extends OutgoingMessage {
     if (this.writableEnded || this.destroyed) {
       const e = new Error(this.destroyed ? "Cannot call write after a stream was destroyed" : "write after end");
       e.code = this.destroyed ? "ERR_STREAM_DESTROYED" : "ERR_STREAM_WRITE_AFTER_END";
-      queueMicrotask(() => this.emit("error", e));
+      /* Node's emitErrorNt: none on a destroyed response (its client went away) */
+      if (!this.destroyed) queueMicrotask(() => this.emit("error", e));
       if (typeof callback === "function") queueMicrotask(() => callback(e));
       return false;
     }
