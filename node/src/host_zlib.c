@@ -12,6 +12,7 @@
 #include "js_exception.h"
 #include "js_gc.h"
 #include "js_node.h"
+#include "js_web.h"
 #include "js_object.h"
 #include "js_ops.h"
 #include "jsstring.h"
@@ -37,6 +38,7 @@ typedef struct ZlibObject {
     int      err;
     int      gzip_id_bytes_read;
     bool     zlib_init_done;
+    bool     reject_garbage_after_end;  /* GUNZIP: no further members after the first */
     uint8_t *dictionary;  /* malloc'd; NULL when empty */
     size_t   dictionary_len;
 } ZlibObject;
@@ -173,7 +175,8 @@ static void process(ZlibObject *z) {
             else if (z->err == Z_DATA_ERROR) z->err = Z_NEED_DICT;  /* a bad dictionary, not bad input */
         }
         /* bytes after a gzip member: another member, or trailing garbage (zeros are padding) */
-        while (z->strm.avail_in > 0 && z->mode == GUNZIP && z->err == Z_STREAM_END && z->strm.next_in[0] != 0x00) {
+        while (z->strm.avail_in > 0 && z->mode == GUNZIP && z->err == Z_STREAM_END && !z->reject_garbage_after_end &&
+               z->strm.next_in[0] != 0x00) {
             reset_stream(z);
             z->err = inflate(&z->strm, z->flush);
         }
@@ -217,6 +220,7 @@ PRIMITIVE(js_host_zlib_new) {
     z->err = Z_OK;
     z->gzip_id_bytes_read = 0;
     z->zlib_init_done = false;
+    z->reject_garbage_after_end = false;
     z->dictionary = NULL;
     z->dictionary_len = 0;
     return js_object_value(&z->obj);
@@ -245,6 +249,7 @@ PRIMITIVE(js_host_zlib_init) {
         memcpy(z->dictionary, p, n);
         z->dictionary_len = n;
     }
+    z->reject_garbage_after_end = js_truthy(ARG(6));
     return JS_UNDEFINED;
 }
 
@@ -260,8 +265,11 @@ PRIMITIVE(js_host_zlib_write) {
         return js_throw_type_error(ctx, "zlibWrite: a handle, buffers and a state expected");
     double in_off = in ? js_as_number(ARG(3)) : 0, in_len = in ? js_as_number(ARG(4)) : 0;
     double out_off = js_as_number(ARG(6)), out_len = js_as_number(ARG(7));
-    if (!(in_off >= 0 && in_len >= 0 && in_off + in_len <= (double)in_n && out_off >= 0 && out_len >= 0 && out_off + out_len <= (double)out_n))
-        return js_throw_range_error(ctx, "zlibWrite: out of bounds");
+    /* node_zlib.cc's checks */
+    if (!(in_off >= 0 && in_len >= 0 && in_off + in_len <= (double)in_n))
+        return js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE", "input buffer is out of bounds");
+    if (!(out_off >= 0 && out_len >= 0 && out_off + out_len <= (double)out_n))
+        return js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE", "output buffer is out of bounds");
     z->strm.next_in = in ? in + (size_t)in_off : NULL;
     z->strm.avail_in = (uInt)in_len;
     z->strm.next_out = out + (size_t)out_off;
@@ -312,14 +320,15 @@ PRIMITIVE(js_host_zlib_crc32) {
     uLong value = js_is_number(ARG(1)) ? (uLong)js_as_number(ARG(1)) : 0;
     uint8_t *p;
     size_t n;
-    if (js_buffer_source_bytes(ARG(0), &p, &n)) return js_number((double)crc32(value, p, (uInt)n));
+    /* no bytes: the value as it is (zlib's crc32 gives 0 for a NULL buffer) */
+    if (js_buffer_source_bytes(ARG(0), &p, &n)) return js_number(n ? (double)crc32(value, p, (uInt)n) : (double)value);
     if (!js_is_string(ARG(0))) return js_throw_type_error(ctx, "zlibCrc32: a string or bytes expected");
     JSStrView view = js_string_view(ctx, ARG(0));
     size_t len = js_view_to_utf8(view, NULL, 0);
     char *utf8 = malloc(len ? len : 1);
     if (!utf8) js_fatal("out of memory in zlib");
     js_view_to_utf8(view, utf8, len);
-    value = crc32(value, (const Bytef *)utf8, (uInt)len);
+    if (len) value = crc32(value, (const Bytef *)utf8, (uInt)len);
     free(utf8);
     return js_number((double)value);
 }

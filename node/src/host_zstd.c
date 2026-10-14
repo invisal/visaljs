@@ -8,6 +8,7 @@
 #include "js_exception.h"
 #include "js_gc.h"
 #include "js_node.h"
+#include "js_web.h"
 #include "js_object.h"
 #include "js_ops.h"
 #include "jsstring.h"
@@ -26,6 +27,7 @@ typedef struct ZstdObject {
     ZSTD_CCtx         *cctx;
     ZSTD_DCtx         *dctx;
     unsigned long long pledged_src_size;
+    long long          consumed_src_size;  /* input read since init, when a size was pledged; -1 otherwise */
     int                flush;
     bool               frame_complete;  /* decompressing: the last input ended a frame */
     ZSTD_ErrorCode     error;  /* the first failure stays, as in Node */
@@ -94,6 +96,7 @@ static const char *zstd_init(ZstdObject *z, const uint8_t *dictionary, size_t di
             return "Failed to load zstd dictionary";
         }
         if (ZSTD_isError(ZSTD_CCtx_setPledgedSrcSize(z->cctx, z->pledged_src_size))) return "Could not set pledged src size";
+        z->consumed_src_size = z->pledged_src_size == ZSTD_CONTENTSIZE_UNKNOWN ? -1 : 0;
     } else {
         if (!(z->dctx = ZSTD_createDCtx_advanced(zstd_mem(z)))) return "Could not initialize zstd instance";
         if (dictionary_len && ZSTD_isError(ZSTD_DCtx_loadDictionary(z->dctx, dictionary, dictionary_len))) {
@@ -113,6 +116,7 @@ PRIMITIVE(js_host_zstd_new) {
     z->dctx = NULL;
     z->rt = ctx->rt;
     z->pledged_src_size = ZSTD_CONTENTSIZE_UNKNOWN;
+    z->consumed_src_size = -1;
     z->flush = ZSTD_e_continue;
     z->frame_complete = false;
     z->error = ZSTD_error_no_error;
@@ -156,14 +160,26 @@ PRIMITIVE(js_host_zstd_write) {
         return js_throw_type_error(ctx, "zstdWrite: a handle, buffers and a state expected");
     double in_off = in ? js_as_number(ARG(3)) : 0, in_len = in ? js_as_number(ARG(4)) : 0;
     double out_off = js_as_number(ARG(6)), out_len = js_as_number(ARG(7));
-    if (!(in_off >= 0 && in_len >= 0 && in_off + in_len <= (double)in_n && out_off >= 0 && out_len >= 0 && out_off + out_len <= (double)out_n))
-        return js_throw_range_error(ctx, "zstdWrite: out of bounds");
+    /* node_zlib.cc's checks */
+    if (!(in_off >= 0 && in_len >= 0 && in_off + in_len <= (double)in_n))
+        return js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE", "input buffer is out of bounds");
+    if (!(out_off >= 0 && out_len >= 0 && out_off + out_len <= (double)out_n))
+        return js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE", "output buffer is out of bounds");
     ZSTD_inBuffer input = { in ? in + (size_t)in_off : NULL, (size_t)in_len, 0 };
     ZSTD_outBuffer output = { out + (size_t)out_off, (size_t)out_len, 0 };
     z->flush = js_is_number(ARG(1)) ? (int)js_as_number(ARG(1)) : ZSTD_e_continue;
     size_t r = z->compress ? ZSTD_compressStream2(z->cctx, &output, &input, (ZSTD_EndDirective)z->flush)
                            : ZSTD_decompressStream(z->dctx, &output, &input);
-    if (ZSTD_isError(r)) z->error = ZSTD_getErrorCode(r);
+    if (ZSTD_isError(r)) {
+        z->error = ZSTD_getErrorCode(r);
+    } else if (z->compress && z->consumed_src_size >= 0) {
+        /* zstd takes a first ZSTD_e_end call's input as the pledged size: check it as Node 24 does */
+        z->consumed_src_size += (long long)input.pos;
+        if (r == 0 && z->flush == ZSTD_e_end) {
+            if ((unsigned long long)z->consumed_src_size != z->pledged_src_size) z->error = ZSTD_error_srcSize_wrong;
+            z->consumed_src_size = -1;
+        }
+    }
     if (z->error != ZSTD_error_no_error) return failure(ctx, ZSTD_getErrorString(z->error), (int)z->error, zstd_strerror(z->error));
     /* decompressing to the end, all the input read, room left and the frame not complete: the
        input stopped short (Node 24's ZstdDecompressContext::GetErrorInfo). A call without input

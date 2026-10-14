@@ -5,7 +5,7 @@ import { errnoMessage, errnoName, utilInspect } from "visaljs:host";
 /** How Node describes a bad argument: "Received type number (1)", "Received undefined", … */
 function received(value) {
   if (value == null) return " Received " + value;
-  if (typeof value === "function") return " Received function " + (value.name || "<anonymous>");
+  if (typeof value === "function") return " Received function " + value.name;  /* determineSpecificType: empty when anonymous */
   if (typeof value === "object") {
     const ctor = value.constructor;
     return ctor && ctor.name ? " Received an instance of " + ctor.name : " Received " + String(value);

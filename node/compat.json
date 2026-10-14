@@ -10,9 +10,9 @@
       "total": 58
     },
     "exports": {
-      "implemented": 1124,
+      "implemented": 1131,
       "stubbed": 33,
-      "missing": 127,
+      "missing": 120,
       "total": 1284
     }
   },
@@ -1335,27 +1335,27 @@
     "stream/web": {
       "status": "partial",
       "implemented": [
+        "CompressionStream",
+        "DecompressionStream",
         "ReadableStream",
         "ReadableStreamDefaultController",
-        "ReadableStreamDefaultReader"
-      ],
-      "stubbed": [],
-      "missing": [
-        "ByteLengthQueuingStrategy",
-        "CompressionStream",
-        "CountQueuingStrategy",
-        "DecompressionStream",
-        "ReadableByteStreamController",
-        "ReadableStreamBYOBReader",
-        "ReadableStreamBYOBRequest",
-        "ReadableStreamTee",
-        "TextDecoderStream",
-        "TextEncoderStream",
+        "ReadableStreamDefaultReader",
         "TransformStream",
         "TransformStreamDefaultController",
         "WritableStream",
         "WritableStreamDefaultController",
         "WritableStreamDefaultWriter"
+      ],
+      "stubbed": [],
+      "missing": [
+        "ByteLengthQueuingStrategy",
+        "CountQueuingStrategy",
+        "ReadableByteStreamController",
+        "ReadableStreamBYOBReader",
+        "ReadableStreamBYOBRequest",
+        "ReadableStreamTee",
+        "TextDecoderStream",
+        "TextEncoderStream"
       ]
     },
     "string_decoder": {

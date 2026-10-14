@@ -132,6 +132,8 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "timers_global.js"), reached: (code) => TIMER_USE.test(code) },
   /* the performance globals (node:perf_hooks'): when the program's own code, or a package's, names one */
   { file: join(preludeDir, "internal", "performance_global.js"), reached: (_code, program) => /\b[Pp]erformance(?:Entry|Mark|Measure)?\b/.test(program) },
+  /* the compression streams (globals and node:stream/web's): they link node:zlib */
+  { file: join(preludeDir, "internal", "compression_streams.js"), reached: (_code, program) => /\b(?:Compression|Decompression)Stream\b/.test(program) },
   /* the fetch global: it links node:http, node:https and node:zlib */
   { file: join(preludeDir, "internal", "fetch.js"), reached: (_code, program) => FETCH.test(program) },
   /* node:zlib's Brotli and zstd (their libraries are large): when the program's own code, or a
@@ -204,6 +206,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   errnoMessage: { c: "js_host_errno_message", length: 1 },    // (-errno) → "no such file or directory"
   errnoMap: { c: "js_host_errno_map", length: 0 },            // () → [[uv code, name, message], …], libuv's order
   cwd: { c: "js_host_cwd", length: 0 },                       // () → the working directory (the runtime's)
+  bufferInspectMaxBytes: { c: "js_host_buffer_inspect_max_bytes", length: 1 }, // (n) → undefined: node:buffer's INSPECT_MAX_BYTES, which Buffer's inspect shows
   /* fetch() (prelude/internal/fetch.js), over the fetch component's Request and Response (runtime/src/fetch.c) */
   fetchHeaderList: { c: "js_host_fetch_header_list", length: 1 },   // (headers) → [name, value, …] as added
   fetchRequestBody: { c: "js_host_fetch_request_body", length: 1 }, // (request) → Uint8Array | ReadableStream | null; the body is then used
@@ -371,7 +374,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   /* node:zlib: Chromium's zlib, as Node has it (src/host_zlib.c); a stream is a handle. Failures are
    * [message, errno, code], as Node's binding passes them to its onerror */
   zlibNew: { c: "js_host_zlib_new", length: 1 },              // (mode) → handle
-  zlibInit: { c: "js_host_zlib_init", length: 6 },            // (handle, windowBits, level, memLevel, strategy, dictionary | undefined)
+  zlibInit: { c: "js_host_zlib_init", length: 7 },            // (handle, windowBits, level, memLevel, strategy, dictionary | undefined, rejectGarbageAfterEnd)
   zlibWrite: { c: "js_host_zlib_write", length: 9 },          // (handle, flush, in | null, inOff, inLen, out, outOff, outLen, state) → 0 | failure; state: [availOut, availIn]
   zlibParams: { c: "js_host_zlib_params", length: 3 },        // (handle, level, strategy) → 0 | failure
   zlibReset: { c: "js_host_zlib_reset", length: 1 },          // (handle) → 0 | failure
@@ -379,7 +382,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   zlibCrc32: { c: "js_host_zlib_crc32", length: 2 },          // (string | bytes, value) → CRC-32
   /* its Brotli streams (src/host_brotli.c), the same way */
   brotliNew: { c: "js_host_brotli_new", length: 1 },          // (mode) → handle
-  brotliInit: { c: "js_host_brotli_init", length: 2 },        // (handle, params: Uint32Array, 0xffffffff unset) → 0 | failure
+  brotliInit: { c: "js_host_brotli_init", length: 3 },        // (handle, params: Uint32Array, 0xffffffff unset, dictionary | undefined) → 0 | failure
   brotliWrite: { c: "js_host_brotli_write", length: 9 },      // as zlibWrite
   brotliReset: { c: "js_host_brotli_reset", length: 1 },      // (handle) → 0 | failure
   brotliClose: { c: "js_host_brotli_close", length: 1 },

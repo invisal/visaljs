@@ -10,7 +10,7 @@ export default tseslint.config(
     /* the host prelude runs on visaljs's runtime: its globals, and URL checked with typeof */
     files: ["node/prelude/**/*.js"],
     languageOptions: {
-      globals: { queueMicrotask: "readonly", URL: "readonly", process: "readonly", Buffer: "readonly", TextDecoder: "readonly", ReadableStream: "readonly", setTimeout: "readonly", clearTimeout: "readonly", setImmediate: "readonly", AbortController: "readonly", SharedArrayBuffer: "readonly", DOMException: "readonly", Headers: "readonly", Request: "readonly", Response: "readonly" },
+      globals: { queueMicrotask: "readonly", URL: "readonly", process: "readonly", Buffer: "readonly", TextDecoder: "readonly", ReadableStream: "readonly", setTimeout: "readonly", clearTimeout: "readonly", setImmediate: "readonly", AbortController: "readonly", SharedArrayBuffer: "readonly", DOMException: "readonly", Headers: "readonly", Request: "readonly", Response: "readonly", WritableStream: "readonly" },
     },
   },
   {
