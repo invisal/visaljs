@@ -1,4 +1,4 @@
-# Every pull request commit: lint + typecheck, the compiler's, CLI's and differential tests, the
+# Every pull request commit: lint and typecheck, the compiler's, CLI's and differential tests, the
 # runtime's unit tests in all six configurations, the programs, Node's tests and the full test262,
 # the long ones in shards, and the cross-platform check (the fast tier of the apps on Linux, macOS
 # and Windows). Nightly (nightly.yml): the programs under GC stress, every app, and the benchmarks.
@@ -55,8 +55,23 @@ jobs:
           echo "nodejs=$(echo "$files" | grep -qE "$code|^cli/|^tests/nodejs/" && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "apps=$(echo "$files" | grep -qE "$code|^cli/|^tests/apps/|^tests/differential/http\.ts$" && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
-  compiler:
-    name: Lint, typecheck, compiler tests
+  lint:
+    name: Lint and typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+
+  unit:
+    # The compiler's, CLI's and test tooling's unit tests, and the differential tests (programs and
+    # the app servers against Node). tests/programs runs in the programs jobs.
+    name: Unit and differential tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -70,13 +85,9 @@ jobs:
       - run: npm ci
       # the apps (tests/apps) aren't workspaces: each has its own lockfile (the HTTP differential tests run them)
       - run: npm run apps:install
-      - run: npm run lint
-      - run: npm run typecheck
       # the runtime's and the host's libraries, compiled once before the tests build programs in
       # parallel: after a change to them, the first test to build would pay for it, and time out
       - run: node cli/src/cli.ts build tests/programs/host-modules.js -o warm-up --quiet
-      # tests/programs (compiled programs against Node's output) runs in the programs jobs; here,
-      # the rest: unit, CLI and differential tests
       - run: npm run test:compiler -- --exclude "tests/programs/**"
 
   node22:
