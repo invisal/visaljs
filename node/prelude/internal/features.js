@@ -34,6 +34,18 @@ export function lazyClass(name) {
   return Wrapper;
 }
 
+/** A constructor function (not a class) of a feature's, as Node's stream classes are: `new Ctor(…)`,
+ *  a class extending it, and the pre-class `Ctor.call(this, …)` with util.inherits all reach the
+ *  feature's function, with `this` as given. Its prototype is the feature's (provideClass). */
+export function lazyConstructor(name, length = 1) {
+  const Wrapper = function (...args) {
+    return Reflect.apply(feature(name), this, args);
+  };
+  Object.defineProperty(Wrapper, "name", { value: name });
+  Object.defineProperty(Wrapper, "length", { value: length });
+  return Wrapper;
+}
+
 /** Called by a feature's module for a lazyClass: the wrapper takes the class's prototype. */
 export function provideClass(Wrapper, Class) {
   features[Wrapper.name] = Class;

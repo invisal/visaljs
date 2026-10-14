@@ -1,119 +1,74 @@
-// stream.compose and stream.duplexPair. Linked into programs that name them (internal/features.js).
-import { Duplex, pipeline } from "../stream.js";
-import { codeError } from "./errors.js";
+// stream.compose, Duplex.from, readable.compose and stream.duplexPair: Node's
+// internal/streams/compose.js, duplexify.js and duplexpair.js, linked into programs that name
+// them (implicitModules in node/index.ts, internal/features.js).
+// Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
+import { Duplex } from "../stream.js";
 import { features } from "./features.js";
+import compose from "./streams/compose.js";
+import duplexify from "./streams/duplexify.js";
+/* Duplex.from of web streams converts them */
+import "./stream_web_adapters.js";
 
-const isNodeStream = (stream) => !!stream && typeof stream === "object" &&
-  (stream._readableState !== undefined || stream._writableState !== undefined || (typeof stream.pipe === "function" && typeof stream.on === "function"));
+const kCallback = Symbol("Callback");
+const kInitOtherSide = Symbol("InitOtherSide");
 
-/* one end of a duplexPair: what it's written comes out of the other end */
+/* one end of a duplexPair: what's written to it comes out of the other end */
 class DuplexSide extends Duplex {
+  #otherSide = null;
+
   constructor(options) {
     super(options);
-    this._otherSide = null;
-    this._readCallback = null;
+    this[kCallback] = null;
+    this.#otherSide = null;
   }
+
+  [kInitOtherSide](otherSide) {
+    if (this.#otherSide === null) this.#otherSide = otherSide;
+  }
+
   _read() {
-    const callback = this._readCallback;
+    const callback = this[kCallback];
     if (callback) {
-      this._readCallback = null;
+      this[kCallback] = null;
       callback();
     }
   }
+
   _write(chunk, encoding, callback) {
-    if (chunk.length === 0) process.nextTick(callback);
-    else {
-      this._otherSide.push(chunk);
-      this._otherSide._readCallback = callback;
+    if (chunk.length === 0) {
+      process.nextTick(callback);
+    } else {
+      this.#otherSide.push(chunk);
+      this.#otherSide[kCallback] = callback;
     }
   }
+
   _final(callback) {
-    this._otherSide.on("end", callback);
-    this._otherSide.push(null);
+    this.#otherSide.on("end", callback);
+    this.#otherSide.push(null);
+  }
+
+  _destroy(err, callback) {
+    const otherSide = this.#otherSide;
+    if (otherSide !== null && !otherSide.destroyed) {
+      process.nextTick(() => {
+        if (otherSide.destroyed) return;
+        if (err) otherSide.destroy();
+        else otherSide.push(null);
+      });
+    }
+    callback(err);
   }
 }
 
-/** Two Duplexes, each one's writes the other's reads: an in-memory socket pair. */
 function duplexPair(options) {
-  const a = new DuplexSide(options);
-  const b = new DuplexSide(options);
-  a._otherSide = b;
-  b._otherSide = a;
-  return [a, b];
+  const side0 = new DuplexSide(options);
+  const side1 = new DuplexSide(options);
+  side0[kInitOtherSide](side1);
+  side1[kInitOtherSide](side0);
+  return [side0, side1];
 }
 
-/** Streams piped one into the next, as one Duplex: writes go to the first, reads come from the
- *  last. (Node's takes functions and async iterables too: not yet.) */
-function compose(...streams) {
-  if (streams.length === 0) throw codeError(TypeError, "ERR_MISSING_ARGS", 'The "streams" argument must be specified');
-  for (const stream of streams) {
-    if (!isNodeStream(stream)) {
-      const e = new Error("stream.compose of anything but streams is not supported by visaljs yet");
-      e.code = "ERR_VISALJS_UNSUPPORTED";
-      throw e;
-    }
-  }
-  if (streams.length === 1) return streams[0];
-  const head = streams[0];
-  const tail = streams[streams.length - 1];
-  const writable = !!head._writableState && head.writable !== false;
-  const readable = !!tail._readableState && tail.readable !== false;
-  let ondrain = null;
-  let onfinish = null;
-  let onclose = null;
-  const d = new Duplex({
-    writableObjectMode: !!head.writableObjectMode,
-    readableObjectMode: !!tail.readableObjectMode,
-    writable,
-    readable,
-  });
-  pipeline(...streams, (err) => {
-    const cb = onclose;
-    onclose = null;
-    if (cb) cb(err);
-    else if (err) d.destroy(err);
-    else if (!readable && !writable) d.destroy();
-  });
-  if (writable) {
-    d._write = (chunk, encoding, callback) => {
-      if (head.write(chunk, encoding)) callback();
-      else ondrain = callback;
-    };
-    d._final = (callback) => {
-      head.end();
-      onfinish = callback;
-    };
-    head.on("drain", () => {
-      const cb = ondrain;
-      ondrain = null;
-      if (cb) cb();
-    });
-    tail.on("finish", () => {
-      const cb = onfinish;
-      onfinish = null;
-      if (cb) cb();
-    });
-  }
-  if (readable) {
-    /* the last stream's chunks as it emits them, paused while the Duplex's buffer is full (Node
-       24's; 22's read() drained it, joining the chunks) */
-    d._read = () => {
-      tail.resume();
-    };
-    tail.on("data", (chunk) => {
-      if (!d.push(chunk)) tail.pause();
-    });
-    tail.on("end", () => d.push(null));
-  }
-  d._destroy = (err, callback) => {
-    ondrain = onfinish = null;
-    if (tail.destroyed) callback(err);
-    else {
-      onclose = callback;
-      tail.destroy(err);
-    }
-  };
-  return d;
-}
-
-Object.assign(features, { compose, duplexPair });
+features.compose = compose;
+features.duplexify = duplexify;
+features.duplexPair = duplexPair;

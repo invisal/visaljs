@@ -77,13 +77,18 @@ export class IncomingMessage extends Readable {
     this.aborted = false;
     this.statusCode = null;
     this.statusMessage = null;
+    /* Node's: read yet, and dumped (stream utils' isServerRequest tells a request by them) */
+    this._consuming = false;
+    this._dumped = false;
   }
 
   get connection() {
     return this.socket;
   }
 
-  _read() {}
+  _read() {
+    this._consuming = true;
+  }
 
   /* a response nobody reads: its body is discarded, so the socket isn't held up */
   _dump() {

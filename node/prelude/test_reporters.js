@@ -6,7 +6,7 @@
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import { hostname } from "./os.js";
 import { relative } from "./path.js";
-import { Transform } from "./stream.js";
+import Transform from "./internal/streams/transform.js";
 import { SpecReporter, TapReporter, colorsFor, inspectWithNoCustomRetry } from "./internal/test_runner/reporters.js";
 
 /* ---- tap, spec ----------------------------------------------------------------------------------- */

@@ -7,7 +7,8 @@
 import { timerStart, zlibClose, zlibCrc32, zlibInit, zlibNew, zlibParams, zlibReset, zlibWrite } from "visaljs:host";
 import { Buffer, kMaxLength } from "./buffer.js";
 import { codeError, invalidArgType, outOfRange } from "./internal/errors.js";
-import { finished, Transform } from "./stream.js";
+import { finished } from "./stream.js";
+import Transform from "./internal/streams/transform.js";
 import { deprecate } from "./util.js";
 import { engines } from "./internal/zlib_engines.js";
 

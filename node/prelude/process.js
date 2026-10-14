@@ -24,6 +24,7 @@ export const kill = (...args) => p.kill(...args);
  * called through process, so a program that imports node:process links none of them */
 export const chdir = (...args) => p.chdir(...args);
 export const umask = (...args) => p.umask(...args);
+export const memoryUsage = (...args) => p.memoryUsage(...args);
 export const uptime = (...args) => p.uptime(...args);
 export const cpuUsage = (...args) => p.cpuUsage(...args);
 export const threadCpuUsage = (...args) => p.threadCpuUsage(...args);

@@ -39,4 +39,16 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
+  {
+    /* Node's lib/internal/streams, ported close to its source: Node's own style */
+    files: ["node/prelude/internal/streams/**/*.js"],
+    languageOptions: { globals: { console: "readonly", AbortSignal: "readonly" } },
+    linterOptions: { reportUnusedDisableDirectives: "off" },
+    rules: {
+      "@typescript-eslint/no-unused-expressions": "off",
+      "@typescript-eslint/no-this-alias": "off",
+      "@typescript-eslint/no-unused-vars": ["error", { args: "none", varsIgnorePattern: "^_|^unused$" }],
+      "no-useless-assignment": "off",
+    },
+  },
 );

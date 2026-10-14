@@ -57,6 +57,11 @@ export const modules: Readonly<Record<string, string>> = {
   repl: join(preludeDir, "repl.js"),
   sea: join(preludeDir, "sea.js"),
   stream: join(preludeDir, "stream.js"),
+  _stream_duplex: join(preludeDir, "_stream_duplex.js"),
+  _stream_passthrough: join(preludeDir, "_stream_passthrough.js"),
+  _stream_readable: join(preludeDir, "_stream_readable.js"),
+  _stream_transform: join(preludeDir, "_stream_transform.js"),
+  _stream_writable: join(preludeDir, "_stream_writable.js"),
   "stream/consumers": join(preludeDir, "stream_consumers.js"),
   "stream/promises": join(preludeDir, "stream_promises.js"),
   "stream/web": join(preludeDir, "stream_web.js"),
@@ -86,6 +91,9 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "process_events.js"), reached: (code) => /\bprocess\b/.test(code) && EMITTER_METHOD.test(code) },
   /* its signal events and kill(), apart: they link libuv */
   { file: join(preludeDir, "internal", "process_signals.js"), reached: (code) => /\bprocess\b/.test(code) && /["'`]SIG[A-Z0-9]+["'`]|\.kill\b/.test(code) },
+  /* process.stdout and stderr as Writables: when the program's own code, or a package's, names
+   * them and uses streams (pipes into them, listens on them, ends them) */
+  { file: join(preludeDir, "internal", "process_stdio.js"), reached: (_code, program) => /\b(?:stdout|stderr)\b/.test(program) && STDIO_STREAM_USE.test(program) },
   /* process.stdin, made when first read: when the program's own code, or a package's, names it */
   { file: join(preludeDir, "internal", "process_stdin.js"), reached: (_code, program) => /\bstdin\b/.test(program) },
   /* node:tty's ReadStream: it links node:net and libuv */
@@ -107,7 +115,16 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "buffer_transcode.js"), reached: (_code, program) => /\btranscode\b/.test(program) },
   /* events.on as a call (bare, or of events or EventEmitter): `.on(` is an emitter's method */
   { file: join(preludeDir, "internal", "events_on.js"), reached: (_code, program) => EVENTS_ON.test(program) },
-  { file: join(preludeDir, "internal", "stream_compose.js"), reached: (_code, program) => /\bduplexPair\b|(?<![.\w$])compose\s*\(|\b(?:stream|Stream)[\w$]*\s*\.\s*compose\b/.test(program) },
+  /* node:stream's rarer parts: compose, Duplex.from and duplexPair; the operators (map, filter, …
+   * on a Readable: drop, take, flatMap and toArray by name, the others named with streams); the
+   * conversions to and from web streams */
+  { file: join(preludeDir, "internal", "stream_compose.js"),
+    reached: (_code, program) => /\bduplexPair\b|(?<![.\w$])compose\s*\(|\.\s*compose\b|\bDuplex[\w$]*\s*\.\s*from\b/.test(program) },
+  { file: join(preludeDir, "internal", "stream_operators.js"), reached: (_code, program) => STREAM_OPERATORS.test(program) },
+  { file: join(preludeDir, "internal", "stream_from.js"), reached: (_code, program) => /\bReadable[\w$]*\s*\.\s*from\b/.test(program) },
+  { file: join(preludeDir, "internal", "stream_pipeline.js"), reached: (_code, program) => /\bpipeline\b/.test(program) },
+  { file: join(preludeDir, "internal", "stream_transform.js"), reached: (_code, program) => /\b(?:Transform|PassThrough)\b/.test(program) },
+  { file: join(preludeDir, "internal", "stream_web_adapters.js"), reached: (_code, program) => /\b(?:toWeb|fromWeb)\b/.test(program) },
   { file: join(preludeDir, "internal", "events_extras.js"),
     reached: (_code, program) => /\b(?:getEventListeners|[gs]etMaxListeners|addAbortListener|EventEmitterAsyncResource)\b/.test(program) },
   /* module.SourceMap */
@@ -149,6 +166,9 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
  * (`= fetch;`, `f(fetch)`), tested with typeof, or as the global object's; not a key or a field
  * named fetch (Hono's app.fetch) */
 const FETCH = /(?<![.\w$#])fetch\s*\(|[=(,]\s*fetch\s*[;,)\n]|\btypeof\s+fetch\b|\b(?:globalThis|global|self)\s*(?:\.\s*fetch\b|\[\s*["'`]fetch["'`])/;
+/* a Readable's operators: the distinctive ones by name, the others with node:stream named */
+const STREAM_OPERATORS = /\.\s*(?:flatMap|toArray|drop|take|asIndexedPairs)\s*\(|\bReadable\b[\s\S]*\.\s*(?:map|filter|forEach|reduce|some|every|find)\s*\(/;
+const STDIO_STREAM_USE = /\.\s*(?:pipe|on|once|end|cork|uncork|destroy|removeListener|addListener|prependListener)\s*\(|\b(?:pipeline|finished)\b|\bwritable(?:Length|HighWaterMark|NeedDrain|Ended|Finished)\b/;
 const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";
 const PROCESS_COMMON = "title|ppid|release|config|ref|unref|abort|report|domain|assert|binding|finalization";
 

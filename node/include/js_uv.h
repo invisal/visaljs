@@ -16,6 +16,13 @@ JSContext *js_uv_context(void);
  * an uncaught error ends the loop with its status. False once the loop is failing; otherwise
  * the callback's result goes to *result, when given. */
 bool js_uv_call(JSValue fn, uint32_t argc, JSValue *argv, JSValue *result);
+/* JS is running around what follows (a primitive called from JS that makes js_uv_calls): those
+ * calls leave microtasks and output to the outermost one, as calls nested in a js_uv_call do.
+ * js_uv_nest(1) before, js_uv_nest(-1) after. */
+void js_uv_nest(int delta);
+/* After work done under js_uv_nest from an I/O callback (no JS on the stack): the microtasks run
+ * and output goes out, as at the end of a js_uv_call. False once the loop is failing. */
+bool js_uv_drain(void);
 
 /* A hook run before the loop waits and after every callback: node:http sends its corked output. */
 void js_uv_set_flush(void (*flush)(void));
