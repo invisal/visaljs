@@ -55,8 +55,9 @@ JS_CORE_FN(OBJECT_PROTO, "toLocaleString", object_proto_to_locale_string, 0)
 /* Array (§23.1) */
 JS_CORE_FN(ARRAY, "isArray", array_is_array, 1)
 JS_CORE_FN(ARRAY, "from", array_from, 1)
-JS_CORE_FN(ARRAY, "of", array_of, 0)
+/* fromAsync before of: V8 13.6's order */
 JS_CORE_FN(ARRAY, "fromAsync", array_from_async, 1)
+JS_CORE_FN(ARRAY, "of", array_of, 0)
 JS_CORE_SYMBOL_GETTER(ARRAY, species, array_species)
 JS_CORE_FN(ARRAY_PROTO, "at", array_proto_at, 1)
 JS_CORE_FN(ARRAY_PROTO, "concat", array_proto_concat, 1)

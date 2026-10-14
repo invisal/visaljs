@@ -552,6 +552,15 @@ BUILTIN(reader_ctor) {
     return new_reader(ctx, proto, ARG(0));
 }
 
+/* A chunk read at once from the queue: Node 24's fast path makes it { done: false, value }, where
+ * a read that waits for its chunk gets { value, done: false } */
+static JSValue queued_result(JSContext *ctx, JSValue chunk) {
+    JSValue o = js_new_object(ctx);
+    js_define_data(ctx, js_as_object(o), JS_ATOM(done), JS_FALSE, JS_PROP_DEFAULT);
+    js_define_data(ctx, js_as_object(o), JS_ATOM(value), chunk, JS_PROP_DEFAULT);
+    return o;
+}
+
 /* ReadableStreamDefaultReaderRead: a promise of { value, done } */
 static JSValue reader_read(JSContext *ctx, ReaderObject *r) {
     StreamObject *s = as_stream(r->stream);
@@ -568,7 +577,7 @@ static JSValue reader_read(JSContext *ctx, ReaderObject *r) {
         } else {
             call_pull_if_needed(ctx, k);
         }
-        return resolved(ctx, js_iter_result(ctx, chunk, false));
+        return resolved(ctx, queued_result(ctx, chunk));
     }
     JSValue p = js_new_promise(ctx);
     if (js_array_push(ctx, js_as_object(r->requests), p) < 0) return JS_EXCEPTION;

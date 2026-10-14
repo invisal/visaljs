@@ -74,12 +74,13 @@ export const isFloat64Array = (value) => tag(value) === "Float64Array";
 export const isBigInt64Array = (value) => tag(value) === "BigInt64Array";
 export const isBigUint64Array = (value) => tag(value) === "BigUint64Array";
 
-/* Node's order, which Object.keys(util.types) shows */
+/* Node 24's order, which Object.keys(util.types) shows */
 export default {
-  isArgumentsObject, isArrayBuffer, isAsyncFunction, isBigIntObject, isBooleanObject, isDataView, isDate, isExternal,
+  isArgumentsObject, isArrayBuffer, isAsyncFunction, isBigIntObject, isBooleanObject, isDate, isExternal,
   isGeneratorFunction, isGeneratorObject, isMap, isMapIterator, isModuleNamespaceObject, isNativeError, isNumberObject,
   isPromise, isProxy, isRegExp, isSet, isSetIterator, isSharedArrayBuffer, isStringObject, isSymbolObject, isWeakMap,
-  isWeakSet, isAnyArrayBuffer, isBoxedPrimitive, isArrayBufferView, isTypedArray, isUint8Array, isUint8ClampedArray,
+  isWeakSet, isAnyArrayBuffer, isBoxedPrimitive, isArrayBufferView, isDataView, isTypedArray, isUint8Array,
+  isUint8ClampedArray,
   isUint16Array, isUint32Array, isInt8Array, isInt16Array, isInt32Array, isFloat16Array, isFloat32Array,
   isFloat64Array, isBigInt64Array, isBigUint64Array, isKeyObject, isCryptoKey,
 };
