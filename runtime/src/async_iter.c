@@ -473,6 +473,7 @@ static void install_async_iterator(JSContext *ctx, JSObject *global) {
     JSObject *agp = js_as_object(in[JS_INTRINSIC_ASYNC_GENERATOR_PROTOTYPE]);
     js_define_data(ctx, agfp, JS_ATOM(prototype), in[JS_INTRINSIC_ASYNC_GENERATOR_PROTOTYPE], JS_PROP_CONFIGURABLE);
     js_define_data(ctx, agfp, JS_SYMBOL(toStringTag), js_atom_from_cstr(ctx, "AsyncGeneratorFunction"), JS_PROP_CONFIGURABLE);
+    js_define_function_kind_ctor(ctx, in[JS_INTRINSIC_ASYNC_GENERATOR_FUNCTION_PROTOTYPE], 2);
     js_define_data(ctx, agp, JS_ATOM(constructor), in[JS_INTRINSIC_ASYNC_GENERATOR_FUNCTION_PROTOTYPE], JS_PROP_CONFIGURABLE);
     (void)js_define_method(ctx, agp, "next", async_generator_next, 1);
     (void)js_define_method(ctx, agp, "return", async_generator_return, 1);

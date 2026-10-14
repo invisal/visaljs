@@ -208,6 +208,7 @@ static void install_generator(JSContext *ctx, JSObject *global) {
     JSObject *gp = js_as_object(in[JS_INTRINSIC_GENERATOR_PROTOTYPE]);
     js_define_data(ctx, gfp, JS_ATOM(prototype), in[JS_INTRINSIC_GENERATOR_PROTOTYPE], JS_PROP_CONFIGURABLE);
     js_define_data(ctx, gfp, JS_SYMBOL(toStringTag), js_atom_from_cstr(ctx, "GeneratorFunction"), JS_PROP_CONFIGURABLE);
+    js_define_function_kind_ctor(ctx, in[JS_INTRINSIC_GENERATOR_FUNCTION_PROTOTYPE], 0);
     js_define_data(ctx, gp, JS_ATOM(constructor), in[JS_INTRINSIC_GENERATOR_FUNCTION_PROTOTYPE], JS_PROP_CONFIGURABLE);
     (void)js_define_method(ctx, gp, "next", generator_next, 1);
     (void)js_define_method(ctx, gp, "return", generator_return, 1);
@@ -222,4 +223,5 @@ void js_async_function_realm_init(JSContext *ctx) {
     in[JS_INTRINSIC_ASYNC_FUNCTION_PROTOTYPE] = js_new_object_proto(ctx, in[JS_INTRINSIC_FUNCTION_PROTOTYPE], 4);
     js_define_data(ctx, js_as_object(in[JS_INTRINSIC_ASYNC_FUNCTION_PROTOTYPE]), JS_SYMBOL(toStringTag),
                    js_atom_from_cstr(ctx, "AsyncFunction"), JS_PROP_CONFIGURABLE);
+    js_define_function_kind_ctor(ctx, in[JS_INTRINSIC_ASYNC_FUNCTION_PROTOTYPE], 1);
 }

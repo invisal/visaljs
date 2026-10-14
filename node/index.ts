@@ -132,6 +132,10 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "timers_global.js"), reached: (code) => TIMER_USE.test(code) },
   /* the performance globals (node:perf_hooks'): when the program's own code, or a package's, names one */
   { file: join(preludeDir, "internal", "performance_global.js"), reached: (_code, program) => /\b[Pp]erformance(?:Entry|Mark|Measure)?\b/.test(program) },
+  /* the FormData global, and Request's and Response's formData() */
+  { file: join(preludeDir, "internal", "form_data.js"), reached: (_code, program) => /\b(?:FormData|formData)\b/.test(program) },
+  /* the structuredClone global */
+  { file: join(preludeDir, "internal", "structured_clone.js"), reached: (_code, program) => /\bstructuredClone\b/.test(program) },
   /* the compression streams (globals and node:stream/web's): they link node:zlib */
   { file: join(preludeDir, "internal", "compression_streams.js"), reached: (_code, program) => /\b(?:Compression|Decompression)Stream\b/.test(program) },
   /* the fetch global: it links node:http, node:https and node:zlib */
@@ -208,10 +212,12 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   errnoMap: { c: "js_host_errno_map", length: 0 },            // () → [[uv code, name, message], …], libuv's order
   cwd: { c: "js_host_cwd", length: 0 },                       // () → the working directory (the runtime's)
   bufferInspectMaxBytes: { c: "js_host_buffer_inspect_max_bytes", length: 1 }, // (n) → undefined: node:buffer's INSPECT_MAX_BYTES, which Buffer's inspect shows
+  cloneClass: { c: "js_host_clone_class", length: 1 },        // (value) → its internal class's name, for structuredClone; undefined for a primitive
   /* fetch() (prelude/internal/fetch.js), over the fetch component's Request and Response (runtime/src/fetch.c) */
   fetchHeaderList: { c: "js_host_fetch_header_list", length: 1 },   // (headers) → [name, value, …] as added
   fetchRequestBody: { c: "js_host_fetch_request_body", length: 1 }, // (request) → Uint8Array | ReadableStream | null; the body is then used
   fetchResponse: { c: "js_host_fetch_response", length: 6 },        // (status, statusText, headers, body, url, redirected) → Response
+  fetchFormDataHooks: { c: "js_host_fetch_form_data_hooks", length: 2 }, // (serialize, parse): FormData's (prelude/internal/form_data.js)
   ttyIsatty: { c: "js_host_tty_isatty", length: 1 },          // (fd) → boolean
   timerUnref: { c: "js_host_timer_unref", length: 2 },        // (fn, ms) → id: a timer that doesn't keep the program alive
   /* node:timers' Timeouts and Immediates (the runtime's timers, runtime/src/jobs.c) */

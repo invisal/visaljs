@@ -11,6 +11,7 @@
 #include "internal.h"
 #include "js_bigint.h"
 #include "js_console.h"
+#include "js_host.h"
 #include "js_symbol.h"
 #include "js_atoms.h"
 #include "js_convert.h"
@@ -212,3 +213,20 @@ JSValue js_decode_utf8_bytes(JSContext *ctx, const uint8_t *p, size_t n) {
     return s;
 }
 
+
+/* cloneClass(value): an object's internal class, as structuredClone (node/prelude/internal/
+ * structured_clone.js) sorts values: "Object" (an ordinary object, a class instance's too),
+ * "Array", "Date", "Map", "TypedArray", "Proxy", "Arguments", "Function", a primitive wrapper's
+ * type ("Number", "String", …), a web class's name ("URL", "Blob", …); undefined for a primitive. */
+JSValue js_host_clone_class(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    UNUSED_ARGS;
+    JSValue v = ARG(0);
+    if (!js_is_object(v)) return JS_UNDEFINED;
+    if (js_is_function(v)) return js_new_string_cstr(ctx, "Function");
+    if (js_is_wrapper(v)) {
+        JSValue p = js_wrapped_value(v);
+        return js_new_string_cstr(ctx, js_is_string(p) ? "String" : js_is_number(p) ? "Number" : js_is_bool(p) ? "Boolean"
+                                       : js_is_bigint(p) ? "BigInt" : "Symbol");
+    }
+    return js_new_string_cstr(ctx, js_as_object(v)->shape->cls->name);
+}

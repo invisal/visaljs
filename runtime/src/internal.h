@@ -23,6 +23,8 @@ void js_function_realm_init(JSContext *ctx);  /* function.c: %Function.prototype
 void js_global_realm_init(JSContext *ctx);    /* global.c: the global object, primitives' prototypes */
 void js_error_realm_init(JSContext *ctx, JSObject *global);  /* error.c: Error and the native errors */
 void js_builtins_realm_init(JSContext *ctx, JSObject *global);  /* builtins.c: Object, Array, String, … */
+/* builtins.c: %GeneratorFunction% (0), %AsyncFunction% (1) or %AsyncGeneratorFunction% (2), for proto */
+void js_define_function_kind_ctor(JSContext *ctx, JSValue proto, int kind);
 
 /* The ordinary internal methods (object.c), for class hooks that add to them. */
 int js_ordinary_get_own_property(JSContext *ctx, JSObject *o, JSValue key, JSPropertyDescriptor *out);

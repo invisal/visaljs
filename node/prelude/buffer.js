@@ -17,8 +17,9 @@ export const constants = { MAX_LENGTH: kMaxLength, MAX_STRING_LENGTH: kStringMax
 
 /** isUtf8 and isAscii's input: an ArrayBuffer or a view, as Node's */
 function viewBytes(input) {
-  if (input instanceof ArrayBuffer) return new Uint8Array(input);
-  if (ArrayBuffer.isView(input)) return new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+  /* a detached buffer, or a view of one, is empty */
+  if (input instanceof ArrayBuffer) return input.detached ? new Uint8Array(0) : new Uint8Array(input);
+  if (ArrayBuffer.isView(input)) return input.buffer.detached ? new Uint8Array(0) : new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
   throw invalidArgType("input", "an instance of ArrayBuffer, Buffer, or TypedArray", input);
 }
 
