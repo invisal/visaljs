@@ -27,6 +27,7 @@ typedef struct ZstdObject {
     ZSTD_DCtx         *dctx;
     unsigned long long pledged_src_size;
     int                flush;
+    bool               frame_complete;  /* decompressing: the last input ended a frame */
     ZSTD_ErrorCode     error;  /* the first failure stays, as in Node */
     JSRuntime         *rt;     /* the allocator's */
 } ZstdObject;
@@ -113,6 +114,7 @@ PRIMITIVE(js_host_zstd_new) {
     z->rt = ctx->rt;
     z->pledged_src_size = ZSTD_CONTENTSIZE_UNKNOWN;
     z->flush = ZSTD_e_continue;
+    z->frame_complete = false;
     z->error = ZSTD_error_no_error;
     return js_object_value(&z->obj);
 }
@@ -163,6 +165,12 @@ PRIMITIVE(js_host_zstd_write) {
                            : ZSTD_decompressStream(z->dctx, &output, &input);
     if (ZSTD_isError(r)) z->error = ZSTD_getErrorCode(r);
     if (z->error != ZSTD_error_no_error) return failure(ctx, ZSTD_getErrorString(z->error), (int)z->error, zstd_strerror(z->error));
+    /* decompressing to the end, all the input read, room left and the frame not complete: the
+       input stopped short (Node 24's ZstdDecompressContext::GetErrorInfo). A call without input
+       leaves the frame as the last one with input left it. */
+    if (!z->compress && input.size > 0) z->frame_complete = r == 0;
+    if (!z->compress && z->flush == ZSTD_e_end && !z->frame_complete && input.pos == input.size && output.pos < output.size)
+        return failure(ctx, "unexpected end of file", -5, "Z_BUF_ERROR");
     uint32_t result[2] = { (uint32_t)(output.size - output.pos), (uint32_t)(input.size - input.pos) };
     memcpy(state, result, sizeof result);
     return js_int32(0);
@@ -174,6 +182,7 @@ PRIMITIVE(js_host_zstd_reset) {
     ZstdObject *z = zstd_arg(ARG(0));
     if (!z) return js_throw_type_error(ctx, "zstdReset: a handle expected");
     if (!z->compress) z->pledged_src_size = ZSTD_CONTENTSIZE_UNKNOWN;  /* ignored when decompressing */
+    z->frame_complete = false;
     const char *code;
     const char *message = zstd_init(z, NULL, 0, &code);
     if (message) return failure(ctx, message, -1, code);

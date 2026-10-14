@@ -81,8 +81,18 @@ export function appendFileSync(path, data, options) {
   writeWhole(path, data, options, true);
 }
 
+let warnedExists = false;
 export function existsSync(path) {
-  if (typeof path !== "string" || path.indexOf("\u0000") !== -1) return false;
+  if (typeof path !== "string") {
+    /* Node 24: a type no path can be, deprecated (DEP0187), warning once */
+    const valid = path instanceof Uint8Array || (typeof URL === "function" && path instanceof URL);  /* a Buffer, a URL */
+    if (!valid && !warnedExists) {
+      warnedExists = true;
+      process.emitWarning("Passing invalid argument types to fs.existsSync is deprecated", "DeprecationWarning", "DEP0187");
+    }
+    return false;
+  }
+  if (path.indexOf("\u0000") !== -1) return false;
   return fsExists(path);
 }
 
@@ -298,8 +308,8 @@ export function linkSync(existingPath, newPath) {
 
 /** type "dir" or "junction" matters on Windows only, as in Node. */
 export function symlinkSync(target, path, type) {
-  if (type != null && type !== "dir" && type !== "file" && type !== "junction") {
-    throw codeError(Error, "ERR_FS_INVALID_SYMLINK_TYPE", `Symlink type must be one of "dir", "file", or "junction". Received "${type}"`);
+  if (type != null && type !== "dir" && type !== "file" && type !== "junction") {  /* Node 24's validateOneOf */
+    throw invalidArgValue("type", "must be one of: 'dir', 'file', 'junction', null, undefined", type);
   }
   twoPaths(FS_SYMLINK, "symlink", target, path, type === "dir" ? 1 : type === "junction" ? 2 : 0);
 }
@@ -806,10 +816,9 @@ export const watchFile = lazyFunction("watchFile", 3);
 export const unwatchFile = lazyFunction("unwatchFile", 2);
 export const openAsBlob = lazyFunction("openAsBlob", 2);
 
-/* the names Node keeps for its streams, and for access()'s modes */
+/* the names Node keeps for its streams */
 export const FileReadStream = ReadStream;
 export const FileWriteStream = WriteStream;
-export const F_OK = 0, R_OK = 4, W_OK = 2, X_OK = 1;
 
 /* the platform's (libuv's, then the C library's), in Node's order */
 export const constants = { __proto__: null };
@@ -818,7 +827,7 @@ export const constants = { __proto__: null };
   for (let i = 0; i < flat.length; i += 2) constants[flat[i]] = flat[i + 1];
 }
 
-export default {
+const fs = {
   constants, readFileSync, writeFileSync, appendFileSync, existsSync, unlinkSync, statSync, lstatSync, readdirSync, readFile, writeFile,
   unlink, stat, lstat, readdir, createReadStream, ReadStream, Stats, Dirent, realpathSync, realpath, mkdirSync, mkdir, utimesSync,
   utimes, openSync, open, closeSync, close, writeSync, readSync, read, write, appendFile, exists, createWriteStream, WriteStream,
@@ -826,8 +835,29 @@ export default {
   chmodSync, chmod, fchmodSync, fchmod, chownSync, chown, lchownSync, lchown, fchownSync, fchown, fstatSync, fstat, fsyncSync, fsync,
   fdatasyncSync, fdatasync, ftruncateSync, ftruncate, truncateSync, truncate, futimesSync, futimes, lutimesSync, lutimes,
   mkdtempSync, mkdtemp, rmdirSync, rmdir, rmSync, rm, readvSync, readv, writevSync, writev, statfsSync, statfs, Dir, opendirSync,
-  opendir, cpSync, cp, globSync, glob, watch, watchFile, unwatchFile, openAsBlob, FileReadStream, FileWriteStream, F_OK, R_OK, W_OK, X_OK,
+  opendir, cpSync, cp, globSync, glob, watch, watchFile, unwatchFile, openAsBlob, FileReadStream, FileWriteStream,
   get promises() {
     return promises;
   },
 };
+
+/* access()'s modes on fs itself: hidden, deprecated getters in Node 24 (DEP0176), warning once */
+let warnedModes = false;
+for (const [name, value] of [["F_OK", 0], ["R_OK", 4], ["W_OK", 2], ["X_OK", 1]]) {
+  Object.defineProperty(fs, name, {
+    enumerable: false,
+    configurable: true,
+    get() {
+      if (!warnedModes) {
+        warnedModes = true;
+        process.emitWarning(`fs.${name} is deprecated, use fs.constants.${name} instead`, "DeprecationWarning", "DEP0176");
+      }
+      return value;
+    },
+    set(v) {
+      Object.defineProperty(fs, name, { value: v, writable: true, enumerable: true, configurable: true });
+    },
+  });
+}
+
+export default fs;

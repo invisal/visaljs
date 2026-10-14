@@ -510,12 +510,12 @@ static JSValue new_process(JSContext *ctx) {
     js_define_data(ctx, js_as_object(versions), js_atom_from_cstr(ctx, "node"), js_new_string_cstr(ctx, JS_NODE_VERSION), JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
     js_define_data(ctx, js_as_object(versions), js_atom_from_cstr(ctx, "visaljs"), js_new_string_cstr(ctx, JS_VISALJS_VERSION), JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
     js_define_data(ctx, p, js_atom_from_cstr(ctx, "versions"), versions, JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
-    /* features: what this build has, in Node's names. No inspector, TLS from
-       BoringSSL without OCSP stapling, require() of ES modules, no type stripping */
+    /* features: what this build has, in Node 24's names. No inspector, TLS from
+       BoringSSL without OCSP stapling, require() of ES modules, no QUIC, no type stripping */
     static const struct { const char *name; bool on; } features[] = {
         { "inspector", false }, { "debug", false }, { "uv", true }, { "ipv6", true },
         { "tls_alpn", true }, { "tls_sni", true }, { "tls_ocsp", false }, { "tls", true },
-        { "openssl_is_boringssl", true }, { "cached_builtins", true }, { "require_module", true },
+        { "openssl_is_boringssl", true }, { "cached_builtins", true }, { "require_module", true }, { "quic", false },
         { "typescript", false },
     };
     JSValue feats = js_new_object(ctx);

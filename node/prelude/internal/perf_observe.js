@@ -10,7 +10,7 @@ import { codeError, invalidArgType } from "./errors.js";
 import { features, provideClass } from "./features.js";
 
 const kConstruct = Symbol("construct");
-const supportedEntryTypes = Object.freeze(["dns", "function", "gc", "http", "http2", "mark", "measure", "net", "resource"]);
+const supportedEntryTypes = Object.freeze(["dns", "function", "gc", "http", "http2", "mark", "measure", "net", "quic", "resource"]);  /* Node 24's */
 const observers = new Set();
 
 const byStartTime = (entries) => entries.slice().sort((a, b) => a.startTime - b.startTime);

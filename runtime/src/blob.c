@@ -99,11 +99,12 @@ static void put(Bytes *b, const uint8_t *p, size_t n) {
 }
 
 /* The parts' bytes: a sequence of strings, buffer sources and blobs. 0, or -1. */
-static int collect_parts(JSContext *ctx, JSValue parts, const char *arg, Bytes *out) {
+static int collect_parts(JSContext *ctx, JSValue parts, Bytes *out) {
     if (js_is_undefined(parts)) return 0;
     JSValue method = js_is_object(parts) ? js_get_value(ctx, parts, JS_SYMBOL(iterator)) : JS_UNDEFINED;
     if (js_is_exception(method)) return -1;
-    if (!js_is_callable(method)) return fail(js_throw_invalid_arg_type(ctx, arg, "a sequence", parts));
+    if (!js_is_callable(method))  /* Node 24: WebIDL's sequence<BlobPart> conversion */
+        return fail(js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE", "Value cannot be converted to sequence."));
     JSValue rec = js_iter_start(ctx, parts);
     if (js_is_exception(rec)) return -1;
     for (;;) {
@@ -148,7 +149,7 @@ BUILTIN(blob_ctor) {
     (void)callee, (void)this_val;
     if (js_is_undefined(new_target)) return js_throw_class_without_new(ctx, "Blob");
     Bytes bytes = { 0 };
-    if (collect_parts(ctx, ARG(0), "sources", &bytes) < 0) {
+    if (collect_parts(ctx, ARG(0), &bytes) < 0) {
         free(bytes.p);
         return JS_EXCEPTION;
     }
@@ -167,7 +168,7 @@ BUILTIN(file_ctor) {
     if (js_is_undefined(new_target)) return js_throw_class_without_new(ctx, "File");
     if (argc < 2) return js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_MISSING_ARGS", "The \"fileBits\" and \"fileName\" arguments must be specified");
     Bytes bytes = { 0 };
-    if (collect_parts(ctx, argv[0], "fileBits", &bytes) < 0) {
+    if (collect_parts(ctx, argv[0], &bytes) < 0) {
         free(bytes.p);
         return JS_EXCEPTION;
     }
@@ -210,14 +211,14 @@ BUILTIN(blob_type) {
 BUILTIN(file_name) {
     UNUSED_ARGS;
     BlobObject *b = as_blob(this_val);
-    if (!b || js_is_undefined(b->name)) return js_throw_type_error(ctx, "Cannot read private member #name from an object whose class did not declare it");
+    if (!b || js_is_undefined(b->name)) return js_throw_invalid_this(ctx, "File");
     return b->name;
 }
 
 BUILTIN(file_last_modified) {
     UNUSED_ARGS;
     BlobObject *b = as_blob(this_val);
-    if (!b || js_is_undefined(b->name)) return js_throw_type_error(ctx, "Cannot read private member #lastModified from an object whose class did not declare it");
+    if (!b || js_is_undefined(b->name)) return js_throw_invalid_this(ctx, "File");
     return js_number(b->last_modified);
 }
 
@@ -308,6 +309,15 @@ BUILTIN(blob_stream) {
     return js_readable_stream_of_bytes(ctx, b->size ? u8 : JS_UNDEFINED);
 }
 
+/* textStream() (Node 24): the text, decoded as text() decodes it, as a stream's one chunk */
+BUILTIN(blob_text_stream) {
+    UNUSED_ARGS;
+    THIS_BLOB();
+    JSValue text = js_decode_utf8_bytes(ctx, b->data, b->size);
+    if (js_is_exception(text)) return text;
+    return js_readable_stream_of_chunk(ctx, b->size ? text : JS_UNDEFINED);
+}
+
 /* `Blob { size: 3, type: '' }`, `File { size: 2, type: '', name: 'a.txt', lastModified: 5 }` */
 BUILTIN(blob_inspect) {
     UNUSED_ARGS;
@@ -350,6 +360,7 @@ static const JSBuiltin blob_proto[] = {
     WEBIDL_OPERATION("text", blob_text, 0),
     WEBIDL_OPERATION("bytes", blob_bytes, 0),
     WEBIDL_OPERATION("stream", blob_stream, 0),
+    WEBIDL_OPERATION("textStream", blob_text_stream, 0),
 };
 
 static const JSBuiltin file_proto[] = {

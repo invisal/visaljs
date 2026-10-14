@@ -80,6 +80,7 @@ typedef struct JSStreamSource {
 JS_WARN_UNUSED JSValue js_new_readable_stream(JSContext *ctx, const JSStreamSource *source, JSValue data, double high_water_mark);
 /* A byte stream of one chunk (a Uint8Array), or of none (undefined), closed after it. */
 JS_WARN_UNUSED JSValue js_readable_stream_of_bytes(JSContext *ctx, JSValue chunk);
+JS_WARN_UNUSED JSValue js_readable_stream_of_chunk(JSContext *ctx, JSValue chunk);  /* not a byte stream */
 bool js_is_readable_stream(JSValue v);
 bool js_readable_stream_locked(JSValue v);
 bool js_readable_stream_disturbed(JSValue v);

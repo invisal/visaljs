@@ -160,8 +160,8 @@ const FS_OPEN = /\b[\w$]*[pP]romises[\w$]*\s*\.\s*open\b|\brequire_promises\(\)\
 const PROCESS_MORE = new RegExp(`\\bprocess[\\w$]*\\s*\\.\\s*(?:${PROCESS_DISTINCT}|${PROCESS_COMMON})\\b|(?<![.\\w$])(?:${PROCESS_DISTINCT})\\b`);
 const EVENTS_ON = /(?<![.\w$])on\s*\(|\b(?:events|EventEmitter)[\w$]*\s*\.\s*on\b|\brequire_events\(\)\s*\.\s*on\b/;
 const UTIL_DEBUG = utilNamed("debug");
-const UTIL_MORE = /\b(?:callbackify|transferableAbort(?:Controller|Signal)|toUSVString|getCallSites?|setTraceSigInt|_extend)\b/;
-const UTIL_MORE_MEMBERS = utilNamed("aborted|log|is(?:Array|Boolean|Buffer|Date|Error|Function|Null|NullOrUndefined|Number|Object|Primitive|RegExp|String|Symbol|Undefined)");
+const UTIL_MORE = /\b(?:callbackify|transferableAbort(?:Controller|Signal)|toUSVString|getCallSites|setTraceSigInt|convertProcessSignalToExitCode|_extend)\b/;
+const UTIL_MORE_MEMBERS = utilNamed("aborted|isArray");
 const TIMER_USE = /\.(?:unref|hasRef|refresh)\s*\(|\bclass Timeout\b/;
 const EMITTER_METHOD = /(?:\.|\[\s*["'`])\s*(?:on|once|off|emit|addListener|prependListener|prependOnceListener|removeListener|removeAllListeners|listeners|rawListeners|listenerCount|eventNames|setMaxListeners|getMaxListeners)\b/;
 
