@@ -1,7 +1,7 @@
 /* URL and URLSearchParams (WHATWG URL), the url component, which needs nothing else.
  * The basic URL parser is the standard's state machine, in C, on code points; hosts go
  * through IDNA as Ada does it (runtime/third_party/ada-idna), so results match Node's, whose
- * URL is Ada (2.9.2 in Node v22). A record keeps each component serialized (ASCII): a
+ * URL is Ada (4.0.0 in Node v24). A record keeps each component serialized (ASCII): a
  * non-opaque path is its serialization, "/a/b", whose segments are what the slashes delimit.
  * The API is Node's: its errors, its inspection, and URLSearchParams' iteration. */
 #include <stdio.h>
@@ -122,8 +122,8 @@ static bool in_set(int set, uint32_t c) {
     case SET_USERINFO:
         if (c == '/' || c == ':' || c == ';' || c == '=' || c == '@' || (c >= '[' && c <= '^') || c == '|') return true;
         /* fallthrough */
-    case SET_PATH:  /* without ^, which the standard added after Ada 2.9.2 (Node v22) */
-        if (c == '?' || c == '`' || c == '{' || c == '}') return true;
+    case SET_PATH:
+        if (c == '?' || c == '^' || c == '`' || c == '{' || c == '}') return true;
         /* fallthrough */
     case SET_QUERY:
         return c == ' ' || c == '"' || c == '#' || c == '<' || c == '>';
@@ -724,12 +724,6 @@ static bool basic_parse(const uint32_t *in, size_t n, const URLRecord *base, URL
                 p--;
                 state = ST_FILE_HOST;
             } else if (c == ':' && !inside_brackets) {
-                if (buffer.n == 0 && override == ST_HOST && !is_special(url)) {  /* Ada: host "" and a port */
-                    buf_clear(&url->host);
-                    url->has_host = true;
-                    state = ST_PORT;
-                    break;
-                }
                 if (buffer.n == 0) FAIL();
                 if (override == ST_HOSTNAME) FAIL();
                 if (!parse_host(buffer.v, buffer.n, !is_special(url), &url->host)) FAIL();
@@ -863,9 +857,8 @@ static bool basic_parse(const uint32_t *in, size_t n, const URLRecord *base, URL
             if (c == END || c == '/' || (is_special(url) && c == '\\') || (!override && (c == '?' || c == '#'))) {
                 bool slash = c == '/' || (is_special(url) && c == '\\');
                 if (is_double_dot(&pbuf)) {
-                    bool was_empty = url->path.n == 0;  /* Ada: nothing to shorten adds no segment, unless special */
                     shorten_path(url);
-                    if (!slash && (is_special(url) || !was_empty)) path_append(url, "", 0);
+                    if (!slash) path_append(url, "", 0);
                 } else if (is_single_dot(&pbuf) && !slash) {
                     path_append(url, "", 0);
                 } else if (!is_single_dot(&pbuf)) {
@@ -890,6 +883,11 @@ static bool basic_parse(const uint32_t *in, size_t n, const URLRecord *base, URL
             }
             break;
         case ST_OPAQUE_PATH:
+            /* a space just before the query or fragment: %20, so the path doesn't end in one */
+            if ((c == '?' || c == '#') && url->path.n && url->path.v[url->path.n - 1] == ' ') {
+                url->path.v[--url->path.n] = '\0';
+                buf_append(&url->path, "%20", 3);
+            }
             if (c == '?') {
                 buf_clear(&url->query);
                 url->has_query = true;
@@ -1487,11 +1485,16 @@ BUILTIN(url_set_port) {
     CPs in = { 0 };
     if (setter_input(ctx, ARG(0), &in) < 0) return JS_EXCEPTION;
     if (!cannot_have_credentials(u->rec)) {
-        size_t k = 0;  /* Ada removes tabs and newlines before the empty check */
-        for (size_t i = 0; i < in.n; i++)
-            if (in.v[i] != '\t' && in.v[i] != '\n' && in.v[i] != '\r') in.v[k++] = in.v[i];
-        if (k == 0) u->rec->port = -1;
-        else parse_override(ctx, in.v, k, u->rec, ST_PORT);
+        /* the empty string clears the port; anything else is parsed, its tabs and newlines removed
+           first (only those: nothing changes) */
+        if (in.n == 0) {
+            u->rec->port = -1;
+        } else {
+            size_t k = 0;
+            for (size_t i = 0; i < in.n; i++)
+                if (in.v[i] != '\t' && in.v[i] != '\n' && in.v[i] != '\r') in.v[k++] = in.v[i];
+            if (k) parse_override(ctx, in.v, k, u->rec, ST_PORT);
+        }
     }
     free(in.v);
     return JS_UNDEFINED;
@@ -1691,7 +1694,7 @@ BUILTIN(params_ctor) {
     JSValue self = new_params(ctx, proto);
     ParamsObject *p = (ParamsObject *)js_as_object(self);
     JSValue init = ARG(0);
-    if (js_is_nullish(init)) return self;
+    if (js_is_undefined(init)) return self;  /* null is the string "null" (Node 24, the standard) */
     if (js_is_object(init)) {
         ParamsObject *other = as_params(init);
         JSValue method = js_get_value(ctx, init, JS_SYMBOL(iterator));
