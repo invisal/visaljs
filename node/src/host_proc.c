@@ -14,6 +14,7 @@
  *   procExecve(file, [arg, …], [key=value, …]) → -errno (it returns only when it fails) */
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE  /* getgroups, setgroups, initgroups */
+#define _DARWIN_C_SOURCE /* the same, on macOS */
 #include "js_node.h"
 
 #include <errno.h>
