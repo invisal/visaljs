@@ -5,17 +5,14 @@
 // linked into programs that name them (internal/features.js, implicitModules in node/index.ts).
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import { Buffer } from "./buffer.js";
-import { lazyFunction } from "./internal/features.js";
+import { feature, lazyConstructor, lazyFunction } from "./internal/features.js";
 import { addAbortSignal } from "./internal/streams/add_abort_signal.js";
 import { destroyer } from "./internal/streams/destroy.js";
 import Duplex from "./internal/streams/duplex.js";
 import { eos, finished as eosFinished } from "./internal/streams/end_of_stream.js";
 import { Stream } from "./internal/streams/legacy.js";
-import PassThrough from "./internal/streams/passthrough.js";
-import { pipeline, pipelineImpl } from "./internal/streams/pipeline.js";
 import Readable from "./internal/streams/readable.js";
 import { getDefaultHighWaterMark, setDefaultHighWaterMark } from "./internal/streams/state.js";
-import Transform from "./internal/streams/transform.js";
 import { isDestroyed, isDisturbed, isErrored, isIterable, isNodeStream, isReadable, isWebStream, isWritable } from "./internal/streams/utils.js";
 import Writable from "./internal/streams/writable.js";
 
@@ -32,7 +29,7 @@ function promisesPipeline(...streams) {
       signal = options.signal;
       end = options.end;
     }
-    pipelineImpl(streams, (err, value) => {
+    feature("pipelineImpl")(streams, (err, value) => {
       if (err) reject(err);
       else resolve(value);
     }, { signal, end });
@@ -40,7 +37,12 @@ function promisesPipeline(...streams) {
 }
 export const promises = { finished: eosFinished, pipeline: promisesPipeline };
 
-/* compose and duplexPair: internal/stream_compose.js */
+/* the rarer parts, modules of their own linked into programs that name them: pipeline
+ * (internal/stream_pipeline.js), Transform and PassThrough (internal/stream_transform.js),
+ * compose and duplexPair (internal/stream_compose.js) */
+export const pipeline = lazyFunction("pipeline");
+export const Transform = lazyConstructor("Transform");
+export const PassThrough = lazyConstructor("PassThrough");
 export const compose = lazyFunction("compose");
 export const duplexPair = lazyFunction("duplexPair");
 
@@ -76,6 +78,6 @@ Stream._uint8ArrayToBuffer = function _uint8ArrayToBuffer(chunk) {
 
 export {
   addAbortSignal, destroyer as destroy, Duplex, eos as finished, getDefaultHighWaterMark, isDestroyed, isDisturbed, isErrored, isReadable,
-  isWritable, PassThrough, pipeline, Readable, setDefaultHighWaterMark, Stream, Transform, Writable,
+  isWritable, Readable, setDefaultHighWaterMark, Stream, Writable,
 };
 export default Stream;

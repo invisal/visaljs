@@ -1,7 +1,7 @@
 // What node:crypto's parts share: argument checks with Node's errors, encodings
 // through Buffer, and LazyTransform, the stream base of Hash, Hmac and the ciphers (a Transform
 // set up only when a stream property is first used, as Node's is).
-import { Transform } from "../../stream.js";
+import Transform from "../streams/transform.js";
 import { codeError, invalidArgType } from "../errors.js";
 
 export const kHandle = Symbol("kHandle");

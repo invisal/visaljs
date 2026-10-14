@@ -4,6 +4,7 @@
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import { Readable } from "../stream.js";
 import { codes } from "./streams/errors.js";
+import "./stream_from.js";
 import { promiseReturningOperators, streamReturningOperators } from "./streams/operators.js";
 
 function install(operators, wrap) {

@@ -10,7 +10,6 @@ import * as __internal_streams_utils from "./utils.js";
 import * as __internal_errors from "./errors.js";
 import * as __internal_validators from "./validators.js";
 import * as __string_decoder from "../../string_decoder.js";
-import * as __internal_streams_from from "./from.js";
 
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -92,7 +91,6 @@ const {
 const FastBuffer = Buffer[Symbol.species];
 
 const { StringDecoder } = __string_decoder;
-const from = __internal_streams_from.default;
 
 Object.setPrototypeOf(Readable.prototype, Stream.prototype);
 Object.setPrototypeOf(Readable, Stream);
@@ -1783,7 +1781,8 @@ function endWritableNT(stream) {
 }
 
 Readable.from = function(iterable, opts) {
-  return from(Readable, iterable, opts);
+  /* internal/stream_from.js, linked into programs that name Readable.from */
+  return feature('readableFrom')(Readable, iterable, opts);
 };
 
 /* the conversions to and from web streams: internal/stream_web_adapters.js, linked into programs
