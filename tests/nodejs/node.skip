@@ -1,0 +1,20 @@
+# Node's tests that can never run compiled by visaljs: `test-file.js  reason`, one a line.
+# A test that fails for something visaljs could do still runs (it just isn't in node.results).
+
+# vm runs source text, which a program compiled ahead of time can't
+test-buffer-alloc.js                     vm.runInNewContext (a cross-realm ArrayBuffer)
+test-buffer-bytelength.js                vm.runInNewContext (a cross-realm ArrayBuffer)
+test-buffer-from.js                      vm.runInNewContext (cross-realm objects)
+
+# no threads: SharedArrayBuffer and transferring between workers
+test-buffer-sharedarraybuffer.js         SharedArrayBuffer (no threads)
+test-buffer-pool-untransferable.js       Buffer's shared pool and MessageChannel transfer lists
+
+# Node's built-in modules are loaded ahead of time: patching one before require() changes nothing
+test-zlib-kmaxlength-rangeerror.js       patches buffer.kMaxLength before require('zlib')
+test-zlib-brotli-kmaxlength-rangeerror.js  patches buffer.kMaxLength before require('zlib')
+test-zlib-zstd-kmaxlength-rangeerror.js  patches buffer.kMaxLength before require('zlib')
+
+# domain (deprecated, DEP0032): its binding to timers and errors isn't provided
+test-timers-reset-process-domain-on-throw.js  domain
+test-timers-immediate-queue-throw.js     domain

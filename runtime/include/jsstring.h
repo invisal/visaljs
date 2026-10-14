@@ -26,7 +26,8 @@ typedef struct JSContext JSContext;
 #define JS_STR_PRIVATE 0x04u  /* a private name (#x): a property key no key listing shows */
 #define JS_STR_BUFFER  0x08u  /* flat: an append buffer, only ever a slice's parent (below) */
 
-#define JS_STRING_MAX_LENGTH ((UINT32_C(1) << 30) - 1)
+/* V8's String::kMaxLength on 64-bit, which Node's buffer.constants.MAX_STRING_LENGTH reports */
+#define JS_STRING_MAX_LENGTH ((UINT32_C(1) << 29) - 24)
 #define JS_ROPE_MIN          13    /* shorter concatenations copy instead */
 #define JS_ROPE_MAX_DEPTH    1024  /* deeper concatenations flatten eagerly */
 #define JS_SLICE_MIN         13    /* shorter substrings copy instead */

@@ -15,6 +15,7 @@
 #include "js_atoms.h"
 #include "js_bigint.h"
 #include "js_buffer.h"
+#include "js_host.h"
 #include "js_console.h"
 #include "js_convert.h"
 #include "js_exception.h"
@@ -32,6 +33,23 @@ static int fail(JSValue thrown) {
 static JSValue throw_bounds(JSContext *ctx);
 
 /* ---- Encodings ------------------------------------------------------------------------------ */
+
+/* Node's addNumericalSeparator: the digits of an integer in groups of three, joined by '_'. */
+static void add_numerical_separator(char *digits, size_t size) {
+    char out[128];
+    const char *p = digits;
+    size_t o = 0;
+    if (*p == '-') out[o++] = *p++;
+    size_t n = strlen(p);
+    for (size_t i = 0; i < n && o + 2 < sizeof out; i++) {
+        if (i > 0 && (n - i) % 3 == 0) out[o++] = '_';
+        out[o++] = p[i];
+    }
+    out[o] = '\0';
+    if (o >= size) o = size - 1;
+    memcpy(digits, out, o);
+    digits[o] = '\0';
+}
 
 typedef enum { ENC_UTF8, ENC_UCS2, ENC_LATIN1, ENC_ASCII, ENC_BASE64, ENC_BASE64URL, ENC_HEX, ENC_INVALID } Encoding;
 
@@ -67,6 +85,15 @@ static JSValue throw_unknown_encoding(JSContext *ctx, JSValue v) {
     return js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_UNKNOWN_ENCODING", "Unknown encoding: %s", s);
 }
 
+/* getEncodingOps's encoding: the value as a string (`encoding += ''`), then its name; ENC_INVALID
+ * for an unknown one, which *str then holds for the error. -1 when the conversion threw. */
+static int encoding_coerced(JSContext *ctx, JSValue v, JSValue *str, Encoding *out) {
+    *str = js_is_string(v) ? v : js_to_string(ctx, v);
+    if (js_is_exception(*str)) return -1;
+    *out = encoding_of(ctx, *str);
+    return 0;
+}
+
 /* An optional encoding argument: utf8 when undefined (or null). 0, or -1 with ERR_UNKNOWN_ENCODING. */
 static int encoding_arg(JSContext *ctx, JSValue v, Encoding *out) {
     if (js_is_nullish(v)) {
@@ -91,11 +118,6 @@ static void bytes_reserve(Bytes *b, size_t more) {
     if (!p) js_fatal("out of memory encoding a Buffer");
     b->p = p;
     b->cap = cap;
-}
-
-static void bytes_push(Bytes *b, uint8_t c) {
-    bytes_reserve(b, 1);
-    b->p[b->n++] = c;
 }
 
 static int hex_digit(uint32_t c) {
@@ -298,7 +320,7 @@ static JSValue throw_not_u8(JSContext *ctx, const char *name, JSValue v) {
     uint8_t *data;                                                       \
     size_t len;                                                          \
     if (!u8_bytes(this_val, &data, &len))                                \
-        return js_throw_type_error(ctx, "argument must be a buffer")
+        return js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE", "argument must be a buffer")
 
 static JSValue buffer_from_string(JSContext *ctx, JSValue s, JSValue encoding) {
     Encoding enc;
@@ -407,6 +429,7 @@ static JSValue from_value(JSContext *ctx, JSValue value, JSValue enc_or_offset, 
 BUILTIN(buffer_ctor) {
     (void)callee, (void)this_val, (void)new_target;
     if (js_is_number(ARG(0))) {
+        if (js_is_string(ARG(1))) return js_throw_invalid_arg_type(ctx, "string", "of type string", ARG(0));  /* Buffer(size, encoding) */
         double n = js_as_number(ARG(0));
         if (!(n >= 0 && n <= JS_MAX_SAFE_INTEGER)) {
             char received[64];
@@ -502,11 +525,27 @@ BUILTIN(buffer_compare_static) {
     return js_int32(compare_bytes(a, an, b, bn));
 }
 
+/* lib/buffer.js's validateOffset: a number, an integer, in [min, max]. */
+static int validate_offset(JSContext *ctx, JSValue v, const char *name, size_t min, size_t max, size_t *out) {
+    if (!js_is_number(v)) return fail(js_throw_invalid_arg_type(ctx, name, "of type number", v));
+    double d = js_as_number(v);
+    if (d != trunc(d) || !isfinite(d) || d < (double)min || d > (double)max) {
+        char received[64];
+        js_describe_value(ctx, v, received, sizeof received);
+        return fail(d != trunc(d) || !isfinite(d)
+            ? js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE", "The value of \"%s\" is out of range. It must be an integer. Received %s", name, received)
+            : js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE", "The value of \"%s\" is out of range. It must be >= %zu && <= %zu. Received %s", name, min, max, received));
+    }
+    *out = (size_t)d;
+    return 0;
+}
+
 BUILTIN(buffer_concat) {
     UNUSED_ARGS;
     JSValue list = ARG(0);
     if (!js_is_array(list)) return js_throw_invalid_arg_type(ctx, "list", "an instance of Array", list);
     uint32_t count = js_array_length(js_as_object(list));
+    if (count == 0) return new_buffer(ctx, 0);  /* lib/buffer.js: before the length */
     double total = 0;
     for (uint32_t i = 0; i < count; i++) {
         JSValue item = js_get_elem(ctx, list, js_int32((int32_t)i));
@@ -520,10 +559,10 @@ BUILTIN(buffer_concat) {
         }
         total += (double)n;
     }
-    if (!js_is_undefined(ARG(1))) {
-        if (!js_is_number(ARG(1))) return js_throw_invalid_arg_type(ctx, "length", "of type number", ARG(1));
-        double t = js_as_number(ARG(1));
-        total = isnan(t) || t < 0 ? 0 : trunc(t);
+    if (!js_is_undefined(ARG(1))) {  /* lib/buffer.js: validateOffset(length, 'length') */
+        size_t given;
+        if (validate_offset(ctx, ARG(1), "length", 0, (size_t)JS_MAX_SAFE_INTEGER, &given) < 0) return JS_EXCEPTION;
+        total = (double)given;
     }
     JSValue result = new_buffer(ctx, (size_t)total);
     if (js_is_exception(result)) return result;
@@ -611,8 +650,9 @@ BUILTIN(buffer_to_string) {
     if (end <= start) return js_empty_string();
     Encoding enc = ENC_UTF8;
     if (!js_is_undefined(ARG(0))) {
-        enc = encoding_of(ctx, ARG(0));
-        if (enc == ENC_INVALID) return throw_unknown_encoding(ctx, ARG(0));
+        JSValue name;
+        if (encoding_coerced(ctx, ARG(0), &name, &enc) < 0) return JS_EXCEPTION;
+        if (enc == ENC_INVALID) return throw_unknown_encoding(ctx, name);
     }
     u8_bytes(this_val, &data, &len);  /* ToNumber ran user code */
     if ((size_t)end > len) end = (double)len;
@@ -679,9 +719,14 @@ BUILTIN(buffer_compare) {
     uint8_t *p;
     size_t n;
     if (!u8_bytes(ARG(0), &p, &n)) return throw_not_u8(ctx, "target", ARG(0));
-    size_t ts, te, ss, se;
-    if (range_arg(ctx, ARG(1), "targetStart", 0, n, &ts) < 0 || range_arg(ctx, ARG(2), "targetEnd", n, n, &te) < 0 ||
-        range_arg(ctx, ARG(3), "sourceStart", 0, len, &ss) < 0 || range_arg(ctx, ARG(4), "sourceEnd", len, len, &se) < 0)
+    /* lib/buffer.js's: each offset given is validated, the starts against kMaxLength (a start past
+     * the end compares as empty) */
+    size_t ts = 0, te = n, ss = 0, se = len;
+    const size_t max = (size_t)JS_MAX_SAFE_INTEGER;
+    if ((!js_is_undefined(ARG(1)) && validate_offset(ctx, ARG(1), "targetStart", 0, max, &ts) < 0) ||
+        (!js_is_undefined(ARG(2)) && validate_offset(ctx, ARG(2), "targetEnd", 0, n, &te) < 0) ||
+        (!js_is_undefined(ARG(3)) && validate_offset(ctx, ARG(3), "sourceStart", 0, max, &ss) < 0) ||
+        (!js_is_undefined(ARG(4)) && validate_offset(ctx, ARG(4), "sourceEnd", 0, len, &se) < 0))
         return JS_EXCEPTION;
     if (ss >= se) return js_int32(ts >= te ? 0 : -1);
     if (ts >= te) return js_int32(1);
@@ -691,6 +736,7 @@ BUILTIN(buffer_compare) {
 /* copy(target, targetStart = 0, sourceStart = 0, sourceEnd = length): the bytes copied */
 BUILTIN(buffer_copy) {
     UNUSED_ARGS;
+    if (!js_is_uint8_array(this_val)) return js_throw_invalid_arg_type(ctx, "source", "an instance of Buffer or Uint8Array", this_val);
     THIS_BYTES();
     uint8_t *p;
     size_t n;
@@ -736,29 +782,83 @@ static size_t write_string(JSContext *ctx, uint8_t *data, size_t room, JSValue s
 
 /* write(string, offset = 0, length = buffer.length - offset, encoding = 'utf8'), with Node's
  * overloads: write(string, encoding), write(string, offset, encoding) */
+/* write(string[, offset[, length]][, encoding]), as lib/buffer.js's: write(string, encoding),
+ * or write(string, offset[, length][, encoding]) */
 BUILTIN(buffer_write) {
     UNUSED_ARGS;
     THIS_BYTES();
     if (!js_is_string(ARG(0))) return js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE", "argument must be a string");
     JSValue offset_arg = ARG(1), length_arg = ARG(2), enc_arg = ARG(3);
-    if (js_is_string(offset_arg)) enc_arg = offset_arg, offset_arg = JS_UNDEFINED, length_arg = JS_UNDEFINED;
-    else if (js_is_string(length_arg)) enc_arg = length_arg, length_arg = JS_UNDEFINED;
-    size_t offset, length;
-    if (range_arg(ctx, offset_arg, "offset", 0, len, &offset) < 0) return JS_EXCEPTION;
-    if (range_arg(ctx, length_arg, "length", len - offset, len, &length) < 0) return JS_EXCEPTION;
-    if (length > len - offset) length = len - offset;
-    Encoding enc;
-    if (encoding_arg(ctx, enc_arg, &enc) < 0) return JS_EXCEPTION;
+    size_t offset = 0, length = len;
+    if (js_is_undefined(offset_arg)) {
+        enc_arg = JS_UNDEFINED;
+    } else if (js_is_undefined(length_arg) && js_is_string(offset_arg)) {
+        enc_arg = offset_arg;
+    } else {
+        if (validate_offset(ctx, offset_arg, "offset", 0, len, &offset) < 0) return JS_EXCEPTION;
+        length = len - offset;
+        if (js_is_string(length_arg)) {
+            enc_arg = length_arg;
+        } else if (!js_is_undefined(length_arg)) {
+            size_t given;
+            if (validate_offset(ctx, length_arg, "length", 0, len, &given) < 0) return JS_EXCEPTION;
+            if (given < length) length = given;
+        }
+    }
+    Encoding enc = ENC_UTF8;
+    if (js_truthy(enc_arg)) {
+        enc = encoding_of(ctx, enc_arg);
+        if (enc == ENC_INVALID) return throw_unknown_encoding(ctx, enc_arg);
+    }
     return js_number((double)write_string(ctx, data + offset, length, ARG(0), enc));
 }
 
+static JSValue throw_outside(JSContext *ctx, const char *name) {
+    return js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_BUFFER_OUT_OF_BOUNDS", "\"%s\" is outside of buffer bounds", name);
+}
+
+/* node_buffer.cc's ParseArrayIndex: undefined is `dflt`, else an integer (NaN 0), never negative
+ * ("Index out of range"). 0, or -1 with an exception. */
+static int parse_array_index(JSContext *ctx, JSValue v, size_t dflt, size_t *out) {
+    if (js_is_undefined(v)) {
+        *out = dflt;
+        return 0;
+    }
+    double d;
+    if (js_to_number(ctx, &d, v) < 0) return -1;
+    d = isnan(d) ? 0 : trunc(d);
+    if (d < 0) return fail(js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE", "Index out of range"));
+    *out = d > (double)SIZE_MAX ? SIZE_MAX : (size_t)d;
+    return 0;
+}
+
+/* the encoding-specific writes: buf.utf8Write(string, offset, length), …. utf8, latin1 and ascii
+ * as lib/internal/buffer.js's (offset and length as numbers within the buffer), the others as
+ * node_buffer.cc's StringWrite. */
 static JSValue write_as(JSContext *ctx, JSValue this_val, uint32_t argc, const JSValue *argv, Encoding enc) {
     THIS_BYTES();
-    if (!js_is_string(ARG(0))) return js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE", "argument must be a string");
     size_t offset, length;
-    if (range_arg(ctx, ARG(1), "offset", 0, len, &offset) < 0) return JS_EXCEPTION;
-    if (range_arg(ctx, ARG(2), "length", len - offset, len, &length) < 0) return JS_EXCEPTION;
+    if (enc == ENC_UTF8 || enc == ENC_LATIN1 || enc == ENC_ASCII) {
+        double o = 0, l;
+        if (!js_is_undefined(ARG(1)) && js_to_number(ctx, &o, ARG(1)) < 0) return JS_EXCEPTION;
+        if (o < 0 || o > (double)len) return throw_outside(ctx, "offset");
+        if (isnan(o)) o = 0;
+        l = (double)len - o;
+        if (!js_is_undefined(ARG(2)) && js_to_number(ctx, &l, ARG(2)) < 0) return JS_EXCEPTION;
+        if (l < 0 || l > (double)len - o) return throw_outside(ctx, "length");
+        if (isnan(l)) l = 0;
+        if (!js_is_string(ARG(0))) return js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE", "argument must be a string");
+        offset = (size_t)o, length = (size_t)l;
+    } else {
+        if (!js_is_string(ARG(0))) return js_throw_node_error(ctx, JS_TYPE_ERROR, "ERR_INVALID_ARG_TYPE", "argument must be a string");
+        if (parse_array_index(ctx, ARG(1), 0, &offset) < 0) return JS_EXCEPTION;
+        if (offset > len) return throw_outside(ctx, "offset");
+        if (parse_array_index(ctx, ARG(2), len - offset, &length) < 0) return JS_EXCEPTION;
+    }
+    u8_bytes(this_val, &data, &len);  /* ToNumber ran user code */
+    if (offset > len) offset = len;
     if (length > len - offset) length = len - offset;
+    if (length == 0) return js_int32(0);
     return js_number((double)write_string(ctx, data + offset, length, ARG(0), enc));
 }
 
@@ -827,62 +927,135 @@ BUILTIN(buffer_fill) {
     return fill_bytes(ctx, data, start, end, ARG(0), enc_arg) < 0 ? JS_EXCEPTION : this_val;
 }
 
-/* indexOf / lastIndexOf / includes: a string (encoded), a number (a byte) or bytes */
+/* ---- indexOf / lastIndexOf / includes (lib/buffer.js's bidirectionalIndexOf, node_buffer.cc's
+ * IndexOfString, IndexOfBuffer and IndexOfNumber) ------------------------------------------- */
+
+/* IndexOfOffset: where a search starts, in [0, length], or -1 for no possible match. */
+static int64_t index_of_offset(size_t length, int64_t offset, int64_t needle_length, bool forward) {
+    int64_t len = (int64_t)length;
+    if (offset < 0) {
+        if (offset + len >= 0) return len + offset;  /* from the end */
+        return forward || needle_length == 0 ? 0 : -1;
+    }
+    if (offset + needle_length <= len) return offset;
+    if (needle_length == 0) return len;
+    return forward ? -1 : len - 1;
+}
+
+/* nbytes::SearchString: the first match at or after `start` (forward), or the last one at or
+ * before it; `length` when there is none. Units of `width` bytes (2 for UCS-2). */
+static size_t search_string(const uint8_t *hay, size_t length, const uint8_t *needle, size_t needle_length, size_t start,
+                            bool forward, size_t width) {
+    if (length < needle_length) return length;
+    size_t diff = length - needle_length;
+    if (forward) {
+        for (size_t i = start; i <= diff; i++)
+            if (memcmp(hay + i * width, needle, needle_length * width) == 0) return i;
+        return length;
+    }
+    for (size_t i = start < diff ? start : diff;; i--) {
+        if (memcmp(hay + i * width, needle, needle_length * width) == 0) return i;
+        if (i == 0) return length;
+    }
+}
+
+/* IndexOfString and IndexOfBuffer: the needle's bytes (encoded), UCS-2 searched by code unit */
+static double index_of_bytes(const uint8_t *data, size_t len, const uint8_t *needle, size_t needle_length, int64_t offset_i64,
+                             int64_t end_i64, bool forward, bool ucs2) {
+    size_t haystack_length = ucs2 ? len & ~(size_t)1 : len;
+    int64_t end_clamped = end_i64 < 0 ? 0 : end_i64;
+    size_t search_end = end_clamped > (int64_t)haystack_length ? haystack_length : (size_t)end_clamped;
+    if (ucs2) search_end &= ~(size_t)1;
+    int64_t opt = index_of_offset(haystack_length, offset_i64, (int64_t)needle_length, forward);
+    if (needle_length == 0) return (double)(opt < (int64_t)search_end ? opt : (int64_t)search_end);
+    if (haystack_length == 0 || opt <= -1) return -1;
+    size_t offset = (size_t)opt;
+    if (offset >= search_end) {
+        if (forward || search_end == 0) return -1;
+        offset = search_end - 1;
+    }
+    if ((forward && needle_length + offset > search_end) || needle_length > search_end) return -1;
+    size_t result;
+    if (ucs2) {
+        if (search_end < 2 || needle_length < 2) return -1;
+        result = search_string(data, search_end / 2, needle, needle_length / 2, offset / 2, forward, 2) * 2;
+    } else {
+        result = search_string(data, search_end, needle, needle_length, offset, forward, 1);
+    }
+    return result >= search_end ? -1 : (double)result;
+}
+
+/* IndexOfNumber: a byte */
+static double index_of_byte(const uint8_t *data, size_t len, uint8_t byte, int64_t offset_i64, int64_t end_i64, bool forward) {
+    int64_t opt = index_of_offset(len, offset_i64, 1, forward);
+    if (opt <= -1 || len == 0) return -1;
+    size_t offset = (size_t)opt;
+    int64_t end_clamped = end_i64 < 0 ? 0 : end_i64;
+    size_t search_end = end_clamped > (int64_t)len ? len : (size_t)end_clamped;
+    if (forward) {
+        for (size_t i = offset; i < search_end; i++)
+            if (data[i] == byte) return (double)i;
+        return -1;
+    }
+    size_t backward_end = offset + 1 < search_end ? offset + 1 : search_end;
+    for (size_t i = backward_end; i > 0; i--)
+        if (data[i - 1] == byte) return (double)(i - 1);
+    return -1;
+}
+
+/* indexOf(value, byteOffset, end, encoding) and its kin (kind 0 indexOf, 1 lastIndexOf, 2 includes) */
 static JSValue search(JSContext *ctx, JSValue this_val, uint32_t argc, const JSValue *argv, int kind) {
     THIS_BYTES();
-    JSValue value = ARG(0), offset_arg = ARG(1), enc_arg = ARG(2);
-    if (js_is_string(offset_arg)) enc_arg = offset_arg, offset_arg = JS_UNDEFINED;
-    bool last = kind == 1;
-    double offset = last ? (double)len : 0;
-    if (!js_is_undefined(offset_arg)) {
-        if (js_to_number(ctx, &offset, offset_arg) < 0) return JS_EXCEPTION;
-        if (isnan(offset)) offset = last ? (double)len : 0;  /* Node: NaN searches the whole buffer */
-        offset = trunc(offset);
+    bool forward = kind != 1;
+    JSValue value = ARG(0), offset_arg = ARG(1), end_arg = ARG(2), enc_arg = ARG(3);
+    /* Buffer.prototype.indexOf: a string `end` is the encoding */
+    double end = (double)len;
+    if (js_is_string(end_arg)) enc_arg = end_arg;
+    else if (!js_is_undefined(end_arg) && js_to_number(ctx, &end, end_arg) < 0) return JS_EXCEPTION;
+    /* bidirectionalIndexOf: a string byteOffset is the encoding; the offset as a number, clamped
+     * to 32 bits; NaN (undefined too) searches the whole buffer */
+    double offset;
+    if (js_is_string(offset_arg)) {
+        enc_arg = offset_arg;
+        offset = NAN;
+    } else if (js_to_number(ctx, &offset, offset_arg) < 0) {
+        return JS_EXCEPTION;
     }
-    if (offset < 0) offset += (double)len;
-    Bytes needle = { 0 };
-    if (js_is_string(value)) {
-        Encoding enc;
-        if (encoding_arg(ctx, enc_arg, &enc) < 0) return JS_EXCEPTION;
-        encode_string(ctx, value, enc, &needle);
-    } else if (js_is_number(value)) {
-        double d = js_as_number(value);
-        bytes_push(&needle, (uint8_t)(isfinite(d) ? (int64_t)trunc(d) & 255 : 0));
+    if (offset > 2147483647.0) offset = 2147483647.0;
+    else if (offset < -2147483648.0) offset = -2147483648.0;
+    if (isnan(offset)) offset = forward ? 0 : (double)len;
+    int64_t offset_i64 = (int64_t)trunc(offset), end_i64 = isnan(end) ? 0 : end > 9e18 ? INT64_MAX : end < -9e18 ? INT64_MIN : (int64_t)trunc(end);
+    double found;
+    if (js_is_number(value)) {
+        uint32_t needle = (uint32_t)js_f64_to_int32(js_as_number(value));  /* val >>> 0; memchr takes its low byte */
+        u8_bytes(this_val, &data, &len);
+        found = index_of_byte(data, len, (uint8_t)needle, offset_i64, end_i64, forward);
     } else {
-        uint8_t *p;
-        size_t n;
-        if (!u8_bytes(value, &p, &n))
-            return js_throw_invalid_arg_type(ctx, "value", "one of type number or string or an instance of Buffer or Uint8Array", value);
-        bytes_reserve(&needle, n);
-        if (n) memcpy(needle.p, p, n);
-        needle.n = n;
-    }
-    u8_bytes(this_val, &data, &len);
-    double found = -1;
-    if (!last) {
-        if (offset < 0) offset = 0;
-        if (needle.n == 0) found = offset < (double)len ? offset : (double)len;
-        else
-            for (size_t i = (size_t)offset; offset < (double)len && i + needle.n <= len; i++)
-                if (memcmp(data + i, needle.p, needle.n) == 0) {
-                    found = (double)i;
-                    break;
-                }
-    } else if (offset >= 0) {
-        if (needle.n == 0) found = offset < (double)len ? offset : (double)len;
-        else if (needle.n <= len) {
-            size_t i = offset > (double)(len - needle.n) ? len - needle.n : (size_t)offset;
-            for (;; i--) {
-                if (memcmp(data + i, needle.p, needle.n) == 0) {
-                    found = (double)i;
-                    break;
-                }
-                if (i == 0) break;
-            }
+        Encoding enc = ENC_UTF8;
+        bool known = true;
+        if (!js_is_undefined(enc_arg)) {
+            if (encoding_coerced(ctx, enc_arg, &enc_arg, &enc) < 0) return JS_EXCEPTION;
+            known = enc != ENC_INVALID;
         }
+        Bytes needle = { 0 };
+        if (js_is_string(value)) {
+            if (!known) return throw_unknown_encoding(ctx, enc_arg);
+            encode_string(ctx, value, enc, &needle);
+        } else {
+            uint8_t *p;
+            size_t n;
+            if (!u8_bytes(value, &p, &n))
+                return js_throw_invalid_arg_type(ctx, "value", "one of type number or string or an instance of Buffer or Uint8Array", value);
+            if (!known) enc = ENC_UTF8;
+            bytes_reserve(&needle, n);
+            if (n) memcpy(needle.p, p, n);
+            needle.n = n;
+        }
+        u8_bytes(this_val, &data, &len);
+        found = index_of_bytes(data, len, needle.p, needle.n, offset_i64, end_i64, forward, enc == ENC_UCS2);
+        free(needle.p);
     }
-    free(needle.p);
-    return kind == 2 ? js_bool(found >= 0) : js_number(found);
+    return kind == 2 ? js_bool(found != -1) : js_number(found);
 }
 
 BUILTIN(buffer_index_of) {
@@ -919,6 +1092,17 @@ BUILTIN(buffer_subarray) {
     if (end < start) end = start;
     JSTypedArray *ta = as_ta(this_val);
     return new_view(ctx, ta->buffer, ta->byte_offset + start, end - start);
+}
+
+/* slice(start, end): this.subarray(start, end), as lib/buffer.js's (a Uint8Array's own subarray
+ * on one that isn't a Buffer) */
+BUILTIN(buffer_slice) {
+    UNUSED_ARGS;
+    JSValue subarray = js_get_value(ctx, this_val, js_atom_from_cstr(ctx, "subarray"));
+    if (js_is_exception(subarray)) return subarray;
+    if (!js_is_callable(subarray)) return js_throw_type_error(ctx, "this.subarray is not a function");
+    JSValue args[2] = { ARG(0), ARG(1) };
+    return js_call(ctx, subarray, this_val, 2, args);
 }
 
 static JSValue swap(JSContext *ctx, JSValue this_val, size_t width) {
@@ -1000,13 +1184,16 @@ static void store_uint(uint8_t *p, size_t size, int order, uint64_t v) {
 static JSValue read_int(JSContext *ctx, JSValue this_val, uint32_t argc, const JSValue *argv, size_t size, int order, bool is_signed, bool variable) {
     THIS_BYTES();
     if (variable) {
+        /* readIntBE and its kin: no default offset */
+        if (js_is_undefined(ARG(0))) return js_throw_invalid_arg_type(ctx, "offset", "of type number", ARG(0));
         if (!js_is_number(ARG(1))) return js_throw_invalid_arg_type(ctx, "byteLength", "of type number", ARG(1));
         double b = js_as_number(ARG(1));
         if (!(b >= 1 && b <= 6) || b != trunc(b)) {
             char received[64];
             js_describe_value(ctx, ARG(1), received, sizeof received);
             return js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE",
-                                       "The value of \"byteLength\" is out of range. It must be >= 1 and <= 6. Received %s", received);
+                                       "The value of \"byteLength\" is out of range. It must be %s. Received %s",
+                                       floor(b) != b ? "an integer" : ">= 1 and <= 6", received);  /* boundsError: NaN too */
         }
         size = (size_t)b;
     }
@@ -1021,13 +1208,16 @@ static JSValue read_int(JSContext *ctx, JSValue this_val, uint32_t argc, const J
 static JSValue write_int(JSContext *ctx, JSValue this_val, uint32_t argc, const JSValue *argv, size_t size, int order, bool is_signed, bool variable) {
     THIS_BYTES();
     if (variable) {
+        /* writeIntBE and its kin: no default offset */
+        if (js_is_undefined(ARG(1))) return js_throw_invalid_arg_type(ctx, "offset", "of type number", ARG(1));
         if (!js_is_number(ARG(2))) return js_throw_invalid_arg_type(ctx, "byteLength", "of type number", ARG(2));
         double b = js_as_number(ARG(2));
         if (!(b >= 1 && b <= 6) || b != trunc(b)) {
             char received[64];
             js_describe_value(ctx, ARG(2), received, sizeof received);
             return js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE",
-                                       "The value of \"byteLength\" is out of range. It must be >= 1 and <= 6. Received %s", received);
+                                       "The value of \"byteLength\" is out of range. It must be %s. Received %s",
+                                       floor(b) != b ? "an integer" : ">= 1 and <= 6", received);  /* boundsError: NaN too */
         }
         size = (size_t)b;
     }
@@ -1035,9 +1225,8 @@ static JSValue write_int(JSContext *ctx, JSValue this_val, uint32_t argc, const 
     if (js_to_number(ctx, &v, ARG(0)) < 0) return JS_EXCEPTION;
     double min = is_signed ? -ldexp(1, (int)(8 * size - 1)) : 0;
     double max = is_signed ? ldexp(1, (int)(8 * size - 1)) - 1 : ldexp(1, (int)(8 * size)) - 1;
-    size_t offset;
-    if (access_offset(ctx, ARG(1), len, size, &offset) < 0) return JS_EXCEPTION;
-    if (!(v >= min && v <= max)) {
+    /* lib/internal/buffer.js's checkInt: the value (NaN passes, written as 0), then the offset */
+    if (v > max || v < min) {
         char range[160], received[64];
         if (size > 4) {
             if (is_signed) snprintf(range, sizeof range, ">= -(2 ** %zu) and < 2 ** %zu", 8 * size - 1, 8 * size - 1);
@@ -1046,10 +1235,13 @@ static JSValue write_int(JSContext *ctx, JSValue this_val, uint32_t argc, const 
             snprintf(range, sizeof range, ">= %.0f and <= %.0f", min, max);
         }
         js_describe_value(ctx, js_number(v), received, sizeof received);
+        if (isfinite(v) && v == trunc(v) && fabs(v) > 4294967296.0) add_numerical_separator(received, sizeof received);
         return js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE", "The value of \"value\" is out of range. It must be %s. Received %s", range, received);
     }
+    size_t offset;
+    if (access_offset(ctx, ARG(1), len, size, &offset) < 0) return JS_EXCEPTION;
     u8_bytes(this_val, &data, &len);
-    store_uint(data + offset, size, order, (uint64_t)(int64_t)trunc(v));
+    store_uint(data + offset, size, order, isnan(v) ? 0 : (uint64_t)(int64_t)trunc(v));
     return js_number((double)(offset + size));
 }
 
@@ -1164,6 +1356,10 @@ static JSValue write_big(JSContext *ctx, JSValue this_val, uint32_t argc, const 
         JSValue s = ctx->rt->bigint->to_string(ctx, v, 10);
         char received[96] = "";
         if (js_is_string(s)) received[js_view_to_utf8(js_string_view(ctx, s), received, sizeof received - 1)] = '\0';
+        /* Node's grouping, for a value past 2^32 in magnitude */
+        const char *digits = received[0] == '-' ? received + 1 : received;
+        size_t nd = strlen(digits);
+        if (nd > 10 || (nd == 10 && strcmp(digits, "4294967296") > 0)) add_numerical_separator(received, sizeof received);
         return js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE", "The value of \"value\" is out of range. It must be %s. Received %sn",
                                    is_signed ? ">= -(2n ** 63n) and < 2n ** 63n" : ">= 0n and < 2n ** 64n", received);
     }
@@ -1189,8 +1385,18 @@ BIG(read_big_int64be, write_big_int64be, INT_BE, true)
 
 /* ---- Inspection ----------------------------------------------------------------------------- */
 
-/* `<Buffer 68 69>`: at most 50 bytes, then ` ... n more bytes`, then the own enumerable
- * non-index properties (`<Buffer 61, foo: 1>`) */
+/* buffer.INSPECT_MAX_BYTES (node:buffer's setter sets it): how many bytes inspect shows */
+static double inspect_max_bytes = 50;
+
+/* bufferInspectMaxBytes(n): node:buffer's INSPECT_MAX_BYTES, validated there. */
+JSValue js_host_buffer_inspect_max_bytes(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    UNUSED_ARGS;
+    if (js_is_number(ARG(0))) inspect_max_bytes = js_as_number(ARG(0));
+    return JS_UNDEFINED;
+}
+
+/* `<Buffer 68 69>`: at most INSPECT_MAX_BYTES bytes, then ` ... n more bytes`, then the own
+ * enumerable non-index properties (`<Buffer 61, foo: 1>`) */
 BUILTIN(buffer_inspect) {
     UNUSED_ARGS;
     THIS_BYTES();
@@ -1202,7 +1408,8 @@ BUILTIN(buffer_inspect) {
         if (js_is_exception(n)) return n;
         if (js_is_string(n)) name[js_view_to_utf8(js_string_view(ctx, n), name, sizeof name - 1)] = '\0';
     }
-    size_t shown = len < 50 ? len : 50;
+    double max = inspect_max_bytes;  /* lib/buffer.js: min(max, length) shown, length - max more */
+    size_t shown = (double)len < max ? len : (size_t)max;
     char *s = malloc(strlen(name) + shown * 3 + 64);
     if (!s) js_fatal("out of memory inspecting a Buffer");
     size_t o = (size_t)sprintf(s, "<%s ", name);
@@ -1211,7 +1418,8 @@ BUILTIN(buffer_inspect) {
         s[o++] = HEX[data[i] >> 4];
         s[o++] = HEX[data[i] & 15];
     }
-    if (len > 50) o += (size_t)sprintf(s + o, " ... %zu more byte%s", len - 50, len - 50 > 1 ? "s" : "");
+    double remaining = (double)len - max;
+    if (remaining > 0) o += (size_t)sprintf(s + o, " ... %.17g more byte%s", remaining, remaining > 1 ? "s" : "");
     s[o] = '\0';
     JSValue r = js_new_string_cstr(ctx, s);
     free(s);
@@ -1325,14 +1533,14 @@ static const JSBuiltin buffer_proto[] = {
     FN("equals", buffer_equals, 1),
     FN("inspect", buffer_inspect, 2),
     FN("compare", buffer_compare, 5),
-    FN("indexOf", buffer_index_of, 3),
-    FN("lastIndexOf", buffer_last_index_of, 3),
-    FN("includes", buffer_includes, 3),
+    FN("indexOf", buffer_index_of, 4),
+    FN("lastIndexOf", buffer_last_index_of, 4),
+    FN("includes", buffer_includes, 4),
     FN("fill", buffer_fill, 4),
     FN("write", buffer_write, 4),
     FN("toJSON", buffer_to_json, 0),
     FN("subarray", buffer_subarray, 2),
-    FN("slice", buffer_subarray, 2),
+    FN("slice", buffer_slice, 2),
     FN("swap16", buffer_swap16, 0),
     FN("swap32", buffer_swap32, 0),
     FN("swap64", buffer_swap64, 0),

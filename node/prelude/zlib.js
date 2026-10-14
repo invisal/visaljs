@@ -85,6 +85,8 @@ export const codes = {
 };
 for (const ckey of Object.keys(codes)) codes[codes[ckey]] = ckey;
 Object.freeze(codes);
+/* each constant read-only and permanent, as NODE_DEFINE_CONSTANT makes them */
+for (const key of Object.keys(constants)) Object.defineProperty(constants, key, { writable: false, configurable: false });
 
 const kFlushFlag = Symbol("kFlushFlag");
 const kError = Symbol("kError");
@@ -181,10 +183,10 @@ class ZlibHandle extends CompressionHandle {
     super(zlibOps, zlibNew(mode));
   }
 
-  init(windowBits, level, memLevel, strategy, writeResult, writeCallback, dictionary) {
+  init(windowBits, level, memLevel, strategy, writeResult, writeCallback, dictionary, rejectGarbageAfterEnd) {
     this._writeResult = writeResult;
     this._writeCallback = writeCallback;
-    zlibInit(this._native, windowBits, level, memLevel, strategy, isArrayBufferView(dictionary) ? dictionary : undefined);
+    zlibInit(this._native, windowBits, level, memLevel, strategy, isArrayBufferView(dictionary) ? dictionary : undefined, rejectGarbageAfterEnd);
   }
 
   params(level, strategy) {
@@ -210,10 +212,10 @@ class BrotliHandle extends CompressionHandle {
     super(ops, ops.new(mode));
   }
 
-  init(params, writeResult, writeCallback) {
+  init(params, writeResult, writeCallback, dictionary) {
     this._writeResult = writeResult;
     this._writeCallback = writeCallback;
-    const failure = this._ops.init(this._native, params);
+    const failure = this._ops.init(this._native, params, dictionary);
     if (failure !== 0) {
       this._emitError(failure);
       throw codeError(Error, "ERR_ZLIB_INITIALIZATION_FAILED", "Initialization failed");
@@ -336,6 +338,7 @@ function ZlibBase(opts, mode, handle, { flush, finishFlush, fullFlush }) {
   assert(mode >= DEFLATE && mode <= ZSTD_DECOMPRESS);
   const brotli = mode === BROTLI_ENCODE || mode === BROTLI_DECODE;
   const zstd = mode === ZSTD_COMPRESS || mode === ZSTD_DECOMPRESS;
+  /* FLUSH_BOUND: the flush kinds each engine takes */
   const minFlush = brotli ? BROTLI_OPERATION_PROCESS : zstd ? ZSTD_e_continue : Z_NO_FLUSH;
   const maxFlushFlag = brotli ? BROTLI_OPERATION_EMIT_METADATA : zstd ? ZSTD_e_end : Z_BLOCK;
 
@@ -349,6 +352,9 @@ function ZlibBase(opts, mode, handle, { flush, finishFlush, fullFlush }) {
     flush = checkRangesOrGetDefault(opts.flush, "options.flush", minFlush, maxFlushFlag, flush);
     finishFlush = checkRangesOrGetDefault(opts.finishFlush, "options.finishFlush", minFlush, maxFlushFlag, finishFlush);
     maxOutputLength = checkRangesOrGetDefault(opts.maxOutputLength, "options.maxOutputLength", 1, kMaxLength, kMaxLength);
+    if (opts.rejectGarbageAfterEnd !== undefined && typeof opts.rejectGarbageAfterEnd !== "boolean") {
+      throw invalidArgType("options.rejectGarbageAfterEnd", "of type boolean", opts.rejectGarbageAfterEnd);
+    }
     if (opts.encoding || opts.objectMode || opts.writableObjectMode) {
       opts = { ...opts };
       opts.encoding = null;
@@ -369,6 +375,7 @@ function ZlibBase(opts, mode, handle, { flush, finishFlush, fullFlush }) {
   this._defaultFlushFlag = flush;
   this._finishFlushFlag = finishFlush;
   this._defaultFullFlushFlag = fullFlush;
+  this._flushBound = [minFlush, maxFlushFlag];
   this._info = opts?.info;
   this._maxOutputLength = maxOutputLength;
   this._rejectGarbageAfterEnd = opts?.rejectGarbageAfterEnd === true;
@@ -437,6 +444,7 @@ ZlibBase.prototype.flush = function (kind, callback) {
     callback = kind;
     kind = this._defaultFullFlushFlag;
   }
+  kind = checkRangesOrGetDefault(kind, "kind", this._flushBound[0], this._flushBound[1], this._defaultFullFlushFlag);
   if (this.writableFinished) {
     if (callback) process.nextTick(callback);
   } else if (this.writableEnded) {
@@ -531,6 +539,11 @@ function processChunkSync(self, chunk, flushFlag) {
     } else {
       break;
     }
+  }
+
+  if (availInAfter > 0 && self._rejectGarbageAfterEnd) {
+    _close(self);
+    throw codeError(TypeError, "ERR_TRAILING_JUNK_AFTER_STREAM_END", "Trailing junk found after the end of the compressed stream");
   }
 
   self.bytesWritten = inputRead;
@@ -664,7 +677,7 @@ function Zlib(opts, mode) {
 
   const handle = new ZlibHandle(mode);
   this._writeState = new Uint32Array(2);
-  handle.init(windowBits, level, memLevel, strategy, this._writeState, processCallback, dictionary);
+  handle.init(windowBits, level, memLevel, strategy, this._writeState, processCallback, dictionary, opts?.rejectGarbageAfterEnd === true);
 
   Reflect.apply(ZlibBase, this, [opts, mode, handle, zlibDefaultOpts]);
 
@@ -793,9 +806,15 @@ function Brotli(opts, mode) {
     });
   }
 
+  let dictionary = opts?.dictionary;
+  if (dictionary !== undefined && !isArrayBufferView(dictionary)) {
+    if (isAnyArrayBuffer(dictionary)) dictionary = Buffer.from(dictionary);
+    else throw invalidArgType("options.dictionary", "an instance of Buffer, TypedArray, DataView, or ArrayBuffer", dictionary);
+  }
+
   const handle = new BrotliHandle(mode);
   this._writeState = new Uint32Array(2);
-  handle.init(brotliInitParamsArray, this._writeState, processCallback);
+  handle.init(brotliInitParamsArray, this._writeState, processCallback, dictionary);
 
   Reflect.apply(ZlibBase, this, [opts, mode, handle, brotliDefaultOpts]);
 }
@@ -836,11 +855,12 @@ class Zstd extends ZlibBase {
       });
     }
 
+    let dictionary = opts?.dictionary;
+    if (dictionary !== undefined && !isArrayBufferView(dictionary)) dictionary = isAnyArrayBuffer(dictionary) ? new Uint8Array(dictionary) : undefined;
     const handle = new ZstdHandle(mode === ZSTD_COMPRESS);
-    const pledgedSrcSize = opts?.pledgedSrcSize ?? undefined;
+    const pledgedSrcSize = opts?.pledgedSrcSize;
     const writeState = new Uint32Array(2);
-    handle.init(initParamsArray, pledgedSrcSize, writeState, processCallback,
-      opts?.dictionary && isArrayBufferView(opts.dictionary) ? opts.dictionary : undefined);
+    handle.init(initParamsArray, pledgedSrcSize, writeState, processCallback, dictionary);
 
     super(opts, mode, handle, zstdDefaultOpts);
     this._writeState = writeState;

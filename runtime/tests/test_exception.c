@@ -99,8 +99,9 @@ TEST(exc_string_too_long) {
         s = t;
         doublings++;
     }
-    CHECK_EQ_INT(doublings, 25);
-    CHECK_EQ_INT(js_string_length(s), 1 << 29);
+    /* 2^28 fits under JS_STRING_MAX_LENGTH (V8's 2^29 - 24); 2^29 doesn't */
+    CHECK_EQ_INT(doublings, 24);
+    CHECK_EQ_INT(js_string_length(s), 1 << 28);
     CHECK(strcmp(take_error_text(ctx), "RangeError: Invalid string length") == 0);
     teardown();
 }

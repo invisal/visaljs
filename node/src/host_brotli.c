@@ -11,6 +11,7 @@
 #include "js_exception.h"
 #include "js_gc.h"
 #include "js_node.h"
+#include "js_web.h"
 #include "js_object.h"
 #include "js_ops.h"
 #include "jsstring.h"
@@ -33,6 +34,9 @@ typedef struct BrotliObject {
     BrotliDecoderResult       decode_result;
     BrotliDecoderErrorCode    error;
     JSRuntime                *rt;             /* the allocator's */
+    uint8_t                  *dictionary;     /* malloc'd; NULL when none (it outlives what uses it) */
+    size_t                    dictionary_len;
+    BrotliEncoderPreparedDictionary *prepared;  /* the encoder's, from the dictionary */
 } BrotliObject;
 
 /* Brotli's memory is the heap's external memory. */
@@ -42,8 +46,13 @@ static void brotli_free(void *rt, void *p) { js_gc_external_free(rt, p); }
 static void brotli_end(BrotliObject *b) {
     if (b->encoder) BrotliEncoderDestroyInstance(b->encoder);
     if (b->decoder) BrotliDecoderDestroyInstance(b->decoder);
+    if (b->prepared) BrotliEncoderDestroyPreparedDictionary(b->prepared);
+    free(b->dictionary);
     b->encoder = NULL;
     b->decoder = NULL;
+    b->prepared = NULL;
+    b->dictionary = NULL;
+    b->dictionary_len = 0;
 }
 
 static void brotli_finalize(JSRuntime *rt, JSCell *cell) {
@@ -65,12 +74,30 @@ static JSValue failure(JSContext *ctx, const char *message, int err, const char 
     return a;
 }
 
-/* Init (and ResetStream, which is Init again: the parameters set before are gone, as in Node) */
-static bool brotli_init(BrotliObject *b) {
+/* Init (and ResetStream, which is Init again: the parameters and the dictionary set before are
+ * gone, as in Node), with a raw shared dictionary when one is given: NULL, or a failure's message
+ * (its code in *code) */
+static const char *brotli_init(BrotliObject *b, const uint8_t *dictionary, size_t dictionary_len, const char **code) {
     brotli_end(b);
+    *code = "ERR_ZLIB_INITIALIZATION_FAILED";
     if (b->mode == BROTLI_ENCODE) b->encoder = BrotliEncoderCreateInstance(brotli_alloc, brotli_free, b->rt);
     else b->decoder = BrotliDecoderCreateInstance(brotli_alloc, brotli_free, b->rt);
-    return b->encoder || b->decoder;
+    if (!b->encoder && !b->decoder) return "Could not initialize Brotli instance";
+    if (!dictionary_len) return NULL;
+    b->dictionary = malloc(dictionary_len);
+    if (!b->dictionary) js_fatal("out of memory in Brotli");
+    memcpy(b->dictionary, dictionary, dictionary_len);
+    b->dictionary_len = dictionary_len;
+    *code = "ERR_ZLIB_DICTIONARY_LOAD_FAILED";
+    if (b->encoder) {
+        b->prepared = BrotliEncoderPrepareDictionary(BROTLI_SHARED_DICTIONARY_RAW, dictionary_len, b->dictionary, BROTLI_MAX_QUALITY,
+                                                     brotli_alloc, brotli_free, b->rt);
+        if (!b->prepared) return "Failed to prepare brotli dictionary";
+        if (!BrotliEncoderAttachPreparedDictionary(b->encoder, b->prepared)) return "Failed to attach brotli dictionary";
+    } else if (!BrotliDecoderAttachDictionary(b->decoder, BROTLI_SHARED_DICTIONARY_RAW, dictionary_len, b->dictionary)) {
+        return "Failed to attach brotli dictionary";
+    }
+    return NULL;
 }
 
 /* brotliNew(mode) → handle */
@@ -81,6 +108,9 @@ PRIMITIVE(js_host_brotli_new) {
     b->encoder = NULL;
     b->decoder = NULL;
     b->rt = ctx->rt;
+    b->dictionary = NULL;
+    b->dictionary_len = 0;
+    b->prepared = NULL;
     b->flush = BROTLI_OPERATION_PROCESS;
     b->encode_result = false;
     b->decode_result = BROTLI_DECODER_RESULT_SUCCESS;
@@ -88,7 +118,8 @@ PRIMITIVE(js_host_brotli_new) {
     return js_object_value(&b->obj);
 }
 
-/* brotliInit(handle, params): params a Uint32Array, by parameter number, 0xffffffff unset →
+/* brotliInit(handle, params, dictionary | undefined): params a Uint32Array, by parameter number,
+ * 0xffffffff unset; the dictionary a raw shared one →
  * 0 | failure */
 PRIMITIVE(js_host_brotli_init) {
     UNUSED_PRIMITIVE_ARGS;
@@ -96,7 +127,12 @@ PRIMITIVE(js_host_brotli_init) {
     uint8_t *p;
     size_t n;
     if (!b || !js_buffer_source_bytes(ARG(1), &p, &n)) return js_throw_type_error(ctx, "brotliInit: a handle and parameters expected");
-    if (!brotli_init(b)) return failure(ctx, "Could not initialize Brotli instance", -1, "ERR_ZLIB_INITIALIZATION_FAILED");
+    uint8_t *dict = NULL;
+    size_t dict_len = 0;
+    if (!js_is_undefined(ARG(2))) js_buffer_source_bytes(ARG(2), &dict, &dict_len);
+    const char *code;
+    const char *message = brotli_init(b, dict, dict_len, &code);
+    if (message) return failure(ctx, message, -1, code);
     for (size_t i = 0; i < n / sizeof(uint32_t); i++) {
         uint32_t value;
         memcpy(&value, p + i * sizeof value, sizeof value);
@@ -120,8 +156,11 @@ PRIMITIVE(js_host_brotli_write) {
         return js_throw_type_error(ctx, "brotliWrite: a handle, buffers and a state expected");
     double in_off = in ? js_as_number(ARG(3)) : 0, in_len = in ? js_as_number(ARG(4)) : 0;
     double out_off = js_as_number(ARG(6)), out_len = js_as_number(ARG(7));
-    if (!(in_off >= 0 && in_len >= 0 && in_off + in_len <= (double)in_n && out_off >= 0 && out_len >= 0 && out_off + out_len <= (double)out_n))
-        return js_throw_range_error(ctx, "brotliWrite: out of bounds");
+    /* node_zlib.cc's checks */
+    if (!(in_off >= 0 && in_len >= 0 && in_off + in_len <= (double)in_n))
+        return js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE", "input buffer is out of bounds");
+    if (!(out_off >= 0 && out_len >= 0 && out_off + out_len <= (double)out_n))
+        return js_throw_node_error(ctx, JS_RANGE_ERROR, "ERR_OUT_OF_RANGE", "output buffer is out of bounds");
     const uint8_t *next_in = in ? in + (size_t)in_off : NULL;
     uint8_t *next_out = out + (size_t)out_off;
     size_t avail_in = (size_t)in_len, avail_out = (size_t)out_len;
@@ -151,7 +190,9 @@ PRIMITIVE(js_host_brotli_reset) {
     UNUSED_PRIMITIVE_ARGS;
     BrotliObject *b = brotli_arg(ARG(0));
     if (!b) return js_throw_type_error(ctx, "brotliReset: a handle expected");
-    if (!brotli_init(b)) return failure(ctx, "Could not initialize Brotli instance", -1, "ERR_ZLIB_INITIALIZATION_FAILED");
+    const char *code;
+    const char *message = brotli_init(b, NULL, 0, &code);
+    if (message) return failure(ctx, message, -1, code);
     return js_int32(0);
 }
 

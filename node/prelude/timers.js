@@ -2,7 +2,8 @@
 // Immediate objects (ref, unref, hasRef, refresh, close, a primitive id) that call back with the
 // object as `this` (internal/timers.js).
 import { clearImmediate, clearInterval, clearTimeout, setImmediate, setInterval, setTimeout } from "./internal/timers.js";
-import * as promises from "./timers_promises.js";
+/* timers.promises is require("timers/promises") itself: the module's exports object */
+import promises from "./timers_promises.js";
 
 export { clearImmediate, clearInterval, clearTimeout, promises, setImmediate, setInterval, setTimeout };
 

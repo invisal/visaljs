@@ -70,8 +70,8 @@ void js_node_received(JSContext *ctx, JSValue v, char *buf, size_t cap) {
     } else if (js_is_function(v)) {
         JSValue n = js_get_value(ctx, v, JS_ATOM(name));
         if (js_is_exception(n)) js_discard(js_take_exception(ctx));
-        if (js_is_string(n) && js_string_length(n) != 0) to_utf8(ctx, n, s, sizeof s);
-        else strcpy(s, "<anonymous>");
+        if (js_is_string(n)) to_utf8(ctx, n, s, sizeof s);
+        else s[0] = '\0';  /* determineSpecificType: `function ${value.name}`, empty when anonymous */
         snprintf(buf, cap, " Received function %s", s);
     } else if (js_is_object(v)) {
         if (constructor_name(ctx, v, s, sizeof s)) snprintf(buf, cap, " Received an instance of %s", s);

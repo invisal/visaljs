@@ -127,6 +127,14 @@ if (typeof Symbol.dispose === "symbol") {
 function fireTimeout(timer) {
   timer[kPending] = false;
   armed.delete(timer[kId]);
+  /* listOnTimeout: a timer whose callback was taken away (an interval's _onTimeout = null) ends */
+  if (!timer._onTimeout) {
+    if (!timer._destroyed) {
+      timer._destroyed = true;
+      if (timer[kHasPrimitive]) knownTimersById.delete(timer[kId]);
+    }
+    return;
+  }
   const args = timer._timerArgs;
   try {
     if (args === undefined) timer._onTimeout();
