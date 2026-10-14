@@ -128,7 +128,7 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "process_more.js"), reached: (_code, program) => PROCESS_MORE.test(program) },
   /* process.memoryUsage(): it links libuv */
   { file: join(preludeDir, "internal", "process_memory.js"), reached: (code) => /\bprocess\b/.test(code) && /\bmemoryUsage\b/.test(code) },
-  /* Node's timer globals, returning Timeouts: when the code may use one's methods, or node:timers */
+  /* Node's timer globals, returning Timeouts: when the code may use one (TIMER_USE), or node:timers */
   { file: join(preludeDir, "internal", "timers_global.js"), reached: (code) => TIMER_USE.test(code) },
   /* the performance globals (node:perf_hooks'): when the program's own code, or a package's, names one */
   { file: join(preludeDir, "internal", "performance_global.js"), reached: (_code, program) => /\b[Pp]erformance(?:Entry|Mark|Measure)?\b/.test(program) },
@@ -170,7 +170,8 @@ const EVENTS_ON = /(?<![.\w$])on\s*\(|\b(?:events|EventEmitter)[\w$]*\s*\.\s*on\
 const UTIL_DEBUG = utilNamed("debug");
 const UTIL_MORE = /\b(?:callbackify|transferableAbort(?:Controller|Signal)|toUSVString|getCallSites|setTraceSigInt|convertProcessSignalToExitCode|_extend)\b/;
 const UTIL_MORE_MEMBERS = utilNamed("aborted|isArray");
-const TIMER_USE = /\.(?:unref|hasRef|refresh)\s*\(|\bclass Timeout\b/;
+/* a Timeout's methods, node:timers, or a callback that clears its own timer: `this` is the Timeout */
+const TIMER_USE = /\.(?:unref|hasRef|refresh)\s*\(|\bclass Timeout\b|\bclear(?:Interval|Timeout)\s*\(\s*this\s*\)/;
 const EMITTER_METHOD = /(?:\.|\[\s*["'`])\s*(?:on|once|off|emit|addListener|prependListener|prependOnceListener|removeListener|removeAllListeners|listeners|rawListeners|listenerCount|eventNames|setMaxListeners|getMaxListeners)\b/;
 
 /** The table createRequire's require() looks packages up in (node:module): the Symbol.for key
