@@ -26,8 +26,8 @@ same files and exit with the same status. There are two tiers:
 
 | Tier | Apps | CI |
 |---|---|---|
-| `fast` | `http-hello`, `express`, `hono`, `zod` | Every pull request that can change a binary, on Linux, macOS and Windows (Windows with Zig, not yet required to pass) |
-| `full` | Every app | Nightly, and pull requests that change `tests/apps` ([`apps-full.yml`](../../.github/workflows/apps-full.yml)) |
+| `fast` | `http-hello`, `express`, `hono`, `zod` | The cross-platform check: every pull request that can change a binary, on Linux, macOS and Windows (Windows with Zig, not yet required to pass) |
+| `full` | Every app | Nightly ([`nightly.yml`](../../.github/workflows/nightly.yml)) |
 
 ```sh
 node tests/apps/check.ts                 # the fast tier

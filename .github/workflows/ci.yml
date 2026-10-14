@@ -1,8 +1,8 @@
 # Every pull request commit: lint + typecheck, the compiler's, CLI's and differential tests, the
 # runtime's unit tests in all six configurations, the programs, Node's tests and the full test262,
-# the long ones in shards, and the fast tier of the apps on Linux, macOS and Windows (the full tier
-# when tests/apps changes). Nightly (nightly.yml): the programs under GC stress, the full tier of
-# the apps and the benchmarks. Every job runs on GitHub's runners.
+# the long ones in shards, and the cross-platform check (the fast tier of the apps on Linux, macOS
+# and Windows). Nightly (nightly.yml): the programs under GC stress, every app, and the benchmarks.
+# Every job runs on GitHub's runners.
 name: CI
 
 # Pull requests only: a merge to main brings commits their pull request already tested, and a
@@ -29,7 +29,6 @@ jobs:
       ctest: ${{ steps.diff.outputs.ctest }}
       nodejs: ${{ steps.diff.outputs.nodejs }}
       apps: ${{ steps.diff.outputs.apps }}
-      apps-full: ${{ steps.diff.outputs.apps-full }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -45,7 +44,6 @@ jobs:
             echo "ctest=true" >> "$GITHUB_OUTPUT"
             echo "nodejs=true" >> "$GITHUB_OUTPUT"
             echo "apps=true" >> "$GITHUB_OUTPUT"
-            echo "apps-full=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files=$(git diff --name-only "$BASE" HEAD)
@@ -55,9 +53,7 @@ jobs:
           echo "programs=$(echo "$files" | grep -qE "$code|^cli/|^tests/programs/|^vitest\.config\.ts$" && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "ctest=$(echo "$files" | grep -qE '^runtime/|^\.github/workflows/ci\.yml$' && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "nodejs=$(echo "$files" | grep -qE "$code|^cli/|^tests/nodejs/" && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          apps='^tests/apps/|^tests/differential/http\.ts$|^\.github/workflows/apps-full\.yml$'
-          echo "apps=$(echo "$files" | grep -qE "$code|^cli/|$apps" && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "apps-full=$(echo "$files" | grep -qE "$apps|^\.github/workflows/ci\.yml$" && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "apps=$(echo "$files" | grep -qE "$code|^cli/|^tests/apps/|^tests/differential/http\.ts$" && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
   compiler:
     name: Lint, typecheck, compiler tests
@@ -255,12 +251,12 @@ jobs:
         env:
           VISALJS_PROGRAMS_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
 
-  apps:
-    # The fast tier of the apps (tests/apps/check.ts): http-hello, express, hono and zod, each
-    # compiled and checked against Node, on each platform. Windows builds with Zig (the README:
+  cross-platform:
+    # The compiler on each platform: the fast tier of the apps (tests/apps/check.ts), http-hello,
+    # express, hono and zod, each compiled and checked against Node. Windows builds with Zig (the README:
     # MSVC isn't supported), and doesn't fail the run until it passes.
     # Locally: node tests/apps/check.ts
-    name: Apps, fast tier (${{ matrix.os }})
+    name: Cross-platform check (${{ matrix.os }})
     needs: changes
     if: needs.changes.outputs.apps == 'true'
     runs-on: ${{ matrix.os }}
@@ -292,9 +288,3 @@ jobs:
       - run: npm ci
       - run: node tests/apps/check.ts --tier=fast
 
-  apps-full:
-    # Every app, when tests/apps changes (nightly runs it too): apps-full.yml.
-    name: Apps, full tier
-    needs: changes
-    if: needs.changes.outputs.apps-full == 'true'
-    uses: ./.github/workflows/apps-full.yml

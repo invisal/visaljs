@@ -3,9 +3,10 @@
 // the same exit status. Two tiers:
 //
 //   fast  http-hello, express, hono and zod: quick to build, and between them node:http, CommonJS
-//         and ES modules, two routers, body parsing, streaming and a regex-heavy library. CI runs
-//         them on Linux, macOS and Windows for every pull request that can change a binary.
-//   full  every app. Nightly, and for pull requests that change tests/apps.
+//         and ES modules, two routers, body parsing, streaming and a regex-heavy library. CI's
+//         cross-platform check runs them on Linux, macOS and Windows for every pull request that
+//         can change a binary.
+//   full  every app. Nightly.
 //
 //   node tests/apps/check.ts [--tier=fast|full] [--require-databases] [name...]
 //
