@@ -3,16 +3,16 @@
   "node": "v24.21.0",
   "summary": {
     "modules": {
-      "complete": 26,
-      "partial": 27,
+      "complete": 28,
+      "partial": 25,
       "stub": 1,
       "missing": 4,
       "total": 58
     },
     "exports": {
-      "implemented": 1122,
+      "implemented": 1124,
       "stubbed": 33,
-      "missing": 129,
+      "missing": 127,
       "total": 1284
     }
   },
@@ -792,12 +792,6 @@
         "Utf8Stream",
         "mkdtempDisposableSync"
       ],
-      "extra": [
-        "F_OK",
-        "R_OK",
-        "W_OK",
-        "X_OK"
-      ],
       "notes": "The synchronous calls, and the callback and promise forms over them (the I/O happens when called, not on a thread pool). readdir (recursive too), opendir and Dir, cp (Node's checks and messages), glob (minimatch's patterns: braces, classes, extglobs, **), statfs, readv and writev, openAsBlob, and watch (inotify, kqueue, … through libuv) and watchFile (a stat poller): the larger ones are linked into programs that name them. Not yet: the bigint option of watchFile, and Buffer paths in places."
     },
     "fs/promises": {
@@ -1373,7 +1367,7 @@
       "missing": []
     },
     "sys": {
-      "status": "partial",
+      "status": "complete",
       "implemented": [
         "MIMEParams",
         "MIMEType",
@@ -1381,6 +1375,7 @@
         "TextEncoder",
         "aborted",
         "callbackify",
+        "convertProcessSignalToExitCode",
         "debug",
         "debuglog",
         "deprecate",
@@ -1407,27 +1402,7 @@
         "types"
       ],
       "stubbed": [],
-      "missing": [
-        "convertProcessSignalToExitCode"
-      ],
-      "extra": [
-        "getCallSite",
-        "isBoolean",
-        "isBuffer",
-        "isDate",
-        "isError",
-        "isFunction",
-        "isNull",
-        "isNullOrUndefined",
-        "isNumber",
-        "isObject",
-        "isPrimitive",
-        "isRegExp",
-        "isString",
-        "isSymbol",
-        "isUndefined",
-        "log"
-      ]
+      "missing": []
     },
     "test": {
       "status": "partial",
@@ -1480,11 +1455,6 @@
       ],
       "stubbed": [],
       "missing": [],
-      "extra": [
-        "active",
-        "enroll",
-        "unenroll"
-      ],
       "notes": "The globals are node:timers' functions, returning Timeout and Immediate objects, in programs that may use them (a Timeout's unref, hasRef or refresh, or node:timers itself; not with --no-bundle or --script); elsewhere they return numbers. A Timeout's primitive is its timer's id, not an async_hooks id."
     },
     "timers/promises": {
@@ -1573,7 +1543,7 @@
       ]
     },
     "util": {
-      "status": "partial",
+      "status": "complete",
       "implemented": [
         "MIMEParams",
         "MIMEType",
@@ -1581,6 +1551,7 @@
         "TextEncoder",
         "aborted",
         "callbackify",
+        "convertProcessSignalToExitCode",
         "debug",
         "debuglog",
         "deprecate",
@@ -1607,27 +1578,7 @@
         "types"
       ],
       "stubbed": [],
-      "missing": [
-        "convertProcessSignalToExitCode"
-      ],
-      "extra": [
-        "getCallSite",
-        "isBoolean",
-        "isBuffer",
-        "isDate",
-        "isError",
-        "isFunction",
-        "isNull",
-        "isNullOrUndefined",
-        "isNumber",
-        "isObject",
-        "isPrimitive",
-        "isRegExp",
-        "isString",
-        "isSymbol",
-        "isUndefined",
-        "log"
-      ]
+      "missing": []
     },
     "util/types": {
       "status": "complete",

@@ -1,5 +1,5 @@
 // Deep equality for node:assert and util.isDeepStrictEqual: Node's
-// lib/internal/util/comparisons.js (MIT; Node v22.22.2), ported: primordials are the methods they
+// lib/internal/util/comparisons.js (MIT; Node v24.21.0), ported: primordials are the methods they
 // stand for, Node's bindings JS (getOwnNonIndexProperties, Buffer's compare). Loose (deepEqual),
 // strict (deepStrictEqual) and partial (partialDeepStrictEqual) modes, with Node's set and map
 // matching and its cycle handling (tried without memos first; a stack overflow, a RangeError the
@@ -7,7 +7,7 @@
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import {
   isAnyArrayBuffer, isArrayBufferView, isBigIntObject, isBooleanObject, isBoxedPrimitive, isCryptoKey, isDate,
-  isFloat16Array, isFloat32Array, isFloat64Array, isKeyObject, isMap, isNativeError, isNumberObject, isRegExp,
+  isFloat16Array, isFloat32Array, isFloat64Array, isKeyObject, isMap, isNativeError, isNumberObject, isPromise, isRegExp,
   isSet, isStringObject, isSymbolObject, isWeakMap, isWeakSet,
 } from "../util_types.js";
 
@@ -38,9 +38,10 @@ const wellKnownConstructors = new Set([
 if (typeof globalThis.Buffer === "function") wellKnownConstructors.add(globalThis.Buffer);
 if (typeof globalThis.Float16Array === "function") wellKnownConstructors.add(globalThis.Float16Array);
 
-const kStrict = 1;
+const kStrict = 2;
+const kStrictWithoutPrototypes = 3;
 const kLoose = 0;
-const kPartial = 2;
+const kPartial = 1;
 
 const kNoIterator = 0;
 const kIsArray = 1;
@@ -86,7 +87,7 @@ function isPartialUint8Array(a, b) {
   }
   let offsetA = 0;
   for (let offsetB = 0; offsetB < lenB; offsetB++) {
-    while (!Object.is(a[offsetA], b[offsetB])) {
+    while (a[offsetA] !== b[offsetB]) {
       offsetA++;
       if (offsetA > lenA - lenB + offsetB) {
         return false;
@@ -117,11 +118,10 @@ function areSimilarFloatArrays(a, b) {
   return true;
 }
 
+/* Node's compare reads any view's bytes; this one reads Uint8Arrays */
 function areSimilarTypedArrays(a, b) {
-  if (a.byteLength !== b.byteLength) {
-    return false;
-  }
-  return compare(new Uint8Array(a.buffer, a.byteOffset, a.byteLength), new Uint8Array(b.buffer, b.byteOffset, b.byteLength)) === 0;
+  return a.byteLength === b.byteLength &&
+    compare(new Uint8Array(a.buffer, a.byteOffset, a.byteLength), new Uint8Array(b.buffer, b.byteOffset, b.byteLength)) === 0;
 }
 
 function areEqualArrayBuffers(buf1, buf2) {
@@ -181,6 +181,17 @@ function innerDeepEqual(val1, val2, mode, memos) {
   return objectComparisonStart(val1, val2, mode, memos);
 }
 
+function hasUnequalTag(val1, val2) {
+  return val1[Symbol.toStringTag] !== val2[Symbol.toStringTag];
+}
+
+function slowHasUnequalTag(val1Tag, val1, val2) {
+  if (val1[Symbol.toStringTag] !== undefined && val2[Symbol.toStringTag] !== undefined) {
+    return val1[Symbol.toStringTag] !== val2[Symbol.toStringTag];
+  }
+  return val1Tag !== objectToString(val2);
+}
+
 function objectComparisonStart(val1, val2, mode, memos) {
   if (mode === kStrict) {
     if (wellKnownConstructors.has(val1.constructor) || (val1.constructor !== undefined && !hasOwn(val1, "constructor"))) {
@@ -192,15 +203,9 @@ function objectComparisonStart(val1, val2, mode, memos) {
     }
   }
 
-  const val1Tag = objectToString(val1);
-  const val2Tag = objectToString(val2);
-
-  if (val1Tag !== val2Tag) {
-    return false;
-  }
-
   if (Array.isArray(val1)) {
-    if (!Array.isArray(val2) || (val1.length !== val2.length && (mode !== kPartial || val1.length < val2.length))) {
+    if (!Array.isArray(val2) || (val1.length !== val2.length && (mode !== kPartial || val1.length < val2.length)) ||
+        hasUnequalTag(val1, val2)) {
       return false;
     }
 
@@ -210,16 +215,24 @@ function objectComparisonStart(val1, val2, mode, memos) {
       return false;
     }
     return keyCheck(val1, val2, mode, memos, kIsArray, keys2);
-  } else if (val1Tag === "[object Object]") {
+  }
+
+  let val1Tag;
+  if (val1[Symbol.toStringTag] === undefined && (val1Tag = objectToString(val1)) === "[object Object]") {
+    if (slowHasUnequalTag(val1Tag, val1, val2)) {
+      return false;
+    }
     return keyCheck(val1, val2, mode, memos, kNoIterator);
-  } else if (isDate(val1)) {
-    if (!isDate(val2) || Date.prototype.getTime.call(val1) !== Date.prototype.getTime.call(val2)) {
+  } else if (isSet(val1)) {
+    if (!isSet(val2) || (val1.size !== val2.size && (mode !== kPartial || val1.size < val2.size)) || hasUnequalTag(val1, val2)) {
       return false;
     }
-  } else if (isRegExp(val1)) {
-    if (!isRegExp(val2) || !areSimilarRegExps(val1, val2)) {
+    return keyCheck(val1, val2, mode, memos, kIsSet);
+  } else if (isMap(val1)) {
+    if (!isMap(val2) || (val1.size !== val2.size && (mode !== kPartial || val1.size < val2.size)) || hasUnequalTag(val1, val2)) {
       return false;
     }
+    return keyCheck(val1, val2, mode, memos, kIsMap);
   } else if (isArrayBufferView(val1)) {
     if (typedArrayTag(val1) !== typedArrayTag(val2)) {
       return false;
@@ -244,18 +257,22 @@ function objectComparisonStart(val1, val2, mode, memos) {
       return false;
     }
     return keyCheck(val1, val2, mode, memos, kNoIterator, keys2);
-  } else if (isSet(val1)) {
-    if (!isSet(val2) || (val1.size !== val2.size && (mode !== kPartial || val1.size < val2.size))) {
+  } else if (isDate(val1)) {
+    if (!isDate(val2) || hasUnequalTag(val1, val2)) {
       return false;
     }
-    return keyCheck(val1, val2, mode, memos, kIsSet);
-  } else if (isMap(val1)) {
-    if (!isMap(val2) || (val1.size !== val2.size && (mode !== kPartial || val1.size < val2.size))) {
+    const time1 = Date.prototype.getTime.call(val1);
+    const time2 = Date.prototype.getTime.call(val2);
+    // two invalid dates (NaN) are equal
+    if (time1 !== time2 && (time1 === time1 || time2 === time2)) {
       return false;
     }
-    return keyCheck(val1, val2, mode, memos, kIsMap);
+  } else if (isRegExp(val1)) {
+    if (!isRegExp(val2) || !areSimilarRegExps(val1, val2) || hasUnequalTag(val1, val2)) {
+      return false;
+    }
   } else if (isAnyArrayBuffer(val1)) {
-    if (!isAnyArrayBuffer(val2)) {
+    if (!isAnyArrayBuffer(val2) || hasUnequalTag(val1, val2)) {
       return false;
     }
     if (mode !== kPartial || val1.byteLength === val2.byteLength) {
@@ -265,6 +282,9 @@ function objectComparisonStart(val1, val2, mode, memos) {
     } else if (!isPartialUint8Array(new Uint8Array(val1), new Uint8Array(val2))) {
       return false;
     }
+  } else if (slowHasUnequalTag(val1Tag ?? objectToString(val1), val1, val2) || Array.isArray(val2) || isArrayBufferView(val2) ||
+             isSet(val2) || isMap(val2) || isDate(val2) || isRegExp(val2) || isAnyArrayBuffer(val2)) {
+    return false;
   } else if (isError(val1)) {
     // Do not compare the stack as it might differ even though the error itself
     // is otherwise identical.
@@ -283,34 +303,31 @@ function objectComparisonStart(val1, val2, mode, memos) {
     if (!isEqualBoxedPrimitive(val1, val2)) {
       return false;
     }
-  } else if (Array.isArray(val2) || isArrayBufferView(val2) || isSet(val2) || isMap(val2) || isDate(val2) ||
-             isRegExp(val2) || isAnyArrayBuffer(val2) || isBoxedPrimitive(val2) || isNativeError(val2) ||
-             val2 instanceof Error) {
-    return false;
   } else if (isURL(val1)) {
     if (!isURL(val2) || val1.href !== val2.href) {
       return false;
     }
   } else if (isKeyObject(val1)) {
+    /* KeyObject.equals compares the types and the keys, as Node 24's handles do */
     if (!isKeyObject(val2) || !val1.equals(val2)) {
       return false;
     }
   } else if (isCryptoKey(val1)) {
+    /* Node 24 compares the type, extractability, algorithm, usages and key; the key's material
+       isn't reachable here without linking the crypto component into every program that compares */
     if (!isCryptoKey(val2) ||
+        val1.type !== val2.type ||
         val1.extractable !== val2.extractable ||
         !innerDeepEqual(val1.algorithm, val2.algorithm, mode, memos) ||
         !innerDeepEqual(val1.usages, val2.usages, mode, memos)) {
       return false;
     }
-  } else if (isWeakMap(val1) || isWeakSet(val1)) {
+  } else if (isBoxedPrimitive(val2) || isNativeError(val2) || val2 instanceof Error || isWeakMap(val1) || isWeakSet(val1) ||
+             isPromise(val1)) {
     return false;
   }
 
   return keyCheck(val1, val2, mode, memos, kNoIterator);
-}
-
-function getEnumerables(val, keys) {
-  return keys.filter((key) => hasEnumerable(val, key));
 }
 
 function partialSymbolEquiv(val1, val2, keys2) {
@@ -318,9 +335,6 @@ function partialSymbolEquiv(val1, val2, keys2) {
   if (symbolKeys.length !== 0) {
     for (const key of symbolKeys) {
       if (hasEnumerable(val2, key)) {
-        if (!hasEnumerable(val1, key)) {
-          return false;
-        }
         keys2.push(key);
       }
     }
@@ -351,30 +365,19 @@ function keyCheck(val1, val2, mode, memos, iterationType, keys2) {
       }
     } else if (keys2.length !== (keys1 = Object.keys(val1)).length) {
       return false;
-    } else if (mode === kStrict) {
-      const symbolKeysA = getOwnSymbols(val1);
-      if (symbolKeysA.length !== 0) {
-        let count = 0;
-        for (const key of symbolKeysA) {
-          if (hasEnumerable(val1, key)) {
-            if (!hasEnumerable(val2, key)) {
-              return false;
-            }
-            keys2.push(key);
-            count++;
-          } else if (hasEnumerable(val2, key)) {
-            return false;
-          }
+    } else if (mode === kStrict || mode === kStrictWithoutPrototypes) {
+      for (const key of getOwnSymbols(val1)) {
+        if (hasEnumerable(val1, key)) {
+          keys1.push(key);
         }
-        const symbolKeysB = getOwnSymbols(val2);
-        if (symbolKeysA.length !== symbolKeysB.length && getEnumerables(val2, symbolKeysB).length !== count) {
-          return false;
+      }
+      for (const key of getOwnSymbols(val2)) {
+        if (hasEnumerable(val2, key)) {
+          keys2.push(key);
         }
-      } else {
-        const symbolKeysB = getOwnSymbols(val2);
-        if (symbolKeysB.length !== 0 && getEnumerables(val2, symbolKeysB).length !== 0) {
-          return false;
-        }
+      }
+      if (keys1.length !== keys2.length) {
+        return false;
       }
     }
   }
@@ -400,13 +403,20 @@ function handleCycles(val1, val2, mode, keys1, keys2, memos, iterationType) {
   if (memos.set === undefined) {
     if (memos.deep === false) {
       if (memos.a === val1) {
-        if (memos.b === val2) return true;
+        return memos.b === val2;
+      }
+      if (memos.b === val2) {
+        return false;
       }
       memos.c = val1;
       memos.d = val2;
       memos.deep = true;
       const result = objEquiv(val1, val2, mode, keys1, keys2, memos, iterationType);
       memos.deep = false;
+      if (memos.set !== undefined) {
+        memos.set.delete(memos.c);
+        memos.set.delete(memos.d);
+      }
       return result;
     }
     memos.set = new Set();
@@ -421,8 +431,8 @@ function handleCycles(val1, val2, mode, keys1, keys2, memos, iterationType) {
   const originalSize = set.size;
   set.add(val1);
   set.add(val2);
-  if (originalSize === set.size) {
-    return true;
+  if (originalSize !== set.size - 2) {
+    return originalSize === set.size;
   }
 
   const areEq = objEquiv(val1, val2, mode, keys1, keys2, memos, iterationType);
@@ -522,16 +532,14 @@ function partialObjectSetEquiv(array, a, b, mode, memo) {
 }
 
 function arrayHasEqualElement(array, val1, mode, memo, comparator, start, end) {
-  let matched = false;
   for (let i = end - 1; i >= start; i--) {
     if (comparator(val1, array[i], mode, memo)) {
-      // Remove the matching element to make sure we do not check that again.
-      array.splice(i, 1);
-      matched = true;
-      break;
+      // Move the matching element to make sure we do not check that again.
+      array[i] = array[end];
+      return true;
     }
   }
-  return matched;
+  return false;
 }
 
 function setObjectEquiv(array, a, b, mode, memo) {
@@ -674,17 +682,15 @@ function partialObjectMapEquiv(array, a, b, mode, memo) {
 }
 
 function arrayHasEqualMapElement(array, key1, item1, b, mode, memo, comparator, start, end) {
-  let matched = false;
   for (let i = end - 1; i >= start; i--) {
     const key2 = array[i];
     if (comparator(key1, key2, mode, memo) && innerDeepEqual(item1, b.get(key2), mode, memo)) {
-      // Remove the matching element to make sure we do not check that again.
-      array.splice(i, 1);
-      matched = true;
-      break;
+      // Move the matching element to make sure we do not check that again.
+      array[i] = array[end];
+      return true;
     }
   }
-  return matched;
+  return false;
 }
 
 function mapObjectEquiv(array, a, b, mode, memo) {
@@ -692,10 +698,13 @@ function mapObjectEquiv(array, a, b, mode, memo) {
   let start = 0;
   let end = array.length - 1;
   const comparator = mode !== kLoose ? objectComparisonStart : innerDeepEqual;
-  const extraChecks = mode === kLoose || array.length !== a.size;
 
   for (const { 0: key1, 1: item1 } of a) {
-    if (extraChecks && (typeof key1 !== "object" || key1 === null)) {
+    // Primitive and `null` keys can never match an object key collected in
+    // `array`, so resolve them directly against `b`. `null` is `typeof
+    // "object"`, so without this it would reach the object comparator, which
+    // reads `key1.constructor` and throws a `TypeError`.
+    if (typeof key1 !== "object" || key1 === null) {
       if (b.has(key1)) {
         if (mode !== kLoose || innerDeepEqual(item1, b.get(key1), mode, memo)) {
           continue;
@@ -772,17 +781,19 @@ function mapEquiv(a, b, mode, memo) {
 }
 
 function partialSparseArrayEquiv(a, b, mode, memos, startA, startB) {
-  let aPos = 0;
-  const keysA = Object.keys(a).slice(startA);
-  const keysB = Object.keys(b).slice(startB);
-  if (keysA.length < keysB.length) {
+  let aPos = startA;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  const lenA = keysA.length - startA;
+  const lenB = keysB.length - startB;
+  if (lenA < lenB) {
     return false;
   }
-  for (let i = 0; i < keysB.length; i++) {
-    const keyB = keysB[i];
+  for (let i = 0; i < lenB; i++) {
+    const keyB = keysB[startB + i];
     while (!innerDeepEqual(a[keysA[aPos]], b[keyB], mode, memos)) {
       aPos++;
-      if (aPos > keysA.length - keysB.length + i) {
+      if (aPos > keysA.length - lenB + i) {
         return false;
       }
     }
@@ -847,8 +858,11 @@ function objEquiv(a, b, mode, keys1, keys2, memos, iterationType) {
     for (; i < keys2.length; i++) {
       const key = keys2[i];
       const descriptor = Object.getOwnPropertyDescriptor(a, key);
-      if (!descriptor?.enumerable ||
-          !innerDeepEqual(descriptor.value !== undefined ? descriptor.value : a[key], b[key], mode, memos)) {
+      if (descriptor === undefined || descriptor.enumerable !== true) {
+        return false;
+      }
+      const value = descriptor.writable !== undefined ? descriptor.value : a[key];
+      if (!innerDeepEqual(value, b[key], mode, memos)) {
         return false;
       }
     }
@@ -861,8 +875,8 @@ function objEquiv(a, b, mode, keys1, keys2, memos, iterationType) {
     for (let i = 0; i < a.length; i++) {
       if (b[i] === undefined) {
         if (!hasOwn(b, i)) return sparseArrayEquiv(a, b, mode, memos, i);
-        if (a[i] !== undefined || !hasOwn(a, i)) return false;
-      } else if (a[i] === undefined || !innerDeepEqual(a[i], b[i], mode, memos)) {
+        if ((a[i] !== undefined || !hasOwn(a, i)) && (mode !== kLoose || a[i] !== null)) return false;
+      } else if ((a[i] === undefined || !innerDeepEqual(a[i], b[i], mode, memos)) && (mode !== kLoose || b[i] !== null)) {
         return false;
       }
     }
@@ -893,8 +907,8 @@ export function isDeepEqual(val1, val2) {
   return detectCycles(val1, val2, kLoose);
 }
 
-export function isDeepStrictEqual(val1, val2) {
-  return detectCycles(val1, val2, kStrict);
+export function isDeepStrictEqual(val1, val2, skipPrototype) {
+  return detectCycles(val1, val2, skipPrototype ? kStrictWithoutPrototypes : kStrict);
 }
 
 export function isPartialStrictEqual(val1, val2) {

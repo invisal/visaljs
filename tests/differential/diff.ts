@@ -113,10 +113,9 @@ function unbracketErrors(lines: string[]): string[] {
   for (let i = 0; i < out.length; i++) {
     const open = /^(\s*)\[((?:\w*Error|\w*Exception)\b.*)$/.exec(out[i]!);
     if (!open) continue;
-    const [, indent, rest] = open;
-    const closing = /\](?: \{)?$/;
-    if (closing.test(rest!)) {  /* on one line */
-      out[i] = indent + rest!.replace(/\]( \{)?$/, "$1");
+    const indent = open[1] ?? "", rest = open[2] ?? "";
+    if (/\](?: \{)?$/.test(rest)) {  /* on one line */
+      out[i] = indent + rest.replace(/\]( \{)?$/, "$1");
       continue;
     }
     for (let j = i + 1; j < out.length; j++) {
