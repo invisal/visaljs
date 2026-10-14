@@ -17,7 +17,21 @@ function received(value) {
 
 function withCode(error, code) {
   Object.defineProperty(error, "code", { value: code, writable: true, enumerable: true, configurable: true });
+  /* Node's NodeError: String(error) shows the code, "TypeError [ERR_X]: …" */
+  Object.defineProperty(error, "toString", { value: nodeErrorToString(code), writable: true, enumerable: false, configurable: true });
   return error;
+}
+
+const toStrings = new Map();
+function nodeErrorToString(code) {
+  let fn = toStrings.get(code);
+  if (fn === undefined) {
+    fn = function toString() {
+      return `${this.name} [${code}]: ${this.message}`;
+    };
+    toStrings.set(code, fn);
+  }
+  return fn;
 }
 
 /** An error of class Ctor with Node's `code`: codeError(TypeError, "ERR_X", "message"). */

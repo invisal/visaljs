@@ -18,3 +18,8 @@ test-zlib-zstd-kmaxlength-rangeerror.js  patches buffer.kMaxLength before requir
 # domain (deprecated, DEP0032): its binding to timers and errors isn't provided
 test-timers-reset-process-domain-on-throw.js  domain
 test-timers-immediate-queue-throw.js     domain
+
+# no eval: Function() and vm compile source text
+test-stream-ispaused.js                  Function() constructor
+# not provided: http2
+test-stream-pipeline-http2.js            http2

@@ -6,6 +6,8 @@ import { Duplex } from "../stream.js";
 import { features } from "./features.js";
 import compose from "./streams/compose.js";
 import duplexify from "./streams/duplexify.js";
+/* Duplex.from of web streams converts them */
+import "./stream_web_adapters.js";
 
 const kCallback = Symbol("Callback");
 const kInitOtherSide = Symbol("InitOtherSide");

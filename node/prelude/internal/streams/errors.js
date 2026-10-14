@@ -100,11 +100,18 @@ function invalidArgTypeMessage(name, expected, actual) {
   return msg + `. Received ${determineSpecificType(actual)}`;
 }
 
+/** util.format's %s: a string as it is, an object inspected shallowly, a bigint with its n */
+function formatS(arg) {
+  if (typeof arg === "bigint") return `${arg}n`;
+  if (typeof arg === "object" && arg !== null) return utilInspect(arg, { depth: 0, colors: false, compact: 3 });
+  return String(arg);
+}
+
 /** A code's class: `new` gives Base's instance with the code and the message format(…args) makes. */
 function E(code, format, Base) {
   const make = typeof format === "function" ? format : (...args) => {
     let i = 0;
-    return format.replace(/%s/g, () => String(args[i++]));
+    return format.replace(/%s/g, () => formatS(args[i++]));
   };
   const Ctor = function (...args) {
     return codeError(Base, code, make(...args));

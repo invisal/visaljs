@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -138,7 +138,9 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     const bundle = readFileSync(join(out, "bundle.js"), "utf8");
     expect(bundle).toContain('from "visaljs:host"');
     expect(bundle).toMatch(/\/\/#region .*node\/prelude\//);  /* the prelude, bundled (an absolute path when tmpdir is on another drive) */
-    expect(readFileSync(join(out, "program.c"), "utf8")).toContain("js_host_fs_exists");
+    /* in one of the C files the program splits into */
+    const c = readdirSync(out).filter((f) => f.endsWith(".c")).map((f) => readFileSync(join(out, f), "utf8")).join("\n");
+    expect(c).toContain("js_host_fs_exists");
 
     const sqlite = join(dir, "sqlite.js");
     writeFileSync(sqlite, 'import { DatabaseSync } from "node:sqlite";\nprint(DatabaseSync);\n');

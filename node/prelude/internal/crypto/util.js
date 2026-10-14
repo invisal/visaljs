@@ -60,7 +60,6 @@ function makeGetter(name) {
   return function () {
     Transform.call(this, this._options);
     this._writableState.decodeStrings = false;
-    if (!this._options || !this._options.defaultEncoding) this._writableState.defaultEncoding = "buffer";
     return this[name];
   };
 }
@@ -71,6 +70,7 @@ function makeSetter(name) {
   };
 }
 
-for (const name of ["_readableState", "_writableState", "_transformState"]) {
+/* Node 24's lib/internal/streams/lazy_transform.js: the two states (Transform keeps no third) */
+for (const name of ["_readableState", "_writableState"]) {
   Object.defineProperty(LazyTransform.prototype, name, { get: makeGetter(name), set: makeSetter(name), configurable: true, enumerable: true });
 }
