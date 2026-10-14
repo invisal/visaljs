@@ -1,40 +1,40 @@
-constructor/0 encrypt/3 decrypt/3 sign/3 verify/4 digest/2 generateKey/3 deriveKey/5 deriveBits/2 importKey/5 exportKey/2 wrapKey/4 unwrapKey/7
+constructor/0 encrypt/3 decrypt/3 sign/3 verify/4 digest/2 generateKey/3 deriveKey/5 deriveBits/2 importKey/5 exportKey/2 wrapKey/4 unwrapKey/7 getPublicKey/2 encapsulateBits/2 encapsulateKey/5 decapsulateBits/3 decapsulateKey/6
 [ 'constructor', 'type', 'extractable', 'algorithm', 'usages' ] true
 TypeError [ERR_ILLEGAL_CONSTRUCTOR]: Illegal constructor
 CryptoKey {
   type: 'secret',
   extractable: true,
-  algorithm: { name: 'HMAC', hash: [Object], length: 128 },
-  usages: [ 'verify', 'sign', 'verify' ]
-} secret true { name: 'HMAC', hash: { name: 'SHA-512' }, length: 128 } [ 'verify', 'sign', 'verify' ] true true
+  algorithm: { name: 'HMAC', length: 128, hash: [Object] },
+  usages: [ 'sign', 'verify' ]
+} secret true { name: 'HMAC', length: 128, hash: { name: 'SHA-512' } } [ 'sign', 'verify' ] true true
 true [object CryptoKey]
 CryptoKey {
   type: 'secret',
   extractable: true,
-  algorithm: { name: 'HMAC', hash: [Object], length: 128 },
+  algorithm: { name: 'HMAC', length: 128, hash: [Object] },
   usages: [ 'sign', 'verify' ]
 }
 CryptoKey {
   type: 'secret',
   extractable: false,
-  algorithm: { name: 'HMAC', hash: [Object], length: 128 },
+  algorithm: { name: 'HMAC', length: 128, hash: [Object] },
   usages: [ 'sign' ]
 }
-NotSupportedError [9]: Unsupported algorithm.length
-DataError [0]: Zero-length key is not supported
-TypeError [ERR_OUT_OF_RANGE]: Failed to normalize algorithm: 'length' of 'HmacImportParams' (passed algorithm) is outside the expected range of 0 to 4294967295.
-TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'HmacImportParams' because 'hash' is required in 'HmacImportParams'.
+DataError [0]: Invalid key length
+DataError [0]: HmacImportParams.length cannot be 0
+TypeError [ERR_OUT_OF_RANGE]: Failed to normalize algorithm: length in passed algorithm is outside the expected range of 0 to 4294967295.
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm cannot be converted to 'HmacImportParams' because 'hash' is required in 'HmacImportParams'.
 NotSupportedError [9]: Unrecognized algorithm name
-SyntaxError [12]: Unsupported key usage for an HMAC key
+SyntaxError [12]: Unsupported key usage for HMAC key
 SyntaxError [12]: Usages cannot be empty when importing a secret key.
 DataError [0]: Zero-length key is not supported
-TypeError [ERR_INVALID_ARG_VALUE]: Failed to execute 'importKey' on 'SubtleCrypto': 1st argument value 'foo' is not a valid enum value of type KeyFormat.
-TypeError [ERR_INVALID_ARG_VALUE]: Failed to execute 'importKey' on 'SubtleCrypto': 5th argument, index 0 value 'bogus' is not a valid enum value of type KeyUsage.
-TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'importKey' on 'SubtleCrypto': 5th argument can not be converted to sequence.
-TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'importKey' on 'SubtleCrypto': 5th argument can not be converted to sequence.
-TypeError [ERR_MISSING_ARGS]: Failed to execute 'importKey' on 'SubtleCrypto': 4 arguments required, but only 3 present.
+TypeError [ERR_INVALID_ARG_VALUE]: Failed to execute 'importKey' on 'SubtleCrypto': 1st argument 'foo' is not a valid enum value of type KeyFormat.
+TypeError [ERR_INVALID_ARG_VALUE]: Failed to execute 'importKey' on 'SubtleCrypto': 5th argument[0] 'bogus' is not a valid enum value of type KeyUsage.
+TypeError [ERR_MISSING_ARGS]: Failed to execute 'importKey' on 'SubtleCrypto': 5 arguments required, but only 4 present.
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'importKey' on 'SubtleCrypto': 5th argument cannot be converted to sequence.
+TypeError [ERR_MISSING_ARGS]: Failed to execute 'importKey' on 'SubtleCrypto': 5 arguments required, but only 3 present.
 TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'importKey' on 'SubtleCrypto': 2nd argument is not instance of ArrayBuffer, Buffer, TypedArray, or DataView.
-TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'importKey' on 'SubtleCrypto': 2nd argument can not be converted to a dictionary
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'importKey' on 'SubtleCrypto': 2nd argument cannot be converted to a dictionary
 NotSupportedError [9]: Unable to import HMAC using spki format
 NotSupportedError [9]: Unrecognized algorithm name
 false
@@ -42,7 +42,7 @@ TypeError [ERR_INVALID_THIS]: Value of "this" must be of type SubtleCrypto
 CryptoKey {
   type: 'secret',
   extractable: true,
-  algorithm: { name: 'HMAC', hash: [Object], length: 128 },
+  algorithm: { name: 'HMAC', length: 128, hash: [Object] },
   usages: [ 'sign' ]
 }
 DataError [0]: JWK "alg" does not match the requested algorithm
@@ -53,7 +53,7 @@ DataError [0]: Invalid JWK "use" Parameter
 CryptoKey {
   type: 'secret',
   extractable: true,
-  algorithm: { name: 'HMAC', hash: [Object], length: 8 },
+  algorithm: { name: 'HMAC', length: 8, hash: [Object] },
   usages: [ 'sign' ]
 }
 DataError [0]: JWK "ext" Parameter and extractable mismatch
@@ -62,15 +62,15 @@ DataError [0]: Duplicate key operation
 CryptoKey {
   type: 'secret',
   extractable: true,
-  algorithm: { name: 'HMAC', hash: [Object], length: 8 },
+  algorithm: { name: 'HMAC', length: 8, hash: [Object] },
   usages: [ 'sign' ]
 }
-TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'importKey' on 'SubtleCrypto': 'key_ops' of 'JsonWebKey' (2nd argument) can not be converted to sequence.
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'importKey' on 'SubtleCrypto': key_ops in 2nd argument cannot be converted to sequence.
 ArrayBuffer 03e43f
 DataError [0]: Zero-length key is not supported
 { key_ops: [ 'sign' ], ext: true, alg: 'HS1', kty: 'oct', k: 'AQ' }
 {
-  key_ops: [ 'verify', 'sign', 'verify' ],
+  key_ops: [ 'sign', 'verify' ],
   ext: true,
   alg: 'HS512',
   kty: 'oct',
@@ -79,8 +79,8 @@ DataError [0]: Zero-length key is not supported
 ArrayBuffer 0102030405060708090a0b0c0d0e0f10
 NotSupportedError [9]: Unable to export HMAC secret key using spki format
 TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'exportKey' on 'SubtleCrypto': 2nd argument is not of type CryptoKey.
-TypeError [ERR_INVALID_ARG_VALUE]: Failed to execute 'exportKey' on 'SubtleCrypto': 1st argument value 'foo' is not a valid enum value of type KeyFormat.
-InvalidAccessException [0]: key is not extractable
+TypeError [ERR_INVALID_ARG_VALUE]: Failed to execute 'exportKey' on 'SubtleCrypto': 1st argument 'foo' is not a valid enum value of type KeyFormat.
+InvalidAccessError [15]: key is not extractable
 dc370ebf143a8f4abacf9e2de9ce8dc056214d538d653a3e1062a4cf0d4498d024a22ff7bc26231ab3b860ea13c3686ddbf6ad8536e25ff983fa37f963e150c6
 true
 false
@@ -96,16 +96,21 @@ SHA-512 b42af09057bac1e2d41708e48a902e09b5ff7f12ab428a4fe86653c73dd248fb82f948a5
 { name: 'HMAC', length: 1024, hash: { name: 'SHA-384' } } [ 'sign', 'verify' ] 128
 { name: 'HMAC', length: 72, hash: { name: 'SHA-1' } }
 SyntaxError [12]: Usages cannot be empty when creating a key.
-DataError [0]: Zero-length key is not supported
-NotSupportedError [9]: Unsupported algorithm.length
-SyntaxError [12]: Unsupported key usage for an HMAC key
+OperationError [0]: HmacKeyGenParams.length cannot be 0
+CryptoKey {
+  type: 'secret',
+  extractable: true,
+  algorithm: { name: 'HMAC', length: 7, hash: [Object] },
+  usages: [ 'sign' ]
+}
+SyntaxError [12]: Unsupported key usage for HMAC key
 NotSupportedError [9]: Unrecognized algorithm name
 TypeError [ERR_MISSING_ARGS]: Failed to execute 'generateKey' on 'SubtleCrypto': 3 arguments required, but only 0 present.
 CryptoKey {
   type: 'secret',
   extractable: false,
   algorithm: { name: 'PBKDF2' },
-  usages: [ 'deriveBits', 'deriveKey' ]
+  usages: [ 'deriveKey', 'deriveBits' ]
 }
 SyntaxError [12]: PBKDF2 keys are not extractable
 SyntaxError [12]: Unsupported key usage for a PBKDF2 key
@@ -114,17 +119,17 @@ ArrayBuffer ae4d0c95af6b46d32d0adff928f06dd0
 ArrayBuffer afe6c5530785b6cc6b1c6453384731bd5ee432ee549fd42fb6695779ad8a1c5bf59de69c48f774efc4007d5298f9033c0241d5ab69305e7b64eceeb8d834cfec
 OperationError [0]: iterations cannot be zero
 ArrayBuffer 12
-TypeError [ERR_OUT_OF_RANGE]: Failed to normalize algorithm: 'iterations' of 'Pbkdf2Params' (passed algorithm) is outside the expected range of 0 to 4294967295.
-TypeError [ERR_INVALID_ARG_TYPE]: Failed to normalize algorithm: 'iterations' of 'Pbkdf2Params' (passed algorithm) is not a finite number.
-TypeError [ERR_INVALID_ARG_TYPE]: Failed to normalize algorithm: 'salt' of 'Pbkdf2Params' (passed algorithm) is not instance of ArrayBuffer, Buffer, TypedArray, or DataView.
-TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'Pbkdf2Params' because 'salt' is required in 'Pbkdf2Params'.
+TypeError [ERR_OUT_OF_RANGE]: Failed to normalize algorithm: iterations in passed algorithm is outside the expected range of 0 to 4294967295.
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to normalize algorithm: iterations in passed algorithm is not a finite number.
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to normalize algorithm: salt in passed algorithm is not instance of ArrayBuffer, Buffer, TypedArray, or DataView.
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm cannot be converted to 'Pbkdf2Params' because 'salt' is required in 'Pbkdf2Params'.
 NotSupportedError [9]: Unrecognized algorithm name
 OperationError [0]: length must be a multiple of 8
 ArrayBuffer 
 OperationError [0]: length cannot be null
 OperationError [0]: length cannot be null
 ArrayBuffer ae
-ArrayBuffer 
+TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'deriveBits' on 'SubtleCrypto': 3rd argument is not a finite number.
 TypeError [ERR_MISSING_ARGS]: Failed to execute 'deriveBits' on 'SubtleCrypto': 2 arguments required, but only 1 present.
 NotSupportedError [9]: Unrecognized algorithm name
 InvalidAccessError [15]: Key algorithm mismatch
@@ -132,7 +137,7 @@ NotSupportedError [9]: PBKDF2 key export is not supported
 ArrayBuffer e7772c45f52d754add3491ace115005af3c313c562cb86e1b0517bf9803a2720
 ArrayBuffer 554e606a4b62ac6dcbeebb3dff46676fabe858a31a41fa26e95f334b1d613c2f6f1e305a71059078d4a0f099fb464d0d5cb6
 OperationError [0]: The operation failed for an operation-specific reason
-TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'HkdfParams' because 'info' is required in 'HkdfParams'.
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm cannot be converted to 'HkdfParams' because 'info' is required in 'HkdfParams'.
 SyntaxError [12]: Unsupported key usage for a HKDF key
 CryptoKey {
   type: 'secret',
@@ -143,15 +148,15 @@ CryptoKey {
 CryptoKey {
   type: 'secret',
   extractable: true,
-  algorithm: { name: 'HMAC', hash: [Object], length: 512 },
+  algorithm: { name: 'HMAC', length: 512, hash: [Object] },
   usages: [ 'sign' ]
 }
 ArrayBuffer 1d1159c0fd365e27
-DataError [0]: Zero-length key is not supported
+DataError [0]: HmacImportParams.length cannot be 0
 OperationError [0]: length cannot be null
 SyntaxError [12]: Usages cannot be empty when importing a secret key.
-TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'HmacImportParams' because 'hash' is required in 'HmacImportParams'.
-{ name: 'HMAC', hash: { name: 'SHA-1' }, length: 512 }
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm cannot be converted to 'HmacImportParams' because 'hash' is required in 'HmacImportParams'.
+{ name: 'HMAC', length: 512, hash: { name: 'SHA-1' } }
 InvalidAccessError [15]: baseKey does not have deriveKey usage
 {
   key_ops: [ 'verify' ],

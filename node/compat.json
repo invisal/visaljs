@@ -1,19 +1,19 @@
 {
   "generatedBy": "node tests/compat/node.ts",
-  "node": "v22.22.2",
+  "node": "v24.21.0",
   "summary": {
     "modules": {
-      "complete": 37,
-      "partial": 16,
+      "complete": 28,
+      "partial": 25,
       "stub": 1,
       "missing": 4,
       "total": 58
     },
     "exports": {
-      "implemented": 1163,
+      "implemented": 1124,
       "stubbed": 33,
-      "missing": 99,
-      "total": 1295
+      "missing": 127,
+      "total": 1284
     }
   },
   "modules": {
@@ -184,7 +184,7 @@
       "missing": []
     },
     "constants": {
-      "status": "complete",
+      "status": "partial",
       "implemented": [
         "COPYFILE_EXCL",
         "COPYFILE_FICLONE",
@@ -423,7 +423,13 @@
         "defaultCoreCipherList"
       ],
       "stubbed": [],
-      "missing": [],
+      "missing": [
+        "RSA_SSLV23_PADDING",
+        "UV_FS_O_RANDOM",
+        "UV_FS_O_SEQUENTIAL",
+        "UV_FS_O_SHORT_LIVED",
+        "UV_FS_O_TEMPORARY"
+      ],
       "notes": "Deprecated in Node, still loaded by graceful-fs: os.constants' dlopen, errno, priority and signals, fs.constants and crypto.constants in one frozen object, as Node builds it. Has only the crypto constants node:crypto provides."
     },
     "crypto": {
@@ -497,7 +503,13 @@
         "X509Certificate",
         "setEngine"
       ],
-      "missing": [],
+      "missing": [
+        "argon2",
+        "argon2Sync",
+        "decapsulate",
+        "encapsulate",
+        "randomUUIDv7"
+      ],
       "extra": [
         "Cipher",
         "Decipher"
@@ -673,19 +685,15 @@
       "missing": []
     },
     "fs": {
-      "status": "complete",
+      "status": "partial",
       "implemented": [
         "Dir",
         "Dirent",
-        "F_OK",
         "FileReadStream",
         "FileWriteStream",
-        "R_OK",
         "ReadStream",
         "Stats",
-        "W_OK",
         "WriteStream",
-        "X_OK",
         "access",
         "accessSync",
         "appendFile",
@@ -780,11 +788,14 @@
         "writevSync"
       ],
       "stubbed": [],
-      "missing": [],
+      "missing": [
+        "Utf8Stream",
+        "mkdtempDisposableSync"
+      ],
       "notes": "The synchronous calls, and the callback and promise forms over them (the I/O happens when called, not on a thread pool). readdir (recursive too), opendir and Dir, cp (Node's checks and messages), glob (minimatch's patterns: braces, classes, extglobs, **), statfs, readv and writev, openAsBlob, and watch (inotify, kqueue, … through libuv) and watchFile (a stat poller): the larger ones are linked into programs that name them. Not yet: the bigint option of watchFile, and Buffer paths in places."
     },
     "fs/promises": {
-      "status": "complete",
+      "status": "partial",
       "implemented": [
         "access",
         "appendFile",
@@ -820,7 +831,9 @@
         "writeFile"
       ],
       "stubbed": [],
-      "missing": [],
+      "missing": [
+        "mkdtempDisposable"
+      ],
       "notes": "node:fs's calls as promises, and open's FileHandle (read, write, readv, writev, readFile, writeFile, stat, truncate, sync, utimes, chmod, chown, streams, readLines, close, Symbol.asyncDispose, 'close'); glob and watch as async iterators. lchmod is ERR_METHOD_NOT_IMPLEMENTED, as on Node outside macOS. Not yet: FileHandle.readableWebStream."
     },
     "http": {
@@ -847,7 +860,8 @@
       "missing": [
         "CloseEvent",
         "MessageEvent",
-        "WebSocket"
+        "WebSocket",
+        "setGlobalProxyFromEnv"
       ],
       "notes": "Server and client over net.Socket, with llhttp parsing in C both ways: keep-alive (Agent pooling), chunked bodies and trailers, upgrades and CONNECT, timeouts. Not yet: the WebSocket client (WebSocket, CloseEvent, MessageEvent), insecureHTTPParser's leniency."
     },
@@ -890,6 +904,7 @@
       "implemented": [],
       "stubbed": [],
       "missing": [
+        "DOMStorage",
         "Network",
         "NetworkResources",
         "Session",
@@ -906,6 +921,7 @@
       "implemented": [],
       "stubbed": [],
       "missing": [
+        "DOMStorage",
         "Network",
         "NetworkResources",
         "Session",
@@ -949,7 +965,7 @@
       "notes": "createRequire's require gives the packages the bundler found the program may require at run time (bundled), else throws MODULE_NOT_FOUND: a compiled program loads no code at run time. A JSON file (a path ending in .json) is data: it is read and parsed when required, and cached. register is a stub."
     },
     "net": {
-      "status": "complete",
+      "status": "partial",
       "implemented": [
         "BlockList",
         "Server",
@@ -968,7 +984,9 @@
         "setDefaultAutoSelectFamilyAttemptTimeout"
       ],
       "stubbed": [],
-      "missing": [],
+      "missing": [
+        "BoundSocket"
+      ],
       "notes": "TCP and Unix domain socket servers and sockets (Socket is a Duplex with backpressure, half-close and timeouts); host names through dns.lookup, with happy eyeballs. Not yet: passing handles to child processes (no child_process or cluster)."
     },
     "os": {
@@ -1071,7 +1089,7 @@
       "missing": []
     },
     "perf_hooks": {
-      "status": "complete",
+      "status": "partial",
       "implemented": [
         "Performance",
         "PerformanceEntry",
@@ -1086,7 +1104,10 @@
         "performance"
       ],
       "stubbed": [],
-      "missing": [],
+      "missing": [
+        "eventLoopUtilization",
+        "timerify"
+      ],
       "notes": "performance: now(), timeOrigin, marks and measures, from process.hrtime. Not yet: PerformanceObserver, PerformanceResourceTiming, monitorEventLoopDelay, createHistogram, eventLoopUtilization."
     },
     "process": {
@@ -1096,7 +1117,6 @@
         "arch",
         "argv",
         "argv0",
-        "assert",
         "availableMemory",
         "binding",
         "chdir",
@@ -1162,6 +1182,9 @@
         "sourceMapsEnabled",
         "stdin",
         "title"
+      ],
+      "extra": [
+        "assert"
       ],
       "notes": "An EventEmitter in programs that call its emitter methods (not with --no-bundle or --script): 'beforeExit', 'exit', 'uncaughtException', 'unhandledRejection', 'rejectionHandled' and signals ('SIGINT', …). Its other members are added in programs that name them, as process's or by a distinctive name, so the probe (which names none) lists the properties among them as missing: stdin (a terminal, a file, a pipe or a socket, as Node makes it), memoryUsage, title, ppid, release, config, report, finalization, debugPort, domain, sourceMapsEnabled, moduleLoadList, allowedNodeEnvironmentFlags. chdir, umask, uptime, cpuUsage, resourceUsage, the memory figures, the uid/gid setters (POSIX), execve, loadEnvFile and the uncaught exception capture callback work as Node's; getBuiltinModule gives the built-ins the program names with a literal string. A compiled program has no internal bindings or native addons (binding and dlopen throw ERR_VISALJS_UNSUPPORTED), no NODE_OPTIONS flags (allowedNodeEnvironmentFlags is empty), and getActiveResourcesInfo is an empty list. Not yet: 'warning'."
     },
@@ -1253,6 +1276,7 @@
       "stubbed": [],
       "missing": [
         "DatabaseSync",
+        "Session",
         "StatementSync",
         "backup",
         "constants"
@@ -1286,7 +1310,7 @@
       "missing": []
     },
     "stream/consumers": {
-      "status": "complete",
+      "status": "partial",
       "implemented": [
         "arrayBuffer",
         "blob",
@@ -1295,7 +1319,9 @@
         "text"
       ],
       "stubbed": [],
-      "missing": []
+      "missing": [
+        "bytes"
+      ]
     },
     "stream/promises": {
       "status": "complete",
@@ -1322,6 +1348,7 @@
         "ReadableByteStreamController",
         "ReadableStreamBYOBReader",
         "ReadableStreamBYOBRequest",
+        "ReadableStreamTee",
         "TextDecoderStream",
         "TextEncoderStream",
         "TransformStream",
@@ -1348,13 +1375,13 @@
         "TextEncoder",
         "aborted",
         "callbackify",
+        "convertProcessSignalToExitCode",
         "debug",
         "debuglog",
         "deprecate",
         "diff",
         "format",
         "formatWithOptions",
-        "getCallSite",
         "getCallSites",
         "getSystemErrorMap",
         "getSystemErrorMessage",
@@ -1362,22 +1389,7 @@
         "inherits",
         "inspect",
         "isArray",
-        "isBoolean",
-        "isBuffer",
-        "isDate",
         "isDeepStrictEqual",
-        "isError",
-        "isFunction",
-        "isNull",
-        "isNullOrUndefined",
-        "isNumber",
-        "isObject",
-        "isPrimitive",
-        "isRegExp",
-        "isString",
-        "isSymbol",
-        "isUndefined",
-        "log",
         "parseArgs",
         "parseEnv",
         "promisify",
@@ -1393,7 +1405,7 @@
       "missing": []
     },
     "test": {
-      "status": "complete",
+      "status": "partial",
       "implemented": [
         "after",
         "afterEach",
@@ -1412,7 +1424,10 @@
         "todo"
       ],
       "stubbed": [],
-      "missing": [],
+      "missing": [
+        "expectFailure",
+        "getTestContext"
+      ],
       "notes": "Node's runner: test / it, describe / suite, the hooks, test contexts (subtests, plan, skip, todo, diagnostic, t.mock, t.assert, waitFor), mocks, and the tap and spec reporters. The current test is carried in an AsyncLocalStorage (Node maps async ids). Reports have no test locations or stack frames: a compiled program knows neither. Not yet: run(), snapshots, mock.timers, mock.module."
     },
     "test/reporters": {
@@ -1430,16 +1445,13 @@
     "timers": {
       "status": "complete",
       "implemented": [
-        "active",
         "clearImmediate",
         "clearInterval",
         "clearTimeout",
-        "enroll",
         "promises",
         "setImmediate",
         "setInterval",
-        "setTimeout",
-        "unenroll"
+        "setTimeout"
       ],
       "stubbed": [],
       "missing": [],
@@ -1457,7 +1469,7 @@
       "missing": []
     },
     "tls": {
-      "status": "complete",
+      "status": "partial",
       "implemented": [
         "CLIENT_RENEG_LIMIT",
         "CLIENT_RENEG_WINDOW",
@@ -1472,7 +1484,6 @@
         "connect",
         "convertALPNProtocols",
         "createSecureContext",
-        "createSecurePair",
         "createServer",
         "getCACertificates",
         "getCiphers",
@@ -1480,7 +1491,12 @@
         "setDefaultCACertificates"
       ],
       "stubbed": [],
-      "missing": [],
+      "missing": [
+        "getCertificateCompressionAlgorithms"
+      ],
+      "extra": [
+        "createSecurePair"
+      ],
       "notes": "TLS 1.0–1.3 on BoringSSL: clients and servers, verification as Node's, SNI, ALPN, client certificates, sessions and tickets, half-close. Not yet: PSK, pfx, encrypted keys, CRLs, OCSP, DH suites, starting a renegotiation, getPeerX509Certificate (needs crypto.X509Certificate); getFinished is undefined with TLS 1.3."
     },
     "trace_events": {
@@ -1505,7 +1521,7 @@
       "notes": "isatty, and ReadStream on libuv's terminal handle, with setRawMode (process.stdin in a terminal). Not yet: WriteStream: process.stdout and process.stderr have isTTY."
     },
     "url": {
-      "status": "complete",
+      "status": "partial",
       "implemented": [
         "URL",
         "URLSearchParams",
@@ -1522,7 +1538,9 @@
         "urlToHttpOptions"
       ],
       "stubbed": [],
-      "missing": []
+      "missing": [
+        "URLPattern"
+      ]
     },
     "util": {
       "status": "complete",
@@ -1533,13 +1551,13 @@
         "TextEncoder",
         "aborted",
         "callbackify",
+        "convertProcessSignalToExitCode",
         "debug",
         "debuglog",
         "deprecate",
         "diff",
         "format",
         "formatWithOptions",
-        "getCallSite",
         "getCallSites",
         "getSystemErrorMap",
         "getSystemErrorMessage",
@@ -1547,22 +1565,7 @@
         "inherits",
         "inspect",
         "isArray",
-        "isBoolean",
-        "isBuffer",
-        "isDate",
         "isDeepStrictEqual",
-        "isError",
-        "isFunction",
-        "isNull",
-        "isNullOrUndefined",
-        "isNumber",
-        "isObject",
-        "isPrimitive",
-        "isRegExp",
-        "isString",
-        "isSymbol",
-        "isUndefined",
-        "log",
         "parseArgs",
         "parseEnv",
         "promisify",
@@ -1655,7 +1658,9 @@
         "queryObjects",
         "writeHeapSnapshot"
       ],
-      "missing": []
+      "missing": [
+        "startCpuProfile"
+      ]
     },
     "vm": {
       "status": "partial",
@@ -1709,7 +1714,9 @@
         "postMessageToThread",
         "receiveMessageOnPort"
       ],
-      "missing": [],
+      "missing": [
+        "locks"
+      ],
       "notes": "A compiled program is one thread, the main one: isMainThread, threadId 0, no parentPort or workerData; environment data and the untransferable marks work. Worker, MessageChannel, MessagePort, BroadcastChannel and the port functions throw ERR_VISALJS_UNSUPPORTED, so a library that loads it for a parallel mode it isn't asked for (mocha) runs."
     },
     "zlib": {

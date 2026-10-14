@@ -212,7 +212,9 @@ export function verify(algorithm, data, key, signature, callback) {
   getIntOption("padding", key);
   getIntOption("saltLength", key);
   getDSASignatureEncoding(key);
-  if (!isArrayBufferView(signature)) throw invalidArgType("signature", "an instance of Buffer, TypedArray, or DataView", signature);
+  /* Node 24: as the data, a string's UTF-8 bytes too */
+  signature = bytesOf(signature, "signature");
+  if (isAnyArrayBuffer(signature)) signature = new Uint8Array(signature);
   const handle = preparePublicOrPrivateKey(key);
   const run = signsMessages(handle) ? () => verifyMessage(handle, algorithm, data, signature) : () => {
     const hash = hashFor(algorithm, handle);
@@ -339,23 +341,33 @@ export function createECDH(curve) {
 
 /* ---- diffieHellman ----------------------------------------------------------------------------- */
 
-const keyObjectType = (actual, expected) =>
-  codeError(TypeError, "ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE", `Invalid key object type ${actual}, expected ${expected}.`);
-
-export function diffieHellman(options) {
-  validateObject(options, "options");
-  const { privateKey, publicKey } = options;
-  if (!(privateKey instanceof KeyObject)) throw invalidArgValue("options.privateKey", "is invalid", privateKey);
-  if (!(publicKey instanceof KeyObject)) throw invalidArgValue("options.publicKey", "is invalid", publicKey);
-  if (privateKey.type !== "private") throw keyObjectType(privateKey.type, "private");
-  if (publicKey.type !== "public" && publicKey.type !== "private") throw keyObjectType(publicKey.type, "private or public");
-  const privateType = asymmetricKeyTypeOf(privateKey[kHandle]);
-  const publicType = asymmetricKeyTypeOf(publicKey[kHandle]);
+/** The two keys' types must match, and be ones Diffie-Hellman takes. */
+function dhKeyTypes(privateHandle, publicHandle) {
+  const privateType = asymmetricKeyTypeOf(privateHandle);
+  const publicType = asymmetricKeyTypeOf(publicHandle);
   if (privateType !== publicType || (privateType !== "ec" && privateType !== "x25519" && privateType !== "dh")) {
     throw codeError(Error, "ERR_CRYPTO_INCOMPATIBLE_KEY", `Incompatible key types for Diffie-Hellman: ${privateType} and ${publicType}`);
   }
-  if (privateType === "dh") return dhStateless(cryptoKeyParts(privateKey[kHandle]), cryptoKeyParts(publicKey[kHandle]));
-  const ret = cryptoEcdh(privateKey[kHandle], publicKey[kHandle]);
+  return privateType;
+}
+
+/* Node 24's: KeyObjects, or key material (PEM, DER, JWK) as createPrivateKey and createPublicKey
+   take it */
+export function diffieHellman(options) {
+  validateObject(options, "options");
+  const { privateKey, publicKey } = options;
+  if (privateKey === undefined) throw invalidArgValue("options.privateKey", "is invalid", privateKey);
+  if (publicKey === undefined) throw invalidArgValue("options.publicKey", "is invalid", publicKey);
+  /* two KeyObjects of usable types: their key types are checked first */
+  if (privateKey instanceof KeyObject && privateKey.type === "private" &&
+      publicKey instanceof KeyObject && (publicKey.type === "public" || publicKey.type === "private")) {
+    dhKeyTypes(privateKey[kHandle], publicKey[kHandle]);
+  }
+  const publicHandle = preparePublicOrPrivateKey(publicKey);
+  const privateHandle = preparePrivateKey(privateKey);
+  const type = dhKeyTypes(privateHandle, publicHandle);
+  if (type === "dh") return dhStateless(cryptoKeyParts(privateHandle), cryptoKeyParts(publicHandle));
+  const ret = cryptoEcdh(privateHandle, publicHandle);
   if (typeof ret === "number") throw asymError(9);
   return ret;
 }

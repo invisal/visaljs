@@ -74,8 +74,9 @@ function exportsOf(ns: Record<string, unknown>): { names: string[]; stubs: strin
 async function nodeExports(): Promise<Record<string, string[]>> {
   process.removeAllListeners("warning");  /* importing punycode, wasi… warns */
   const out: Record<string, string[]> = {};
-  /* and the ones only named with the node: scheme, which builtinModules leaves out */
-  const names = [...builtinModules.filter((m) => !m.startsWith("_")), "sea", "sqlite", "test", "test/reporters"];
+  /* and the ones only named with the node: scheme: Node 22's builtinModules leaves them out, Node
+     24's lists them with it */
+  const names = [...new Set([...builtinModules.map((m) => m.replace(/^node:/, "")).filter((m) => !m.startsWith("_")), "sea", "sqlite", "test", "test/reporters"])];
   for (const name of names.sort()) out[name] = exportsOf(await import(`node:${name}`)).names;
   return out;
 }

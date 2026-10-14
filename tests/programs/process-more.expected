@@ -31,7 +31,7 @@ capture now: true
 captured: thrown in a timer
 ref called
 unref called
-release: node Jod true
+release: node Krypton true
 config: true variables,target_defaults
 flags: true debugPort 9229 domain null sourceMaps false true
 setSourceMapsEnabled string: TypeError ERR_INVALID_ARG_TYPE The "enabled" argument must be of type boolean. Received type string ('x')

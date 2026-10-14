@@ -1,4 +1,4 @@
-// node:zlib: Node's lib/zlib.js (v22) on Node's binding, which is C here
+// node:zlib: Node's lib/zlib.js (v24) on Node's binding, which is C here
 // (node/src/host_zlib.c over Chromium's zlib, the copy Node vendors): the same streams, the same
 // convenience functions, and the same compressed bytes, Brotli's and zstd's too (node/src/host_brotli.c
 // and host_zstd.c, linked into programs that name them: internal/zlib_engines.js). A write's
@@ -159,6 +159,7 @@ class CompressionHandle {
   }
 
   reset() {
+    if (this._writing) throw new Error("Cannot reset zlib stream while a write is in progress");
     const failure = this._ops.reset(this._native);
     if (failure !== 0) this._emitError(failure);
   }
@@ -232,11 +233,11 @@ class ZstdHandle extends CompressionHandle {
   init(params, pledgedSrcSize, writeResult, writeCallback, dictionary) {
     this._writeResult = writeResult;
     this._writeCallback = writeCallback;
-    if (typeof pledgedSrcSize === "number") {
-      pledgedSrcSize = Number.isNaN(pledgedSrcSize) ? 0 : Math.trunc(pledgedSrcSize);
-      if (pledgedSrcSize < 0) throw codeError(TypeError, "ERR_INVALID_ARG_VALUE", "pledgedSrcSize may not be negative");
-    } else {
-      pledgedSrcSize = undefined;
+    /* Node 24's binding checks it: a number, a safe integer, not negative */
+    if (pledgedSrcSize !== undefined) {
+      if (typeof pledgedSrcSize !== "number") throw codeError(TypeError, "ERR_INVALID_ARG_TYPE", "pledgedSrcSize must be a number");
+      if (!Number.isSafeInteger(pledgedSrcSize)) throw codeError(RangeError, "ERR_OUT_OF_RANGE", "pledgedSrcSize must be a safe integer");
+      if (pledgedSrcSize < 0) throw codeError(RangeError, "ERR_OUT_OF_RANGE", "pledgedSrcSize must be non-negative");
     }
     const failure = this._ops.init(this._native, params, pledgedSrcSize, dictionary);
     if (failure !== 0) {
@@ -695,29 +696,39 @@ Zlib.prototype.params = function params(level, strategy, callback) {
   }
 };
 
+/* a constructor called without new: Node 24 deprecates it (DEP0184), warning once */
+let warnedInstantiation = false;
+function deprecateInstantiation(target, opts) {
+  if (!warnedInstantiation) {
+    warnedInstantiation = true;
+    process.emitWarning(`Instantiating ${target.name} without the 'new' keyword has been deprecated.`, "DeprecationWarning", "DEP0184");
+  }
+  return new target(opts);
+}
+
 export function Deflate(opts) {
-  if (!(this instanceof Deflate)) return new Deflate(opts);
+  if (!(this instanceof Deflate)) return deprecateInstantiation(Deflate, opts);
   Reflect.apply(Zlib, this, [opts, DEFLATE]);
 }
 Object.setPrototypeOf(Deflate.prototype, Zlib.prototype);
 Object.setPrototypeOf(Deflate, Zlib);
 
 export function Inflate(opts) {
-  if (!(this instanceof Inflate)) return new Inflate(opts);
+  if (!(this instanceof Inflate)) return deprecateInstantiation(Inflate, opts);
   Reflect.apply(Zlib, this, [opts, INFLATE]);
 }
 Object.setPrototypeOf(Inflate.prototype, Zlib.prototype);
 Object.setPrototypeOf(Inflate, Zlib);
 
 export function Gzip(opts) {
-  if (!(this instanceof Gzip)) return new Gzip(opts);
+  if (!(this instanceof Gzip)) return deprecateInstantiation(Gzip, opts);
   Reflect.apply(Zlib, this, [opts, GZIP]);
 }
 Object.setPrototypeOf(Gzip.prototype, Zlib.prototype);
 Object.setPrototypeOf(Gzip, Zlib);
 
 export function Gunzip(opts) {
-  if (!(this instanceof Gunzip)) return new Gunzip(opts);
+  if (!(this instanceof Gunzip)) return deprecateInstantiation(Gunzip, opts);
   Reflect.apply(Zlib, this, [opts, GUNZIP]);
 }
 Object.setPrototypeOf(Gunzip.prototype, Zlib.prototype);
@@ -725,21 +736,21 @@ Object.setPrototypeOf(Gunzip, Zlib);
 
 export function DeflateRaw(opts) {
   if (opts && opts.windowBits === 8) opts.windowBits = 9;
-  if (!(this instanceof DeflateRaw)) return new DeflateRaw(opts);
+  if (!(this instanceof DeflateRaw)) return deprecateInstantiation(DeflateRaw, opts);
   Reflect.apply(Zlib, this, [opts, DEFLATERAW]);
 }
 Object.setPrototypeOf(DeflateRaw.prototype, Zlib.prototype);
 Object.setPrototypeOf(DeflateRaw, Zlib);
 
 export function InflateRaw(opts) {
-  if (!(this instanceof InflateRaw)) return new InflateRaw(opts);
+  if (!(this instanceof InflateRaw)) return deprecateInstantiation(InflateRaw, opts);
   Reflect.apply(Zlib, this, [opts, INFLATERAW]);
 }
 Object.setPrototypeOf(InflateRaw.prototype, Zlib.prototype);
 Object.setPrototypeOf(InflateRaw, Zlib);
 
 export function Unzip(opts) {
-  if (!(this instanceof Unzip)) return new Unzip(opts);
+  if (!(this instanceof Unzip)) return deprecateInstantiation(Unzip, opts);
   Reflect.apply(Zlib, this, [opts, UNZIP]);
 }
 Object.setPrototypeOf(Unzip.prototype, Zlib.prototype);
@@ -792,14 +803,14 @@ Object.setPrototypeOf(Brotli.prototype, Zlib.prototype);
 Object.setPrototypeOf(Brotli, Zlib);
 
 export function BrotliCompress(opts) {
-  if (!(this instanceof BrotliCompress)) return new BrotliCompress(opts);
+  if (!(this instanceof BrotliCompress)) return deprecateInstantiation(BrotliCompress, opts);
   Reflect.apply(Brotli, this, [opts, BROTLI_ENCODE]);
 }
 Object.setPrototypeOf(BrotliCompress.prototype, Brotli.prototype);
 Object.setPrototypeOf(BrotliCompress, Brotli);
 
 export function BrotliDecompress(opts) {
-  if (!(this instanceof BrotliDecompress)) return new BrotliDecompress(opts);
+  if (!(this instanceof BrotliDecompress)) return deprecateInstantiation(BrotliDecompress, opts);
   Reflect.apply(Brotli, this, [opts, BROTLI_DECODE]);
 }
 Object.setPrototypeOf(BrotliDecompress.prototype, Brotli.prototype);

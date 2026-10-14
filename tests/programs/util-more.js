@@ -1,8 +1,9 @@
 // node:util's functions beyond inspect and format: callbackify, debuglog, the system errors,
-// styleText, diff, MIMEType, parseEnv, aborted, toUSVString, and the deprecated is* and log.
+// styleText, diff, MIMEType, parseEnv, aborted, toUSVString, and the deprecated isArray and _extend
+// (Node 24 removed the other is* and log).
 import util, {
   MIMEType, aborted, callbackify, debuglog, diff, getSystemErrorMap, getSystemErrorMessage, getSystemErrorName, isArray,
-  isBoolean, isPrimitive, parseEnv, styleText, toUSVString, transferableAbortController,
+  parseEnv, styleText, toUSVString, transferableAbortController,
 } from "node:util";
 
 /* callbackify: the value, a rejection, a falsy rejection; name and length */
@@ -116,6 +117,6 @@ print("diff same: " + JSON.stringify(diff("same", "same")) + " " + JSON.stringif
 
 /* deprecated: they work (their warnings, as Node's, carry the process id: not compared here) */
 process.noDeprecation = true;
-print("is*: " + isArray([]) + " " + isBoolean(1) + " " + isPrimitive(null) + " " + util.isFunction(() => {}) + " " + util.isError(new TypeError()));
+print("is*: " + isArray([]) + " " + typeof util.isBoolean + " " + typeof util.isFunction + " " + typeof util.log);
 print("_extend: " + JSON.stringify(util._extend({ a: 1 }, { b: 2 })));
 print("again: " + isArray("x"));

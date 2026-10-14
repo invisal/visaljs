@@ -704,8 +704,9 @@ export function getHeapStatistics() {
 }
 
 /* V8's spaces: visaljs's heap is one, reported as old_space */
-const SPACES = ["read_only_space", "new_space", "old_space", "code_space", "shared_space", "trusted_space", "new_large_object_space",
-  "large_object_space", "code_large_object_space", "shared_large_object_space", "trusted_large_object_space"];
+const SPACES = ["read_only_space", "new_space", "old_space", "code_space", "shared_space", "trusted_space", "shared_trusted_space",
+  "new_large_object_space", "large_object_space", "code_large_object_space", "shared_large_object_space",
+  "shared_trusted_large_object_space", "trusted_large_object_space"];  /* V8 13.6's, as Node 24 lists them */
 
 export function getHeapSpaceStatistics() {
   const { heapTotal, heapUsed } = memory();

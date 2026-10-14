@@ -21,6 +21,6 @@ x/../../y -> Error ERR_MODULE_NOT_FOUND: Cannot find package 'x' imported from <
 import() rejected: Error ERR_MODULE_NOT_FOUND: Cannot find module '<dir>/import-meta/missing.js' imported from <file>
 import() rejected: Error ERR_MODULE_NOT_FOUND: Cannot find package 'not-a-package-1' imported from <file>
 import() rejected: TypeError undefined: The second argument to import() must be an object
-import() rejected: TypeError undefined: The 'assert' option must be an object
-import() rejected: TypeError undefined: Import assertion value must be a string
+import() rejected: TypeError undefined: The 'with' option must be an object
+import() rejected: TypeError undefined: Import attribute value must be a string
 import() rejected: RangeError undefined: bad specifier

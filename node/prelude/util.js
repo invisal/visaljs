@@ -33,14 +33,13 @@ export const formatWithOptions = utilFormatWithOptions;
 export const TextEncoder = globalThis.TextEncoder;
 export const TextDecoder = globalThis.TextDecoder;
 
-/* ANSI escape codes, as Node's internal/util/inspect.js matches them */
+/* ANSI escape codes, as Node's internal/util/inspect.js matches them: an OSC sequence (a terminal
+   hyperlink: ESC ] … BEL) whole, or a CSI sequence */
 const ansi = new RegExp(
-  "[\\u001B\\u009B][[\\]()#;?]*" +
-  "(?:(?:(?:(?:;[-a-zA-Z\\d\\/\\#&.:=?%@~_]+)*" +
-  "|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/\\#&.:=?%@~_]*)*)?" +
-  "(?:\\u0007|\\u001B\\u005C|\\u009C))" +
-  "|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?" +
-  "[\\dA-PR-TZcf-nq-uy=><~]))", "g",
+  "(?:\\u001B\\][\\s\\S]*?(?:\\u0007|\\u001B\\u005C|\\u009C))" +
+  "|[\\u001B\\u009B][[\\]()#;?]*" +
+  "(?:\\d{1,4}(?:[;:]\\d{0,4})*)?" +
+  "[\\dA-PR-TZcf-nq-uy=><~]", "g",
 );
 
 const kCustomPromisifiedSymbol = Symbol.for("nodejs.util.promisify.custom");
@@ -96,6 +95,7 @@ promisify.custom = kCustomPromisifiedSymbol;
 /** The string without its ANSI escape codes (colors, cursor movements, …). */
 export function stripVTControlCharacters(str) {
   validateString(str, "str");
+  if (!str.includes("\u001B") && !str.includes("\u009B")) return str;  /* no escape introducer */
   return str.replace(ansi, "");
 }
 
@@ -167,30 +167,16 @@ export const aborted = lazyFunction("aborted", 2);
 export const transferableAbortSignal = lazyFunction("transferableAbortSignal", 1);
 export const transferableAbortController = lazyFunction("transferableAbortController");
 export const getCallSites = lazyFunction("getCallSites");
-export const getCallSite = lazyFunction("getCallSite");
 export const setTraceSigInt = lazyFunction("setTraceSigInt", 1);
-export const log = lazyFunction("log");
+export const convertProcessSignalToExitCode = lazyFunction("convertProcessSignalToExitCode", 1);
 export const _extend = lazyFunction("_extend", 2);
 export const isArray = lazyFunction("isArray", 1);
-export const isBoolean = lazyFunction("isBoolean", 1);
-export const isBuffer = lazyFunction("isBuffer", 1);
-export const isDate = lazyFunction("isDate", 1);
-export const isError = lazyFunction("isError", 1);
-export const isFunction = lazyFunction("isFunction", 1);
-export const isNull = lazyFunction("isNull", 1);
-export const isNullOrUndefined = lazyFunction("isNullOrUndefined", 1);
-export const isNumber = lazyFunction("isNumber", 1);
-export const isObject = lazyFunction("isObject", 1);
-export const isPrimitive = lazyFunction("isPrimitive", 1);
-export const isRegExp = lazyFunction("isRegExp", 1);
-export const isString = lazyFunction("isString", 1);
-export const isSymbol = lazyFunction("isSymbol", 1);
-export const isUndefined = lazyFunction("isUndefined", 1);
 
+/* in Node 24's order, which Object.keys(util) shows (less the internal _errnoException and
+   _exceptionWithHostPort) */
 export default {
-  format, formatWithOptions, inspect, deprecate, inherits, isDeepStrictEqual, promisify, callbackify, stripVTControlCharacters, styleText,
-  types, TextEncoder, TextDecoder, debuglog, debug, parseArgs, parseEnv, MIMEType, MIMEParams, diff, getSystemErrorName,
-  getSystemErrorMessage, getSystemErrorMap, toUSVString, aborted, transferableAbortController, transferableAbortSignal, getCallSites,
-  getCallSite, setTraceSigInt, log, _extend, isArray, isBoolean, isBuffer, isDate, isError, isFunction, isNull, isNullOrUndefined,
-  isNumber, isObject, isPrimitive, isRegExp, isString, isSymbol, isUndefined,
+  _extend, callbackify, convertProcessSignalToExitCode, debug, debuglog, deprecate, format, styleText, formatWithOptions, getCallSites,
+  getSystemErrorMap, getSystemErrorName, getSystemErrorMessage, inherits, inspect, isArray, isDeepStrictEqual, promisify,
+  stripVTControlCharacters, toUSVString, transferableAbortSignal, transferableAbortController, aborted, types, parseEnv, parseArgs,
+  TextDecoder, TextEncoder, MIMEType, MIMEParams, diff, setTraceSigInt,
 };

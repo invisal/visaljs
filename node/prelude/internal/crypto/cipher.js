@@ -56,14 +56,17 @@ function bytesOf(value, name, encoding) {
   throw invalidArgType(name, "of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView", value);
 }
 
+/* Node 24's: an unknown encoding is ERR_UNKNOWN_ENCODING (StringDecoder's), a different one than
+   the first output's ERR_INVALID_ARG_VALUE */
 function getDecoder(decoder, encoding) {
+  const normalized = new StringDecoder(encoding).encoding;
   decoder ||= new StringDecoder(encoding);
-  if (decoder.encoding !== new StringDecoder(encoding).encoding) {
-    throw codeError(Error, "ERR_INTERNAL_ASSERTION", "Cannot change encoding\nThis is caused by either a bug in Node.js or incorrect " +
-      "usage of Node.js internals.\nPlease open an issue with this stack trace at https://github.com/nodejs/node/issues\n");
-  }
+  if (decoder.encoding !== normalized) throw invalidArgValue("outputEncoding", `cannot be changed from '${decoder.encoding}'`, encoding);
   return decoder;
 }
+
+const kGcmAnyTag = Symbol("kGcmAnyTag");
+let warnedShortTag = false;
 
 function createCipherWithIV(self, cipher, key, options, encrypt, iv) {
   validateString(cipher, "cipher");
@@ -74,6 +77,8 @@ function createCipherWithIV(self, cipher, key, options, encrypt, iv) {
   const handle = cryptoCipherNew(cipher, encrypt, key, iv, authTagLength);
   if (typeof handle === "number") throw cipherError(handle, cipher, authTagLength);
   self[kHandle] = handle;
+  /* GCM without authTagLength: a short tag on decryption is deprecated (DEP0182) */
+  self[kGcmAnyTag] = /-gcm$/i.test(cipher) && authTagLength === -1;
   self._decoder = null;
   LazyTransform.call(self, options);
 }
@@ -156,6 +161,11 @@ Decipheriv.prototype.setAuthTag = function setAuthTag(tagbuf, encoding) {
   const code = cryptoCipherSetAuthTag(this[kHandle], tagbuf);
   if (code === 5) throw invalidState("setAuthTag");
   if (code !== 0) throw cipherError(code, undefined, tagbuf.byteLength);
+  if (this[kGcmAnyTag] && tagbuf.byteLength !== 16 && !warnedShortTag) {
+    warnedShortTag = true;  /* once a process, as Node's */
+    process.emitWarning("Using AES-GCM authentication tags of less than 128 bits without specifying the authTagLength option " +
+      "when initializing decryption is deprecated.", "DeprecationWarning", "DEP0182");
+  }
   return this;
 };
 Decipheriv.prototype.setAAD = setAAD;

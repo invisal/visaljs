@@ -1,12 +1,11 @@
 true true
-isArgumentsObject isArrayBuffer isAsyncFunction isBigIntObject isBooleanObject isDataView isDate isExternal isGeneratorFunction isGeneratorObject isMap isMapIterator isModuleNamespaceObject isNativeError isNumberObject isPromise isProxy isRegExp isSet isSetIterator isSharedArrayBuffer isStringObject isSymbolObject isWeakMap isWeakSet isAnyArrayBuffer isBoxedPrimitive isArrayBufferView isTypedArray isUint8Array isUint8ClampedArray isUint16Array isUint32Array isInt8Array isInt16Array isInt32Array isFloat16Array isFloat32Array isFloat64Array isBigInt64Array isBigUint64Array isKeyObject isCryptoKey
+isArgumentsObject isArrayBuffer isAsyncFunction isBigIntObject isBooleanObject isDate isExternal isGeneratorFunction isGeneratorObject isMap isMapIterator isModuleNamespaceObject isNativeError isNumberObject isPromise isProxy isRegExp isSet isSetIterator isSharedArrayBuffer isStringObject isSymbolObject isWeakMap isWeakSet isAnyArrayBuffer isBoxedPrimitive isArrayBufferView isDataView isTypedArray isUint8Array isUint8ClampedArray isUint16Array isUint32Array isInt8Array isInt16Array isInt32Array isFloat16Array isFloat32Array isFloat64Array isBigInt64Array isBigUint64Array isKeyObject isCryptoKey
 true
 isArgumentsObject: arguments, strict arguments
 isArrayBuffer: ArrayBuffer
 isAsyncFunction: async function, async arrow, async generator function
 isBigIntObject: Object(1n)
 isBooleanObject: Boolean
-isDataView: DataView
 isDate: date, MyDate
 isExternal: -
 isGeneratorFunction: generator function, async generator function
@@ -29,6 +28,7 @@ isWeakSet: WeakSet
 isAnyArrayBuffer: ArrayBuffer
 isBoxedPrimitive: Number(1), String, Boolean, Object(Symbol), Object(1n)
 isArrayBufferView: DataView, Uint8Array, Buffer, Uint8ClampedArray, Int8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array
+isDataView: DataView
 isTypedArray: Uint8Array, Buffer, Uint8ClampedArray, Int8Array, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array, BigInt64Array, BigUint64Array
 isUint8Array: Uint8Array, Buffer
 isUint8ClampedArray: Uint8ClampedArray

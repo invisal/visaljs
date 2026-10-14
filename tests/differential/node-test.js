@@ -1,10 +1,12 @@
 // node:test: suites, tests and subtests, hooks in Node's order, skip / todo, failures of every
 // kind (assertion, thrown value, rejected promise, callback error, timeout, plan, hook), mocks,
-// t.assert, diagnostics, and the TAP report (durations, locations and stack frames aside)
+// t.assert, diagnostics, and the report (spec, Node 24's default; durations, locations and stack
+// frames aside). The program's own lines go to stderr: when they interleave with the report on
+// stdout is the reporter stream's timing, which this doesn't compare.
 import { after, afterEach, before, beforeEach, describe, it, mock, suite, test } from "node:test";
 import assert from "node:assert/strict";
 
-const log = (...args) => console.log(...args);
+const log = (...args) => console.error(...args);
 
 before(() => log("global before"));
 after(() => log("global after"));
@@ -169,10 +171,6 @@ describe("mocks", () => {
 
 describe.skip("a skipped suite", () => {
   it("is not run", () => log("unreachable"));
-});
-
-describe("only without --test-only", () => {
-  it.only("warns", () => {});
 });
 
 log("module code done");

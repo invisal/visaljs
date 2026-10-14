@@ -1,5 +1,5 @@
 // node:test/reporters (Node's lib/test/reporters.js and lib/internal/test_runner/reporter/; MIT;
-// Node v22.22.2): the reporters a program composes with a stream of test events. tap, dot and junit
+// Node v24.21.0): the reporters a program composes with a stream of test events. tap, dot and junit
 // are async generators over the events; spec and lcov are Transforms from events to text. tap and
 // spec are the runner's own (internal/test_runner/reporters.js); lcov writes the coverage events,
 // which a compiled program doesn't produce.
@@ -40,7 +40,7 @@ class SpecTransform extends Transform {
 }
 
 /** Node's: a function that makes a spec Transform, with or without new. */
-export const spec = function value() {
+export const spec = function spec() {
   return new SpecTransform();
 };
 
@@ -80,12 +80,13 @@ export async function* dot(source) {
 
 const junitInspectOptions = { __proto__: null, colors: false, breakLength: Infinity };
 
+/* Node 24's: a newline as &#10;, and an & that begins a numeric character reference kept */
 function escapeAttribute(s = "") {
-  return escapeContent(s.replaceAll("\n", "").replaceAll('"', "&quot;"));
+  return escapeContent(s.replaceAll("\n", "&#10;").replaceAll('"', "&quot;"));
 }
 
 function escapeContent(s = "") {
-  return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;");
+  return s.replace(/(&)(?!#\d{1,7};)/g, "&amp;").replaceAll("<", "&lt;");
 }
 
 function escapeComment(s = "") {
@@ -98,7 +99,7 @@ function treeToXML(tree) {
   }
   const { tag, attrs, nesting, children, comment } = tree;
   const indent = "\t".repeat(nesting + 1);
-  if (comment) {
+  if (comment != null) {
     return `${indent}<!-- ${escapeComment(comment)} -->\n`;
   }
   const attrsString = Object.entries(attrs).map(([key, value]) => `${key}="${escapeAttribute(String(value))}"`).join(" ");
@@ -162,10 +163,15 @@ export async function* junit(source) {
           currentTest.attrs.tests = nonCommentChildren.length;
           currentTest.attrs.failures = currentTest.children.filter(isFailure).length;
           currentTest.attrs.skipped = currentTest.children.filter(isSkipped).length;
+          /* when it started: its end less its duration (its test:start comes late, with its first test) */
+          currentTest.attrs.timestamp = new Date(Date.now() - event.data.details.duration_ms).toISOString();
           currentTest.attrs.hostname = HOSTNAME;
         } else {
           currentTest.tag = "testcase";
           currentTest.attrs.classname = event.data.classname ?? "test";
+          if (event.data.file) {
+            currentTest.attrs.file = event.data.file;
+          }
           if (event.data.skip) {
             currentTest.children.push({
               __proto__: null, nesting: event.data.nesting + 1, tag: "skipped", attrs: { __proto__: null, type: "skipped", message: event.data.skip },
@@ -182,7 +188,7 @@ export async function* junit(source) {
               __proto__: null,
               nesting: event.data.nesting + 1,
               tag: "failure",
-              attrs: { __proto__: null, type: error?.failureType || error?.code, message: error?.message ?? "" },
+              attrs: { __proto__: null, type: error?.failureType || error?.code, message: error?.message.trim() ?? "" },
               children: [inspectWithNoCustomRetry(error, junitInspectOptions)],
             });
             currentTest.failures = 1;
@@ -191,7 +197,8 @@ export async function* junit(source) {
         }
         break;
       }
-      case "test:diagnostic": {
+      case "test:diagnostic":
+      case "test:log": {
         const parent = currentSuite?.children ?? roots;
         parent.push({ __proto__: null, nesting: event.data.nesting, comment: event.data.message });
         break;
@@ -253,9 +260,10 @@ class LcovReporter extends Transform {
   }
 }
 
-/** Node's getter makes a new LcovReporter on each read; an import binding is read once. */
-export const lcov = new LcovReporter();
+/** A new reporter on each call, with new or without, as spec. */
+export function lcov(options) {
+  return new LcovReporter(options);
+}
 
-const reporters = { dot, junit, spec, tap };
-Object.defineProperty(reporters, "lcov", { configurable: true, enumerable: true, get: () => new LcovReporter() });
+const reporters = { dot, junit, spec, tap, lcov };
 export default reporters;

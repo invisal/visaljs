@@ -528,13 +528,14 @@ static JSValue format_property(Insp *ip, JSValue value, double recurse, JSValue 
             JSValue got = js_call(ctx, d.get, value, 0, NULL);
             Builder g2 = { 0 };
             if (js_is_exception(got)) {
+                /* what it threw, inspected: <Inspection threw ([Error: nope])> */
                 JSValue err = keep(ip, js_take_exception(ctx));
-                JSValue msg = js_is_object(err) ? get(ip, err, js_atom_from_cstr(ctx, "message")) : JS_UNDEFINED;
-                if (js_is_exception(msg)) return msg;
-                JSValue ms = keep(ip, js_to_string(ctx, msg));
-                if (js_is_exception(ms)) return ms;
+                ip->indentation += 2;
+                JSValue shown = format_value(ip, err, recurse);
+                ip->indentation -= 2;
+                if (js_is_exception(shown)) { free(g2.units); return shown; }
                 put_ascii(&g2, "["), put_ascii(&g2, label), put_ascii(&g2, ": <Inspection threw (");
-                put_str(&g2, ctx, ms);
+                put_str(&g2, ctx, shown);
                 put_ascii(&g2, ")>]");
             } else {
                 keep(ip, got);
@@ -558,23 +559,21 @@ static JSValue format_property(Insp *ip, JSValue value, double recurse, JSValue 
     }
     if (js_is_exception(str)) return str;
     if (type == ARRAY_TYPE) return str;
+    /* the key: Symbol(s), an identifier as it is, any other quoted; in brackets when it isn't
+       enumerable */
+    if (!enumerable) put_ascii(&b, "[");
     if (js_is_symbol(key)) {
         JSValue s = js_symbol_descriptive_string(ctx, key);
-        if (js_is_exception(s)) return s;
-        put_ascii(&b, "[");
+        if (js_is_exception(s)) { free(b.units); return s; }
         put_escaped(&b, js_string_view(ctx, s));
-        put_ascii(&b, "]");
     } else {
         JSValue k = key_string(ip, key);
-        if (js_is_exception(k)) return k;
+        if (js_is_exception(k)) { free(b.units); return k; }
         if (str_eq_cstr(ctx, k, "__proto__")) put_ascii(&b, "['__proto__']");
-        else if (!enumerable) {
-            put_ascii(&b, "[");
-            put_escaped(&b, js_string_view(ctx, k));
-            put_ascii(&b, "]");
-        } else if (is_identifier_key(ctx, k)) put_str(&b, ctx, k);
+        else if (is_identifier_key(ctx, k)) put_str(&b, ctx, k);
         else put_quoted(&b, js_string_view(ctx, k));
     }
+    if (!enumerable) put_ascii(&b, "]");
     put_ascii(&b, ": ");
     put_str(&b, ctx, str);
     return done(ip, &b);
@@ -904,6 +903,13 @@ static JSValue format_error(Insp *ip, JSValue err, JSValue constructor, JSValue 
 /* ---- Laying out ------------------------------------------------------------------------- */
 
 static bool is_below_break_length(Insp *ip, List *output, double start, JSValue base) {
+    /* an infinite breakLength: one line, unless an entry has a line break of its own */
+    if (isinf(ip->o.break_length)) {
+        if (js_string_length(base) != 0 && str_contains_unit(ip->ctx, base, '\n')) return false;
+        for (size_t i = 0; i < output->n; i++)
+            if (str_contains_unit(ip->ctx, output->v[i], '\n')) return false;
+        return true;
+    }
     double total = output->n + start;
     if (total + output->n > ip->o.break_length) return false;
     for (size_t i = 0; i < output->n; i++) {
@@ -1195,7 +1201,10 @@ static JSValue format_raw(Insp *ip, JSValue value, double recurse) {
     JSValue constructor = get_constructor_name(ip, value, recurse);
     if (js_is_exception(constructor)) return constructor;
     JSValue tag = get(ip, value, JS_SYMBOL(toStringTag));
-    if (js_is_exception(tag)) return tag;
+    if (js_is_exception(tag)) {  /* a getter that throws: no tag */
+        js_discard(js_take_exception(ctx));
+        tag = js_empty_string();
+    }
     /* only listed when not an own enumerable property (it would be printed twice) */
     if (!js_is_string(tag) ||
         (js_string_length(tag) != 0 && (ip->o.show_hidden ? has_own(ctx, value, JS_SYMBOL(toStringTag))

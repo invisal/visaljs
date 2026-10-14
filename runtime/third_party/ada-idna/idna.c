@@ -1,5 +1,5 @@
-/* UTS #46 domain to ASCII: a C port of Ada's IDNA (src/ada_idna.cpp of ada-url/ada 2.9.2, the
- * version Node v22 bundles; mapping.cpp, punycode.cpp, validity.cpp and to_ascii.cpp), kept
+/* UTS #46 domain to ASCII: a C port of Ada's IDNA (src/ada_idna.cpp of ada-url/ada 4.0.0, the
+ * version Node v24 bundles; mapping.cpp, punycode.cpp, validity.cpp and to_ascii.cpp), kept
  * step for step, including Ada's quirks, so that hosts come out as Node's do. Copyright Yagiz
  * Nizipli and Daniel Lemire; MIT license (LICENSE-MIT). visaljs's changes: C instead of C++
  * (code point buffers instead of std::u32string), tables packed by convert.mjs, and
@@ -182,6 +182,8 @@ static bool punycode_to_utf32(const char *input, size_t len, U32 *out) {
         written_out++;
         ++i;
     }
+    /* a label that decodes to an xn-- label (encoded twice) is refused: whatwg/url#803 */
+    if (out->n >= 4 && out->v[0] == 'x' && out->v[1] == 'n' && out->v[2] == '-' && out->v[3] == '-') return false;
     return true;
 }
 
@@ -196,7 +198,7 @@ static bool utf32_to_punycode(const uint32_t *input, size_t len, Bytes *out) {
             ++h;
             bytes_push(out, (char)c);
         }
-        if (c > 0x10ffff || (c >= 0xd880 && c < 0xe000)) return false;  /* sic: Ada's bound */
+        if (c > 0x10ffff || (c >= 0xd800 && c < 0xe000)) return false;
     }
     size_t b = h;
     if (b > 0) bytes_push(out, '-');
@@ -289,14 +291,18 @@ static bool is_label_valid(const uint32_t *label, size_t n) {
     unsigned directions = 0;
     for (size_t i = 0; i < n; i++) directions |= 1u << find_direction(label[i]);
     if (!(directions & ((1u << DIR_R) | (1u << DIR_AL) | (1u << DIR_AN)))) return true;
-    if (find_direction(label[0]) == DIR_L) {  /* LTR; Ada checks up to the last non-NSM, exclusive */
-        for (size_t i = 0; i < last_non_nsm; i++) {
+    if (find_direction(label[0]) == DIR_L) {  /* LTR */
+        for (size_t i = 0; i <= last_non_nsm; i++) {
             int d = find_direction(label[i]);
             if (!(d == DIR_L || d == DIR_EN || d == DIR_ES || d == DIR_CS || d == DIR_ET || d == DIR_ON || d == DIR_BN || d == DIR_NSM))
                 return false;
         }
-        return true;
+        int last = find_direction(label[last_non_nsm]);
+        return last == DIR_L || last == DIR_EN;
     }
+    /* RTL: it must begin with R or AL (a leading AN, or anything else, doesn't start one) */
+    int first = find_direction(label[0]);
+    if (first != DIR_R && first != DIR_AL) return false;
     bool has_an = false, has_en = false;
     for (size_t i = 0; i <= last_non_nsm; i++) {
         int d = find_direction(label[i]);
@@ -318,11 +324,16 @@ static bool is_label_valid(const uint32_t *label, size_t n) {
 
 /* ---- To ASCII (to_ascii.cpp) --------------------------------------------------------------- */
 
-/* An xn-- label (its punycode after the prefix): it must decode, be mapped and normalized
- * already, and be valid. */
+/* An xn-- label of a domain that isn't all ASCII (its punycode after the prefix): it must decode
+ * to something not ASCII, be mapped and normalized already, and be valid. */
 static bool check_punycode_label(const char *puny, size_t len) {
     U32 decoded = { 0 }, mapped = { 0 }, normal = { 0 };
     bool ok = punycode_to_utf32(puny, len, &decoded);
+    if (ok) {
+        bool ascii = true;
+        for (size_t i = 0; i < decoded.n && ascii; i++) ascii = decoded.v[i] < 0x80;
+        ok = !ascii;
+    }
     if (ok) {
         map(decoded.v, decoded.n, &mapped);
         ok = u32_equal(decoded.v, decoded.n, mapped.v, mapped.n);
@@ -338,36 +349,24 @@ static bool check_punycode_label(const char *puny, size_t len) {
     return ok;
 }
 
+/* An ASCII domain: lowercased, as the URL standard's domain to ASCII (beStrict false) has it,
+ * whatever its labels (xn-- ones aren't checked) */
 static char *from_ascii_to_ascii(const uint32_t *domain, size_t n, size_t *out_len) {
-    Bytes mapped = { 0 }, out = { 0 };
-    for (size_t i = 0; i < n; i++) bytes_push(&mapped, (char)(domain[i] >= 'A' && domain[i] <= 'Z' ? domain[i] + 32 : domain[i]));
-    size_t label_start = 0;
-    while (label_start != mapped.n) {
-        const char *dot = memchr(mapped.v + label_start, '.', mapped.n - label_start);
-        bool last = dot == NULL;
-        size_t label_size = last ? mapped.n - label_start : (size_t)(dot - (mapped.v + label_start));
-        const char *label = mapped.v + label_start;
-        label_start += last ? label_size : label_size + 1;
-        if (label_size >= 4 && memcmp(label, "xn--", 4) == 0) {
-            bytes_append(&out, label, label_size);
-            if (!check_punycode_label(label + 4, label_size - 4)) goto fail;
-        } else {
-            bytes_append(&out, label, label_size);
-        }
-        if (!last) bytes_push(&out, '.');
+    Bytes out = { 0 };
+    for (size_t i = 0; i < n; i++) bytes_push(&out, (char)(domain[i] >= 'A' && domain[i] <= 'Z' ? domain[i] + 32 : domain[i]));
+    if (out.n == 0) {
+        free(out.v);
+        return NULL;
     }
-    free(mapped.v);
-    if (out.n == 0) goto fail_out;
     *out_len = out.n;
     return out.v;
-fail:
-    free(mapped.v);
-fail_out:
-    free(out.v);
-    return NULL;
 }
 
 char *idna_to_ascii(const uint32_t *domain, size_t n, size_t *out_len) {
+    /* Ada's bound on the input, in UTF-8 bytes */
+    size_t bytes = 0;
+    for (size_t i = 0; i < n; i++) bytes += domain[i] < 0x80 ? 1 : domain[i] < 0x800 ? 2 : domain[i] < 0x10000 ? 3 : 4;
+    if (bytes > 16384) return NULL;
     bool ascii = true;
     for (size_t i = 0; i < n && ascii; i++) ascii = domain[i] < 0x80;
     if (ascii) return from_ascii_to_ascii(domain, n, out_len);

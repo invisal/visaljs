@@ -22,7 +22,7 @@ TypeError [ERR_INVALID_ARG_TYPE]: The "salt" argument must be of type string or 
 RangeError [ERR_OUT_OF_RANGE]: The value of "iterations" is out of range. It must be an integer. Received 1.5
 TypeError [ERR_INVALID_ARG_TYPE]: The "iterations" argument must be of type number. Received type string ('1')
 Error [undefined]: Deriving bits failed
-Error [undefined]: Deriving bits failed
+Error [undefined]: error:1C8000B7:Provider routines::xof digests not allowed
 TypeError [ERR_INVALID_ARG_TYPE]: The "callback" argument must be of type function. Received undefined
 TypeError [ERR_CRYPTO_INVALID_DIGEST]: Invalid digest: foo
 ArrayBuffer 3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865
@@ -55,9 +55,9 @@ c0b515908e61334cae6d6003c00be60e
 c0b515908e61334cae6d6003c00be60e
 RangeError [ERR_CRYPTO_INVALID_SCRYPT_PARAMS]: Invalid scrypt params
 RangeError [ERR_CRYPTO_INVALID_SCRYPT_PARAMS]: Invalid scrypt params
-Error [ERR_CRYPTO_SCRYPT_INVALID_PARAMETER]: Invalid scrypt parameter
-Error [ERR_CRYPTO_SCRYPT_INVALID_PARAMETER]: Invalid scrypt parameter
-Error [ERR_CRYPTO_SCRYPT_INVALID_PARAMETER]: Invalid scrypt parameter
+TypeError [ERR_INCOMPATIBLE_OPTION_PAIR]: Option "N" cannot be used in combination with option "cost"
+TypeError [ERR_INCOMPATIBLE_OPTION_PAIR]: Option "r" cannot be used in combination with option "blockSize"
+TypeError [ERR_INCOMPATIBLE_OPTION_PAIR]: Option "p" cannot be used in combination with option "parallelization"
 RangeError [ERR_CRYPTO_INVALID_SCRYPT_PARAMS]: Invalid scrypt params: error:030000AC:digital envelope routines::memory limit exceeded
 RangeError [ERR_CRYPTO_INVALID_SCRYPT_PARAMS]: Invalid scrypt params: error:030000AC:digital envelope routines::memory limit exceeded
 RangeError [ERR_CRYPTO_INVALID_SCRYPT_PARAMS]: Invalid scrypt params: error:030000AC:digital envelope routines::memory limit exceeded

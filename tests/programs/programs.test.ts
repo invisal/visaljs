@@ -63,7 +63,9 @@ async function check(file: string, name: string) {
   /* in an empty directory: programs may write files (host-modules.js); in a fixed time zone */
   const run = spawnSync(binary, [], { encoding: "utf8", cwd: mkdtempSync(join(OUT, "cwd-")), env: { ...process.env, TZ: "Europe/Lisbon" } });
   const stderrFile = join(DIR, file.replace(/\.js$/, ".stderr"));  /* console.error output, from Node */
-  expect(run.stderr).toBe(existsSync(stderrFile) ? readFileSync(stderrFile, "utf8") : "");
+  /* a warning names the process: (node:1234) */
+  const pid = (text: string) => text.replace(/^\(node:\d+\)/gm, "(node:PID)");
+  expect(pid(run.stderr)).toBe(existsSync(stderrFile) ? pid(readFileSync(stderrFile, "utf8")) : "");
   expect(run.status).toBe(0);
   expect(run.stdout).toBe(readFileSync(join(DIR, file.replace(/\.js$/, ".expected")), "utf8"));
 }
@@ -214,7 +216,7 @@ describe.runIf(FIRST)("process", () => {
     const r = await run("timers", 'console.time();\nconsole.timeLog(undefined, "data");\nconsole.timeEnd();\nconsole.timeEnd("nope");\nconsole.time("t"); console.time("t");\n' +
       'process.emitWarning("careful", { code: "W1", type: "DeprecationWarning" });\n');
     expect(r.stdout).toMatch(/^default: \d+(\.\d+)?ms data\ndefault: \d+(\.\d+)?ms\n$/);
-    expect(r.stderr).toMatch(/^\(node:\d+\) Warning: No such label 'nope' for console\.timeEnd\(\)\n\(node:\d+\) Warning: Label 't' already exists for console\.time\(\)\n\(node:\d+\) \[W1\] DeprecationWarning: careful\n$/);
+    expect(r.stderr).toMatch(/^\(node:\d+\) Warning: No such label 'nope' for console\.timeEnd\(\)\n\(Use `node --trace-warnings \.\.\.` to show where the warning was created\)\n\(node:\d+\) Warning: Label 't' already exists for console\.time\(\)\n\(node:\d+\) \[W1\] DeprecationWarning: careful\n$/);
   }, 60000);
 
   it("reads process.stdin: piped, from a file, and empty", async () => {

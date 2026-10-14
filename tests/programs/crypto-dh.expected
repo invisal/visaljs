@@ -16,8 +16,8 @@ secret 256 47c5d46dd3fb6153 true
 true true true
 RangeError [ERR_CRYPTO_INVALID_KEYLEN]: Supplied key is too small
 RangeError [ERR_CRYPTO_INVALID_KEYLEN]: Supplied key is too small
-RangeError [ERR_CRYPTO_INVALID_KEYTYPE]: Unspecified validation error
-RangeError [ERR_CRYPTO_INVALID_KEYTYPE]: Unspecified validation error
+RangeError [ERR_CRYPTO_INVALID_KEYLEN]: Supplied key is too large
+RangeError [ERR_CRYPTO_INVALID_KEYLEN]: Supplied key is too large
 129
 128 128
 0

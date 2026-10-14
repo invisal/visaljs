@@ -32,6 +32,6 @@ parseEnv: {"A":"1","B":"x\ny","C":"q"}
 toUSVString: "a�b"
 aborted resolved
 aborted bad resource: ERR_INVALID_ARG_TYPE
-is*: true false true true true
+is*: true undefined undefined undefined
 _extend: {"a":1,"b":2}
 again: false

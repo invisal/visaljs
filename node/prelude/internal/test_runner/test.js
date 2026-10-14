@@ -17,7 +17,7 @@ import assert from "../../assert.js";
 import { EventEmitter } from "../../events.js";
 import { codeError, invalidArgType, invalidArgValue, outOfRange, validateFunction } from "../errors.js";
 import { MockTracker } from "./mock.js";
-import { SpecReporter, TapReporter } from "./reporters.js";
+import { SpecReporter } from "./reporters.js";
 import { isPromise } from "../../util_types.js";
 import { utilInspect as inspect } from "visaljs:host";
 
@@ -648,7 +648,23 @@ export class Test {
       this.timeout = parent.timeout;
       this.entryFile = parent.entryFile;
 
-      if (only || this.parent.runOnlySubtests) {
+      /* Node 24: a file run directly filters by `only` (no --test-only needed) */
+      if (this.root.harness.isFilteringByOnly) {
+        if (this.only) {
+          // If filtering impacts the tests within a suite, then the suite only
+          // runs those tests. If filtering does not impact the tests within a
+          // suite, then all tests are run.
+          this.parent.runOnlySubtests = true;
+
+          if (this.parent === this.root || this.parent.startTime === null) {
+            for (let t = this.parent; t !== null && !t.hasOnlyTests; t = t.parent) {
+              t.hasOnlyTests = true;
+            }
+          }
+        } else if (this.only === false) {
+          fn = noop;
+        }
+      } else if (only || this.parent.runOnlySubtests) {
         const warning = "'only' and 'runOnly' require the --test-only command-line option.";
         this.diagnostic(warning);
       }
@@ -724,7 +740,15 @@ export class Test {
     return testStorage.run(this, () => Reflect.apply(fn, thisArg, args));
   }
 
-  applyFilters() {}
+  /** Node 24's: a test outside the `only` ones, when filtering by them, isn't run or reported. */
+  applyFilters() {
+    if (this.error) return;  /* errors are never filtered */
+    if (this.root.harness.isFilteringByOnly && !this.only && !this.hasOnlyTests) {
+      if (this.parent.runOnlySubtests || this.parent.hasOnlyTests || this.only === false) {
+        this.filtered = true;
+      }
+    }
+  }
 
   /** The name of the test after its ancestors' names, each after a space. */
   getTestNameWithAncestors() {
@@ -1376,6 +1400,8 @@ function createTestTree(rootTestOptions, globalOptions) {
     isWaitingForBuildPhase: false,
     bootstrapPromise: Promise.resolve(),
     config: globalOptions,
+    /* Node 24: unless tests run in their own processes (--test), always by `only` */
+    isFilteringByOnly: globalOptions.isolation === "process" || process.env.NODE_TEST_CONTEXT ? globalOptions.only : true,
     resetCounters() {
       harness.counters = {
         __proto__: null,
@@ -1482,7 +1508,7 @@ function lazyBootstrapRoot() {
         process.exitCode = kGenericUserError;
       }
     });
-    globalRoot.reporter.attach(process.stdout.isTTY ? new SpecReporter() : new TapReporter());
+    globalRoot.reporter.attach(new SpecReporter());  /* Node 24's default, a terminal or not */
   }
   return globalRoot;
 }

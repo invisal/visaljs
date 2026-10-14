@@ -189,10 +189,19 @@ await new Promise((resolve) => {
   log("params", short(out), zlib.inflateSync(out).equals(input));
 }
 
-/* reset(), and errors on a stream */
+/* reset(): not while a write is in progress; before one, it starts the stream over. And errors on
+   a stream. */
 {
+  const busy = zlib.createDeflateRaw();
+  busy.write("discarded");
+  try {
+    busy.reset();
+    log("reset while writing: no error");
+  } catch (e) {
+    log("reset while writing:", e.message);
+  }
+  busy.destroy();
   const deflate = zlib.createDeflateRaw();
-  deflate.write("discarded");
   deflate.reset();
   const out = [];
   deflate.on("data", (c) => out.push(c));

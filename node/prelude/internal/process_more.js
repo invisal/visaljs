@@ -321,7 +321,7 @@ define("openStdin", function openStdin() {
 const version = p.version;
 define("release", {
   name: "node",
-  ...(version.startsWith("v22.") ? { lts: "Jod" } : {}),
+  ...(version.startsWith("v24.") ? { lts: "Krypton" } : {}),
   sourceUrl: `https://nodejs.org/download/release/${version}/node-${version}.tar.gz`,
   headersUrl: `https://nodejs.org/download/release/${version}/node-${version}-headers.tar.gz`,
 });

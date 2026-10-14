@@ -16,7 +16,7 @@ true MyArray true 1 true
 [ 'a', <1 empty item>, 'c' ] a--c [ 'b', 'c' ]
 1,2,3 1,,,2 1.5,x 
 length,constructor,at,concat,copyWithin,fill,find,findIndex,findLast,findLastIndex,lastIndexOf,pop,push,reverse,shift,unshift,slice,sort,splice,includes,indexOf,join,keys,entries,values,forEach,filter,flat,flatMap,map,every,some,reduce,reduceRight,toReversed,toSorted,toSpliced,with,toLocaleString,toString at,copyWithin,entries,fill,find,findIndex,findLast,findLastIndex,flat,flatMap,includes,keys,toReversed,toSorted,toSpliced,values
-length,name,prototype,isArray,from,of,fromAsync true { value: [ 0, 'a' ], done: false }
+length,name,prototype,isArray,from,fromAsync,of true { value: [ 0, 'a' ], done: false }
 fromAsync is function
 [
   [ 1, 2, 3 ],

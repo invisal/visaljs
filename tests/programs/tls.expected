@@ -110,7 +110,7 @@ finished messages cross [ 12, 12 ]
    server secure TLSv1.2
    client secureConnect true true
    client data "got written before the handshake" raw closed true
--- not TLS: error ERR_SSL_PACKET_LENGTH_TOO_LONG (packet length too long)
+-- not TLS: error ERR_SSL_WRONG_VERSION_NUMBER (wrong version number)
 -- hang up: end ""; error ECONNRESET
 -- not a TLS client: tlsClientError ERR_SSL_HTTP_REQUEST; tlsClientError ECONNRESET
 -- no cipher in common

@@ -47,7 +47,7 @@ view: Uint16Array 5,6
 raw: 300 1,2 0.25 0908
 heap: total_heap_size,total_heap_size_executable,total_physical_size,total_available_size,used_heap_size,heap_size_limit,malloced_memory,peak_malloced_memory,does_zap_garbage,number_of_native_contexts,number_of_detached_contexts,total_global_handles_size,used_global_handles_size,external_memory
 heap types: true
-spaces: 11 space_name,space_size,space_used_size,space_available_size,physical_space_size
+spaces: 13 space_name,space_size,space_used_size,space_available_size,physical_space_size
 code: code_and_metadata_size,bytecode_and_metadata_size,external_script_source_size,cpu_profiler_metadata_size
 cpp: committed_size_bytes,resident_size_bytes,used_size_bytes,space_statistics,type_names,detail_level brief
 cpp bad: TypeError ERR_INVALID_ARG_VALUE The argument 'type' must be one of: 'brief', 'detailed'. Received 'x'

@@ -185,7 +185,7 @@ const kRules = Symbol("kRules");
 
 export class BlockList {
   constructor() {
-    this[kRules] = [];  /* newest first, as Node lists them */
+    this[kRules] = [];  /* newest first, as Node lists them: addresses, then subnets, then ranges */
   }
 
   static isBlockList(value) {
@@ -201,7 +201,9 @@ export class BlockList {
   addAddress(address, family = "ipv4") {
     const sa = toSocketAddress(address, "address", family);
     const bytes = sa[kDetail].bytes;
-    this[kRules].unshift({ text: "Address: " + familyName(sa) + " " + sa.address, test: (b) => compare(b, bytes) === 0 });
+    const text = "Address: " + familyName(sa) + " " + sa.address;
+    if (this[kRules].some((rule) => rule.text === text)) return;  /* once each, as Node 24 keeps them */
+    this[kRules].unshift({ kind: 0, text, test: (b) => compare(b, bytes) === 0 });
   }
 
   addRange(start, end, family = "ipv4") {
@@ -210,6 +212,7 @@ export class BlockList {
     const a = from[kDetail].bytes, b = to[kDetail].bytes;
     if (compare(a, b) > 0) throw invalidArgValue("start", "must come before end", from);
     this[kRules].unshift({
+      kind: 2,
       text: "Range: " + familyName(from) + " " + from.address + "-" + to.address,
       test: (x) => compare(x, a) >= 0 && compare(x, b) <= 0,
     });
@@ -221,7 +224,7 @@ export class BlockList {
     if (typeof prefix !== "number") throw invalidArgType("prefix", "of type number", prefix);
     if (!Number.isInteger(prefix) || prefix < 0 || prefix > max) throw outOfRange("prefix", ">= 0 && <= " + max, prefix);
     const bytes = sa[kDetail].bytes;
-    this[kRules].unshift({ text: "Subnet: " + familyName(sa) + " " + sa.address + "/" + prefix, test: (x) => inNetwork(x, bytes, prefix) });
+    this[kRules].unshift({ kind: 1, text: "Subnet: " + familyName(sa) + " " + sa.address + "/" + prefix, test: (x) => inNetwork(x, bytes, prefix) });
   }
 
   check(address, family = "ipv4") {
@@ -241,7 +244,7 @@ export class BlockList {
   }
 
   get rules() {
-    return this[kRules].map((rule) => rule.text);
+    return this[kRules].toSorted((a, b) => a.kind - b.kind).map((rule) => rule.text);
   }
 
   toJSON() {

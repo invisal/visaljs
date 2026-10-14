@@ -156,10 +156,7 @@ TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object.
 [ 'ExAd', '', '7Hs=' ]
 [ '13101dec', '7bba', '' ]
 TypeError [ERR_UNKNOWN_ENCODING]: Unknown encoding: foo
-Error [ERR_INTERNAL_ASSERTION]: Cannot change encoding
-This is caused by either a bug in Node.js or incorrect usage of Node.js internals.
-Please open an issue with this stack trace at https://github.com/nodejs/node/issues
-
+TypeError [ERR_INVALID_ARG_VALUE]: The argument 'outputEncoding' cannot be changed from 'hex'. Received 'base64'
 b531422c5dae60e8854600809c46b715
 6ad77cdab9adb3bfed21ef94210e121eb6aeaffa752dc08b51639731761aed00e431c158177be7de
 [ 0, 16, 16 ]
@@ -201,7 +198,7 @@ TypeError [ERR_CRYPTO_INVALID_IV]: Invalid initialization vector
 TypeError [ERR_CRYPTO_INVALID_AUTH_TAG]: Invalid authentication tag length: 3
 TypeError [ERR_CRYPTO_INVALID_AUTH_TAG]: authTagLength required for aes-128-ccm
 Error [undefined]: Trying to add data in unsupported state
-Error [ERR_OSSL_TAG_NOT_SET]: error:1C800077:Provider routines::tag not set
+<Buffer >
 35
 RangeError [ERR_CRYPTO_INVALID_MESSAGELEN]: Invalid message length
 694221bd817261ad76970d 191c3a597b2ca6b9745ffb89f24d402b

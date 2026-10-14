@@ -39,7 +39,7 @@ NotSupportedError [9]: Unrecognized algorithm name
 TypeError [ERR_INVALID_ARG_TYPE]: Failed to execute 'digest' on 'SubtleCrypto': 2nd argument is not instance of ArrayBuffer, Buffer, TypedArray, or DataView.
 TypeError [ERR_MISSING_ARGS]: Failed to execute 'digest' on 'SubtleCrypto': 2 arguments required, but only 0 present.
 TypeError [ERR_MISSING_ARGS]: Failed to execute 'digest' on 'SubtleCrypto': 2 arguments required, but only 1 present.
-TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm can not be converted to 'Algorithm' because 'name' is required in 'Algorithm'.
+TypeError [ERR_MISSING_OPTION]: Failed to normalize algorithm: passed algorithm cannot be converted to 'Algorithm' because 'name' is required in 'Algorithm'.
 NotSupportedError [9]: Unrecognized algorithm name
 TypeError [ERR_INVALID_THIS]: Value of "this" must be of type SubtleCrypto
 true

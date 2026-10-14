@@ -16,12 +16,12 @@ visaljs licenses > THIRD_PARTY_LICENSES
 | Project | What | Version | License | License files |
 |---|---|---|---|---|
 | [QuickJS](https://github.com/bellard/quickjs) | Regular expressions, Unicode tables, number printing and parsing, BigInt arithmetic (`runtime/src/bigint.c`, ported) | commit `a38171d` | MIT | [`quickjs-regexp`](runtime/third_party/quickjs-regexp/LICENSE), [`quickjs-dtoa`](runtime/third_party/quickjs-dtoa/LICENSE) |
-| [Unicode](https://www.unicode.org) | The Unicode Character Database's tables (in QuickJS's), CLDR's time zone names (`runtime/src/tznames.gen.h`) | as in QuickJS and Node v22.22.2 | Unicode-3.0 | [`unicode`](runtime/third_party/unicode/LICENSE) |
+| [Unicode](https://www.unicode.org) | The Unicode Character Database's tables (in QuickJS's), CLDR's time zone names (`runtime/src/tznames.gen.h`) | as in QuickJS and Node v24.21.0 | Unicode-3.0 | [`unicode`](runtime/third_party/unicode/LICENSE) |
 | [V8](https://v8.dev) | `Math`'s functions (its fdlibm port) and `Date.parse` (`runtime/src/date.c`, ported) | 12.4 (fdlibm) | BSD-3-Clause, fdlibm's notice | [`v8-ieee754`](runtime/third_party/v8-ieee754/LICENSE), [fdlibm](runtime/third_party/v8-ieee754/LICENSE.fdlibm) |
-| [Ada](https://github.com/ada-url/ada) | Domain names in URLs (IDNA) | 2.9.2 | MIT | [`ada-idna`](runtime/third_party/ada-idna/LICENSE-MIT) |
+| [Ada](https://github.com/ada-url/ada) | Domain names in URLs (IDNA) | 4.0.0 | MIT | [`ada-idna`](runtime/third_party/ada-idna/LICENSE-MIT) |
 | [Node.js](https://nodejs.org) | The `node:` modules ported from its `lib/` (each says so at its top), `util.inspect`, `console.table`, the zlib binding | v22.22.2 | MIT | [`runtime`](runtime/third_party/nodejs/LICENSE), [`node`](node/third_party/nodejs/LICENSE) |
 | [BoringSSL](https://boringssl.googlesource.com/boringssl) | Cryptography and TLS, with fiat-crypto's field arithmetic | commit `304dad3` | Apache-2.0 | [`boringssl`](runtime/third_party/boringssl/LICENSE), [fiat](runtime/third_party/boringssl/third_party/fiat/LICENSE) |
-| Mozilla's CA certificates | The root certificates TLS trusts (`runtime/src/tls_roots.gen.h`), as Node v22.22.2 bundles them | Node v22.22.2's | MPL-2.0 | [`mozilla-ca`](runtime/third_party/mozilla-ca) |
+| Mozilla's CA certificates | The root certificates TLS trusts (`runtime/src/tls_roots.gen.h`), as Node v24.21.0 bundles them | Node v24.21.0's | MPL-2.0 | [`mozilla-ca`](runtime/third_party/mozilla-ca) |
 | [libuv](https://libuv.org) | The event loop and I/O | 1.51.0 | MIT, ISC, BSD-2-Clause | [`libuv`](node/third_party/libuv/LICENSE), [extra](node/third_party/libuv/LICENSE-extra) |
 | [llhttp](https://github.com/nodejs/llhttp) | The HTTP parser | 9.3.0 | MIT | [`llhttp`](node/third_party/llhttp/LICENSE) |
 | [zlib](https://zlib.net), Chromium's copy | Deflate and gzip | 1.3.1 | Zlib, BSD-3-Clause (Chromium's parts) | [`zlib`](node/third_party/zlib/LICENSE), [Chromium](node/third_party/zlib/LICENSE.chromium) |

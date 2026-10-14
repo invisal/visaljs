@@ -24,7 +24,7 @@ listener AbortError: This operation was aborted
 follower true
 true true AbortError This operation was aborted AbortError [20]: This operation was aborted
 why 5
-TypeError [ERR_ILLEGAL_CONSTRUCTOR]: Illegal constructor | RangeError [ERR_OUT_OF_RANGE]: The value of "delay" is out of range. It must be >= 0 && <= 4294967295. Received -1 | TypeError [ERR_INVALID_ARG_TYPE]: The "signals[0]" argument must be an instance of AbortSignal. Received type number (1)
+TypeError [ERR_ILLEGAL_CONSTRUCTOR]: Illegal constructor | RangeError [ERR_OUT_OF_RANGE]: The value of "delay" is out of range. It must be >= 0 && <= 4294967295. Received -1 | TypeError [ERR_INVALID_ARG_TYPE]: signals[0] is not of type AbortSignal.
 stop
 null
 timeout: TimeoutError The operation was aborted due to timeout

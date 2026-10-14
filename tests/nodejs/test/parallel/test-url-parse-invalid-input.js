@@ -89,14 +89,6 @@ if (common.hasIntl) {
       }));
   });
 
-  // Warning should only happen once per process.
-  const expectedWarning = [
-    `The URL ${badURLs[0]} is invalid. Future versions of Node.js will throw an error.`,
-    'DEP0170',
-  ];
-  common.expectWarning({
-    DeprecationWarning: expectedWarning,
-  });
   badURLs.forEach((badURL) => {
     url.parse(badURL);
   });

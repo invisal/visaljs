@@ -1,4 +1,4 @@
-SecretKeyObject { [Symbol(kKeyType)]: 'secret' } secret 16 undefined undefined
+SecretKeyObject {} secret 16 undefined undefined
 <Buffer 30 31 32 33 34 35 36 37 38 39 61 62 63 64 65 66>
 { kty: 'oct', k: 'MDEyMzQ1Njc4OWFiY2RlZg' }
 <Buffer 30 31 32 33 34 35 36 37 38 39 61 62 63 64 65 66>
@@ -9,8 +9,8 @@ TypeError [ERR_INVALID_ARG_TYPE]: The "otherKeyObject" argument must be an insta
 abc
 abc
 TypeError [ERR_INVALID_ARG_TYPE]: The "key" argument must be an instance of ArrayBuffer, Buffer, TypedArray, or DataView. Received type number (1)
-[ 'constructor', 'type', 'equals' ]
-[ 'constructor', 'symmetricKeySize', 'export', 'toCryptoKey' ]
+[ 'constructor', 'type', 'toCryptoKey', 'equals' ]
+[ 'constructor', 'symmetricKeySize', 'export' ]
 [ 'SecretKeyObject', true ]
 TypeError [ERR_INVALID_ARG_TYPE]: The "handle" argument must be of type object. Received an instance of Object
 TypeError [ERR_INVALID_ARG_TYPE]: The "key" argument must be an instance of CryptoKey. Received type number (1)
@@ -18,11 +18,7 @@ TypeError [ERR_INVALID_ARG_TYPE]: The "key" argument must be an instance of Cryp
 377222e061a924c591cd9c27ea163ed4
 ArrayBuffer 8620fa3b1d772261
 rsa private rsa { modulusLength: 1024, publicExponent: 65537n } public rsa undefined
-PrivateKeyObject {
-  [Symbol(kKeyType)]: 'private',
-  [Symbol(kAsymmetricKeyType)]: 'rsa',
-  [Symbol(kAsymmetricKeyDetails)]: { modulusLength: 1024, publicExponent: 65537n }
-}
+PrivateKeyObject {}
 -----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDzcwgppEbBV4oVOt4JfFhFGmJr
 0BZgQy/lTRO8CBPyalOkcluPm6jAjs5a2d+R08hToVrsHH9QXPs9ZKgap1pQsirH
@@ -92,17 +88,7 @@ pss private rsa-pss {
   mgf1HashAlgorithm: 'sha256',
   saltLength: 16
 } public rsa-pss undefined
-PrivateKeyObject {
-  [Symbol(kKeyType)]: 'private',
-  [Symbol(kAsymmetricKeyType)]: 'rsa-pss',
-  [Symbol(kAsymmetricKeyDetails)]: {
-    modulusLength: 1024,
-    publicExponent: 65537n,
-    hashAlgorithm: 'sha256',
-    mgf1HashAlgorithm: 'sha256',
-    saltLength: 16
-  }
-}
+PrivateKeyObject {}
 -----BEGIN PUBLIC KEY-----
 MIHTMEEGCSqGSIb3DQEBCjA0oA8wDQYJYIZIAWUDBAIBBQChHDAaBgkqhkiG9w0B
 AQgwDQYJYIZIAWUDBAIBBQCiAwIBEAOBjQAwgYkCgYEAzoufjdrOR12WpU477NS7
@@ -133,11 +119,7 @@ Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
 false
 TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
 pss0 private rsa-pss { modulusLength: 1024, publicExponent: 65537n } public rsa-pss undefined
-PrivateKeyObject {
-  [Symbol(kKeyType)]: 'private',
-  [Symbol(kAsymmetricKeyType)]: 'rsa-pss',
-  [Symbol(kAsymmetricKeyDetails)]: { modulusLength: 1024, publicExponent: 65537n }
-}
+PrivateKeyObject {}
 -----BEGIN PUBLIC KEY-----
 MIGdMAsGCSqGSIb3DQEBCgOBjQAwgYkCgYEAuvONzGPB5Uq0i0IAHgzvKHaMyRSa
 ug64xphpblKjE4E8ahcofWKhGwIWpAVKHpQiRsWWlj12wGy+pXSeo0p8OUH4Q+mu
@@ -167,11 +149,7 @@ Error [ERR_CRYPTO_JWK_UNSUPPORTED_KEY_TYPE]: Unsupported JWK Key Type.
 false
 TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
 prime256v1 private ec { namedCurve: 'prime256v1' } public ec undefined
-PrivateKeyObject {
-  [Symbol(kKeyType)]: 'private',
-  [Symbol(kAsymmetricKeyType)]: 'ec',
-  [Symbol(kAsymmetricKeyDetails)]: { namedCurve: 'prime256v1' }
-}
+PrivateKeyObject {}
 -----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEqJS/jqjjOZhu/S6URkaOUPdEEeUP
 dpN3CQPul60TX5/jMnsYSuB8GjCYi+SX4Jbm9CMbj+OAZ4O7x1ExNP1YzQ==
@@ -215,11 +193,7 @@ TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Recei
 false
 TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
 secp384r1 private ec { namedCurve: 'secp384r1' } public ec undefined
-PrivateKeyObject {
-  [Symbol(kKeyType)]: 'private',
-  [Symbol(kAsymmetricKeyType)]: 'ec',
-  [Symbol(kAsymmetricKeyDetails)]: { namedCurve: 'secp384r1' }
-}
+PrivateKeyObject {}
 -----BEGIN PUBLIC KEY-----
 MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEq84T5YlCQn0hnDV43XjmeCyNK7y9+xwO
 y4nBI5wpG7bVd3PyjxZjeDHBcgH0Z+ZTNbtnA0zBozC7ejOVdlwbEuHsGOFidbQ0
@@ -265,11 +239,7 @@ TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Recei
 false
 TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
 secp521r1 private ec { namedCurve: 'secp521r1' } public ec undefined
-PrivateKeyObject {
-  [Symbol(kKeyType)]: 'private',
-  [Symbol(kAsymmetricKeyType)]: 'ec',
-  [Symbol(kAsymmetricKeyDetails)]: { namedCurve: 'secp521r1' }
-}
+PrivateKeyObject {}
 -----BEGIN PUBLIC KEY-----
 MIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQACqiSiyEh9VvojwWJizU/zxB9qOzU
 1I0dnWrhuAeMUwjmPhf0VykSZfwk718bgOQ7qdVvnS+dqWSHqSbEIL42Q8sBwwci
@@ -317,10 +287,7 @@ TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Recei
 false
 TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type public, expected private.
 x25519 private x25519 {} public x25519 undefined
-PrivateKeyObject {
-  [Symbol(kKeyType)]: 'private',
-  [Symbol(kAsymmetricKeyType)]: 'x25519'
-}
+PrivateKeyObject {}
 -----BEGIN PUBLIC KEY-----
 MCowBQYDK2VuAyEA5sONUE8wY2BNCd9MJdnEuJn7bWy12nW3M7ZJUQdv6HU=
 -----END PUBLIC KEY-----
@@ -372,14 +339,14 @@ Error [ERR_OSSL_UNSUPPORTED]: error:1E08010C:DECODER routines::unsupported
 Error [ERR_OSSL_ASN1_WRONG_TAG]: error:068000A8:asn1 encoding routines::wrong tag
 Error [ERR_OSSL_UNSUPPORTED]: error:1E08010C:DECODER routines::unsupported
 Error [ERR_OSSL_ASN1_WRONG_TAG]: error:068000A8:asn1 encoding routines::wrong tag
-TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received undefined
-TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.format' is invalid. Received 'foo'
-TypeError [ERR_INVALID_ARG_VALUE]: The property 'key.kty' must be one of: 'RSA', 'EC', 'OKP'. Received undefined
-TypeError [ERR_INVALID_ARG_TYPE]: The "key.d" property must be of type string. Received undefined
-TypeError [ERR_INVALID_ARG_VALUE]: The property 'key.crv' must be one of: 'P-256', 'secp256k1', 'P-384', 'P-521'. Received 'P-999'
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'key.type' is invalid. Received undefined
+TypeError [ERR_INVALID_ARG_VALUE]: The property 'key.format' is invalid. Received 'foo'
+TypeError [ERR_CRYPTO_INVALID_JWK]: Invalid JWK format
+TypeError [ERR_CRYPTO_INVALID_JWK]: JWK does not contain private key material
+TypeError [ERR_CRYPTO_INVALID_CURVE]: Invalid EC curve name
 TypeError [ERR_INVALID_ARG_TYPE]: The "key" argument must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, DataView, KeyObject, or CryptoKey. Received type number (1)
 TypeError [ERR_CRYPTO_INVALID_KEY_OBJECT_TYPE]: Invalid key object type secret, expected private.
-TypeError [ERR_INVALID_ARG_TYPE]: The "key" argument must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView. Received an instance of PublicKeyObject
+TypeError [ERR_INVALID_ARG_TYPE]: The "key" argument must be of type string or an instance of ArrayBuffer, Buffer, TypedArray, DataView, or URL. Received an instance of PublicKeyObject
 TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.format' is invalid. Received 'foo'
 TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received 'foo'
 TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Received undefined
@@ -387,7 +354,7 @@ TypeError [ERR_INVALID_ARG_VALUE]: The property 'options.type' is invalid. Recei
 CryptoKey {
   type: 'secret',
   extractable: true,
-  algorithm: { name: 'HMAC', hash: [Object], length: 128 },
+  algorithm: { name: 'HMAC', length: 128, hash: [Object] },
   usages: [ 'sign' ]
 }
 { name: 'AES-GCM', length: 128 }

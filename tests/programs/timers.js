@@ -111,29 +111,6 @@ await sleep(20);
 const custom = Symbol.for("nodejs.util.promisify.custom");
 log("promisify.custom:", setTimeout[custom] === sleep, setImmediate[custom] === tick);
 
-/* the legacy API */
-process.noDeprecation = true;
-{
-  const item = { _onTimeout() { log("enrolled item fired", this === item); } };
-  timers.enroll(item, 3);
-  log("enrolled:", item._idleTimeout);
-  timers.active(item);
-  const item2 = { _onTimeout() { log("never: item2"); } };
-  timers.enroll(item2, 3);
-  timers.active(item2);
-  timers.unenroll(item2);
-  log("unenrolled:", item2._idleTimeout, item2._destroyed);
-  for (const msecs of [-1, "x"]) {
-    try {
-      timers.enroll({}, msecs);
-    } catch (e) {
-      log(e.code, e.message);
-    }
-  }
-}
-
-await sleep(20);
-
 /* timers/promises */
 log("sleep:", await sleep(2, "slept"), "tick:", await tick("ticked"));
 log("scheduler:", await scheduler.wait(1), await scheduler.yield(), Object.getOwnPropertyNames(Object.getPrototypeOf(scheduler)).join(","));
