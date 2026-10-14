@@ -12,8 +12,8 @@ function validatePath(path) {
 
 /** A file system's figures: statfs(2). */
 class StatFs {
-  constructor(type, bsize, blocks, bfree, bavail, files, ffree) {
-    Object.assign(this, { type, bsize, blocks, bfree, bavail, files, ffree });
+  constructor(type, bsize, frsize, blocks, bfree, bavail, files, ffree) {
+    Object.assign(this, { type, bsize, frsize, blocks, bfree, bavail, files, ffree });  /* Node 24's fields */
   }
 }
 

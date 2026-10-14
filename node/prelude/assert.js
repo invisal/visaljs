@@ -779,7 +779,7 @@ export function Assert(options) {
     throw codeError(TypeError, "ERR_CONSTRUCT_CALL_REQUIRED", "Class constructor Assert cannot be invoked without `new`");
   }
 
-  options = Object.assign({ __proto__: null, strict: true }, options);
+  options = Object.assign({ __proto__: null, strict: true, skipPrototype: false }, options);
 
   const allowedDiffs = ["simple", "full"];
   if (options.diff !== undefined && !allowedDiffs.includes(options.diff)) {
@@ -905,7 +905,7 @@ Assert.prototype.deepStrictEqual = function deepStrictEqual(actual, expected, me
   if (arguments.length < 2) {
     throw missingArgs();
   }
-  if (!isDeepStrictEqual(actual, expected)) {
+  if (!isDeepStrictEqual(actual, expected, this?.[kOptions]?.skipPrototype)) {
     innerFail({ actual, expected, message, operator: "deepStrictEqual", stackStartFn: deepStrictEqual, diff: this?.[kOptions]?.diff });
   }
 };
@@ -915,7 +915,7 @@ Assert.prototype.notDeepStrictEqual = function notDeepStrictEqual(actual, expect
   if (arguments.length < 2) {
     throw missingArgs();
   }
-  if (isDeepStrictEqual(actual, expected)) {
+  if (isDeepStrictEqual(actual, expected, this?.[kOptions]?.skipPrototype)) {
     innerFail({ actual, expected, message, operator: "notDeepStrictEqual", stackStartFn: notDeepStrictEqual, diff: this?.[kOptions]?.diff });
   }
 };

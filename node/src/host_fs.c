@@ -27,6 +27,7 @@
 #define unlink _unlink
 #define F_OK 0
 #else
+#include <sys/statvfs.h>
 #include <unistd.h>
 #endif
 
@@ -490,6 +491,10 @@ JSValue js_host_fs_call(JSContext *ctx, JSValue callee, JSValue this_val, uint32
     uv_file fd = by_fd ? (uv_file)NUM(0) : -1;
     uv_fs_t req;
     int r;
+    double frsize = -1;  /* statfs's */
+#ifndef _WIN32
+    struct statvfs vfs;
+#endif
     switch (op) {
     case FS_RENAME: r = uv_fs_rename(loop, &req, path, dest, NULL); break;
     case FS_LINK: r = uv_fs_link(loop, &req, path, dest, NULL); break;
@@ -510,7 +515,13 @@ JSValue js_host_fs_call(JSContext *ctx, JSValue callee, JSValue this_val, uint32
     case FS_MKDTEMP: r = uv_fs_mkdtemp(loop, &req, path, NULL); break;
     case FS_ACCESS: r = uv_fs_access(loop, &req, path, (int)NUM(1), NULL); break;
     case FS_FSTAT: r = uv_fs_fstat(loop, &req, fd, NULL); break;
-    case FS_STATFS: r = uv_fs_statfs(loop, &req, path, NULL); break;
+    case FS_STATFS:
+        r = uv_fs_statfs(loop, &req, path, NULL);
+#ifndef _WIN32
+        /* frsize (Node 24, libuv 1.52's f_frsize): statvfs's fragment size, as libuv reads it */
+        if (r >= 0 && statvfs(path, &vfs) == 0) frsize = (double)vfs.f_frsize;
+#endif
+        break;
     default:
         free(path), free(dest);
         return js_throw_type_error(ctx, "fsCall: unknown operation");
@@ -524,10 +535,11 @@ JSValue js_host_fs_call(JSContext *ctx, JSValue callee, JSValue this_val, uint32
     else if (op == FS_FSTAT) result = js_host_stat_array(ctx, &req.statbuf);
     else if (op == FS_STATFS) {
         const uv_statfs_t *f = req.ptr;
-        JSValue v[7] = { js_number((double)f->f_type), js_number((double)f->f_bsize), js_number((double)f->f_blocks),
+        if (frsize < 0) frsize = (double)f->f_bsize;  /* no statvfs: the block size */
+        JSValue v[8] = { js_number((double)f->f_type), js_number((double)f->f_bsize), js_number(frsize), js_number((double)f->f_blocks),
                          js_number((double)f->f_bfree), js_number((double)f->f_bavail), js_number((double)f->f_files),
                          js_number((double)f->f_ffree) };
-        result = js_new_array_from(ctx, v, 7);
+        result = js_new_array_from(ctx, v, 8);
     }
     uv_fs_req_cleanup(&req);
     return result;

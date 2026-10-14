@@ -4,6 +4,8 @@ test-assert-class-destructuring.js
 test-assert-class.js
 test-assert-deep-with-error.js
 test-assert-if-error.js
+test-assert-partial-deep-equal.js
+test-assert-typedarray-deepequal.js
 test-event-emitter-add-listeners.js
 test-event-emitter-check-listener-leaks.js
 test-event-emitter-emit-context.js

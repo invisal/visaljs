@@ -142,11 +142,21 @@ function fireTimeout(timer) {
   }
 }
 
+/* Node 24's cleanTimer: a cancelled timer lets go of its callback and arguments */
+function cleanTimer(item) {
+  item._onTimeout = undefined;
+  item._timerArgs = undefined;
+}
+
 export function unenrollTimeout(item) {
-  if (item._destroyed) return;
+  if (item._destroyed) {
+    cleanTimer(item);
+    return;
+  }
   item._destroyed = true;
   if (item[kHasPrimitive]) knownTimersById.delete(item[kId]);
   disarm(item);
+  cleanTimer(item);
   item._idleTimeout = -1;
 }
 
@@ -237,9 +247,10 @@ export function setImmediate(callback, ...args) {
 }
 
 export function clearImmediate(immediate) {
-  if (!immediate || immediate._destroyed) return;
+  if (!immediate?._onImmediate || immediate._destroyed) return;
   immediate._destroyed = true;
   immediate[kRefed] = null;
-  immediate._onImmediate = null;
+  immediate._onImmediate = undefined;  /* Node 24's cleanImmediate */
+  immediate._argv = undefined;
   timerClear(immediate[kId]);
 }
