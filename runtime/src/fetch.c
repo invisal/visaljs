@@ -3,7 +3,7 @@
  * Node's errors and inspection. A body made from bytes (a string, a buffer source, a Blob,
  * URLSearchParams) keeps them: text(), json(), arrayBuffer(), bytes() and blob() read them
  * directly, and `body` makes a ReadableStream of them only when asked. A ReadableStream body is
- * read through the streams component. fetch() itself (the client) isn't provided yet. */
+ * read through the streams component. fetch() itself is node:http's client\n * (node/prelude/internal/fetch.js), through the js_host_fetch_* primitives at the end. */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +15,7 @@
 #include "js_buffer.h"
 #include "js_convert.h"
 #include "js_exception.h"
+#include "js_host.h"
 #include "js_ops.h"
 #include "js_promise.h"
 #include "js_web.h"
@@ -25,6 +26,33 @@
 static int fail(JSValue thrown) {
     (void)thrown;
     return -1;
+}
+
+/* undici's TypeError for a URL that doesn't parse: "Failed to parse URL from …", its cause
+ * new URL's error (ERR_INVALID_URL). */
+static JSValue throw_unparsable(JSContext *ctx, JSValue input) {
+    JSValue cause = js_new_error(ctx, JS_TYPE_ERROR, js_new_string_cstr(ctx, "Invalid URL"));
+    js_define_data(ctx, js_as_object(cause), js_atom_from_cstr(ctx, "code"), js_new_string_cstr(ctx, "ERR_INVALID_URL"), JS_PROP_DEFAULT);
+    js_define_data(ctx, js_as_object(cause), js_atom_from_cstr(ctx, "input"), input, JS_PROP_DEFAULT);
+    JSValue message = js_concat(ctx, js_new_string_cstr(ctx, "Failed to parse URL from "), input);
+    if (js_is_exception(message)) return message;
+    JSValue e = js_new_error(ctx, JS_TYPE_ERROR, message);
+    js_define_data(ctx, js_as_object(e), JS_ATOM(cause), cause, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
+    return js_throw(ctx, e);
+}
+
+/* Whether a serialized URL has a username or password: an '@' in its authority. */
+static bool has_credentials(JSContext *ctx, JSValue href) {
+    JSStrView v = js_string_view(ctx, href);
+    uint32_t i = 0;
+    while (i < v.length && js_view_at(v, i) != ':') i++;
+    if (i + 2 >= v.length || js_view_at(v, i + 1) != '/' || js_view_at(v, i + 2) != '/') return false;
+    for (i += 3; i < v.length; i++) {
+        uint32_t c = js_view_at(v, i);
+        if (c == '@') return true;
+        if (c == '/' || c == '?' || c == '#') return false;
+    }
+    return false;
 }
 
 /* ---- Bodies (§5.3) -------------------------------------------------------------------------- */
@@ -308,10 +336,11 @@ BUILTIN(request_ctor) {
         if (js_is_exception(s)) return s;
         JSValue u = js_parse_url_href(ctx, s);
         if (js_is_exception(u)) return u;
-        if (js_is_undefined(u)) {
-            char text[256];
-            text[js_view_to_utf8(js_string_view(ctx, s), text, sizeof text - 1)] = '\0';
-            return js_throw_type_error(ctx, "Failed to parse URL from %s", text);
+        if (js_is_undefined(u)) return throw_unparsable(ctx, s);
+        if (has_credentials(ctx, u)) {
+            JSValue message = js_concat(ctx, js_new_string_cstr(ctx, "Request cannot be constructed from a URL that includes credentials: "), u);
+            if (js_is_exception(message)) return message;
+            return js_throw(ctx, js_new_error(ctx, JS_TYPE_ERROR, message));
         }
         url = u;
     }
@@ -608,11 +637,7 @@ BUILTIN(response_redirect) {
     if (js_is_exception(s)) return s;
     JSValue url = js_parse_url_href(ctx, s);
     if (js_is_exception(url)) return url;
-    if (js_is_undefined(url)) {
-        char text[256];
-        text[js_view_to_utf8(js_string_view(ctx, s), text, sizeof text - 1)] = '\0';
-        return js_throw_type_error(ctx, "Failed to parse URL from %s", text);
-    }
+    if (js_is_undefined(url)) return throw_unparsable(ctx, s);
     double status = 302;
     if (!js_is_undefined(ARG(1)) && js_to_number(ctx, &status, ARG(1)) < 0) return JS_EXCEPTION;
     if (status != 301 && status != 302 && status != 303 && status != 307 && status != 308)
@@ -754,6 +779,63 @@ static const JSBuiltin response_proto[] = {
     WEBIDL_OPERATION("formData", form_data_unsupported, 0),
     WEBIDL_OPERATION("bytes", response_bytes, 0),
 };
+
+/* ---- fetch() (node/prelude/internal/fetch.js) ---------------------------------------------- */
+
+/* fetchHeaderList(headers): a Headers' entries as sent, [name, value, …] in the order they were
+ * added, with the names' case kept. */
+JSValue js_host_fetch_header_list(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    UNUSED_ARGS;
+    JSValue headers = ARG(0);
+    if (!js_is_headers(headers)) return js_throw_type_error(ctx, "fetchHeaderList: not a Headers");
+    uint32_t n = js_headers_count(headers);
+    JSValue list = js_new_array(ctx, n * 2);
+    if (js_is_exception(list)) return list;
+    for (uint32_t i = 0; i < n; i++) {
+        JSValue lower, name, value;
+        js_headers_at(headers, i, &lower, &name, &value);
+        if (js_array_append(ctx, list, name) < 0 || js_array_append(ctx, list, value) < 0) return JS_EXCEPTION;
+    }
+    return list;
+}
+
+/* fetchRequestBody(request): the body a fetch sends, taken from the request (it is then used):
+ * its bytes (a Uint8Array, sent with a Content-Length), its ReadableStream (sent chunked), or
+ * null. */
+JSValue js_host_fetch_request_body(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    UNUSED_ARGS;
+    RequestObject *r = as_request(ARG(0));
+    if (!r) return js_throw_invalid_this(ctx, "Request");
+    Body *b = &r->body;
+    if (!b->has_body) return JS_NULL;
+    if (body_used(b)) return js_throw_type_error(ctx, "Body is unusable: Body has already been read");
+    if (!js_is_undefined(b->stream)) return b->stream;
+    b->used = 1;
+    return js_is_undefined(b->bytes) ? js_new_uint8_array(ctx, 0) : b->bytes;
+}
+
+/* fetchResponse(status, statusText, headers, body, url, redirected): a fetched response, its
+ * headers (a Headers) made immutable and its body a ReadableStream or null. */
+JSValue js_host_fetch_response(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    UNUSED_ARGS;
+    double status;
+    if (js_to_number(ctx, &status, ARG(0)) < 0) return JS_EXCEPTION;
+    if (!js_is_headers(ARG(2))) return js_throw_type_error(ctx, "fetchResponse: not a Headers");
+    ResponseObject *r = alloc_response(ctx, ctx->intrinsics[JS_INTRINSIC_RESPONSE_PROTOTYPE]);
+    JSValue rv = js_object_value(&r->obj);
+    r->status = (uint16_t)status;
+    r->type = 2;
+    r->redirected = js_truthy(ARG(5));
+    if (js_is_string(ARG(1))) js_store(ctx, &r->obj.cell, &r->status_text, ARG(1));
+    js_headers_set_guard(ARG(2), JS_HEADERS_IMMUTABLE);
+    js_store(ctx, &r->obj.cell, &r->headers, ARG(2));
+    if (js_is_string(ARG(4))) js_store(ctx, &r->obj.cell, &r->url, ARG(4));
+    if (js_is_readable_stream(ARG(3))) {
+        r->body.has_body = 1;
+        js_store(ctx, &r->obj.cell, &r->body.stream, ARG(3));
+    }
+    return rv;
+}
 
 static void install_fetch(JSContext *ctx, JSObject *global) {
     JSValue object_proto = ctx->intrinsics[JS_INTRINSIC_OBJECT_PROTOTYPE];

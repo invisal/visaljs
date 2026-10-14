@@ -23,4 +23,10 @@ void js_emit_warning(JSContext *ctx, JSValue message, const char *type, const ch
 /* cwd(): the working directory (process.cwd()), also a host primitive of node:path; -errno on failure. */
 JSValue js_host_cwd(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
 
+/* fetch.c: fetch()'s primitives (node/prelude/internal/fetch.js): a Headers' list as sent, a
+ * request's body as sent, and a fetched Response. */
+JSValue js_host_fetch_header_list(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
+JSValue js_host_fetch_request_body(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
+JSValue js_host_fetch_response(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
+
 #endif /* JS_HOST_H */

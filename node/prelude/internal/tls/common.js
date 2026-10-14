@@ -111,11 +111,16 @@ const VERIFY_MESSAGES = {
   HOSTNAME_MISMATCH: "hostname mismatch",
 };
 
+const SYSTEM_CA_HINTED = new Set(["UNABLE_TO_VERIFY_LEAF_SIGNATURE", "DEPTH_ZERO_SELF_SIGNED_CERT", "UNABLE_TO_GET_ISSUER_CERT"]);
+
 /** A certificate verification error (Node's: message, and the code that authorizationError gets),
  *  from X509_V_ERR_* or a name */
 export function verifyError(code) {
   const name = typeof code === "number" ? VERIFY_CODES[code] ?? "CERT_REJECTED" : code;
-  const error = new Error(VERIFY_MESSAGES[name] ?? name.toLowerCase().replace(/_/g, " "));
+  let message = VERIFY_MESSAGES[name] ?? name.toLowerCase().replace(/_/g, " ");
+  /* Node 24's hint (GetValidationErrorReason), for the errors a locally installed root CA may cause */
+  if (SYSTEM_CA_HINTED.has(name)) message += "; if the root CA is installed locally, try running Node.js with --use-system-ca";
+  const error = new Error(message);
   error.code = name;
   return error;
 }

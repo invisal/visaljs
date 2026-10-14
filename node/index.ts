@@ -132,11 +132,17 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "timers_global.js"), reached: (code) => TIMER_USE.test(code) },
   /* the performance globals (node:perf_hooks'): when the program's own code, or a package's, names one */
   { file: join(preludeDir, "internal", "performance_global.js"), reached: (_code, program) => /\b[Pp]erformance(?:Entry|Mark|Measure)?\b/.test(program) },
+  /* the fetch global: it links node:http, node:https and node:zlib */
+  { file: join(preludeDir, "internal", "fetch.js"), reached: (_code, program) => FETCH.test(program) },
   /* node:zlib's Brotli and zstd (their libraries are large): when the program's own code, or a
    * package's, names them */
   { file: join(preludeDir, "internal", "zlib_brotli.js"), reached: (_code, program) => /brotli/i.test(program) },
   { file: join(preludeDir, "internal", "zlib_zstd.js"), reached: (_code, program) => /zstd/i.test(program) },
 ];
+/* the fetch global: called bare (not as another object's method, `.fetch(`), passed or assigned
+ * (`= fetch;`, `f(fetch)`), tested with typeof, or as the global object's; not a key or a field
+ * named fetch (Hono's app.fetch) */
+const FETCH = /(?<![.\w$#])fetch\s*\(|[=(,]\s*fetch\s*[;,)\n]|\btypeof\s+fetch\b|\b(?:globalThis|global|self)\s*(?:\.\s*fetch\b|\[\s*["'`]fetch["'`])/;
 const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";
 const PROCESS_COMMON = "title|ppid|release|config|ref|unref|abort|report|domain|assert|binding|finalization";
 
@@ -198,6 +204,10 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   errnoMessage: { c: "js_host_errno_message", length: 1 },    // (-errno) → "no such file or directory"
   errnoMap: { c: "js_host_errno_map", length: 0 },            // () → [[uv code, name, message], …], libuv's order
   cwd: { c: "js_host_cwd", length: 0 },                       // () → the working directory (the runtime's)
+  /* fetch() (prelude/internal/fetch.js), over the fetch component's Request and Response (runtime/src/fetch.c) */
+  fetchHeaderList: { c: "js_host_fetch_header_list", length: 1 },   // (headers) → [name, value, …] as added
+  fetchRequestBody: { c: "js_host_fetch_request_body", length: 1 }, // (request) → Uint8Array | ReadableStream | null; the body is then used
+  fetchResponse: { c: "js_host_fetch_response", length: 6 },        // (status, statusText, headers, body, url, redirected) → Response
   ttyIsatty: { c: "js_host_tty_isatty", length: 1 },          // (fd) → boolean
   timerUnref: { c: "js_host_timer_unref", length: 2 },        // (fn, ms) → id: a timer that doesn't keep the program alive
   /* node:timers' Timeouts and Immediates (the runtime's timers, runtime/src/jobs.c) */
