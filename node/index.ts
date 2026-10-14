@@ -107,7 +107,13 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "buffer_transcode.js"), reached: (_code, program) => /\btranscode\b/.test(program) },
   /* events.on as a call (bare, or of events or EventEmitter): `.on(` is an emitter's method */
   { file: join(preludeDir, "internal", "events_on.js"), reached: (_code, program) => EVENTS_ON.test(program) },
-  { file: join(preludeDir, "internal", "stream_compose.js"), reached: (_code, program) => /\bduplexPair\b|(?<![.\w$])compose\s*\(|\b(?:stream|Stream)[\w$]*\s*\.\s*compose\b/.test(program) },
+  /* node:stream's rarer parts: compose, Duplex.from and duplexPair; the operators (map, filter, …
+   * on a Readable: drop, take, flatMap and toArray by name, the others named with streams); the
+   * conversions to and from web streams */
+  { file: join(preludeDir, "internal", "stream_compose.js"),
+    reached: (_code, program) => /\bduplexPair\b|(?<![.\w$])compose\s*\(|\.\s*compose\b|\bDuplex\s*\.\s*from\b/.test(program) },
+  { file: join(preludeDir, "internal", "stream_operators.js"), reached: (_code, program) => STREAM_OPERATORS.test(program) },
+  { file: join(preludeDir, "internal", "stream_web_adapters.js"), reached: (_code, program) => /\b(?:toWeb|fromWeb)\b/.test(program) },
   { file: join(preludeDir, "internal", "events_extras.js"),
     reached: (_code, program) => /\b(?:getEventListeners|[gs]etMaxListeners|addAbortListener|EventEmitterAsyncResource)\b/.test(program) },
   /* module.SourceMap */
@@ -149,6 +155,8 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
  * (`= fetch;`, `f(fetch)`), tested with typeof, or as the global object's; not a key or a field
  * named fetch (Hono's app.fetch) */
 const FETCH = /(?<![.\w$#])fetch\s*\(|[=(,]\s*fetch\s*[;,)\n]|\btypeof\s+fetch\b|\b(?:globalThis|global|self)\s*(?:\.\s*fetch\b|\[\s*["'`]fetch["'`])/;
+/* a Readable's operators: the distinctive ones by name, the others with node:stream named */
+const STREAM_OPERATORS = /\.\s*(?:flatMap|toArray|drop|take|asIndexedPairs)\s*\(|\bReadable\b[\s\S]*\.\s*(?:map|filter|forEach|reduce|some|every|find)\s*\(/;
 const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";
 const PROCESS_COMMON = "title|ppid|release|config|ref|unref|abort|report|domain|assert|binding|finalization";
 

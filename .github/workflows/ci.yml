@@ -203,7 +203,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -213,7 +213,8 @@ jobs:
       - run: npm ci
       # one build at a time, two C files at once: a test that runs away on memory stops at its heap
       # limit, and the builds stay well within the runner's memory
-      - run: npm run nodejs -- --jobs=1 --build-jobs=2 --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+      # --failures: why each failing test fails, in the log
+      - run: npm run nodejs -- --jobs=1 --build-jobs=2 --failures --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
   programs:
     # The end-to-end programs (tests/programs): each compiled, run, and its output compared with
