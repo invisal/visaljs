@@ -67,7 +67,7 @@ import * as __internal_streams_state from "./state.js";
 
 'use strict';
 
-export default Transform;
+export { Transform, Transform as default };
 const {
   ERR_METHOD_NOT_IMPLEMENTED,
 } = __internal_errors.codes;

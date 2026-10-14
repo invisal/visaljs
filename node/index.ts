@@ -119,9 +119,9 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
    * on a Readable: drop, take, flatMap and toArray by name, the others named with streams); the
    * conversions to and from web streams */
   { file: join(preludeDir, "internal", "stream_compose.js"),
-    reached: (_code, program) => /\bduplexPair\b|(?<![.\w$])compose\s*\(|\.\s*compose\b|\bDuplex\s*\.\s*from\b/.test(program) },
+    reached: (_code, program) => /\bduplexPair\b|(?<![.\w$])compose\s*\(|\.\s*compose\b|\bDuplex[\w$]*\s*\.\s*from\b/.test(program) },
   { file: join(preludeDir, "internal", "stream_operators.js"), reached: (_code, program) => STREAM_OPERATORS.test(program) },
-  { file: join(preludeDir, "internal", "stream_from.js"), reached: (_code, program) => /\bReadable\s*\.\s*from\b/.test(program) },
+  { file: join(preludeDir, "internal", "stream_from.js"), reached: (_code, program) => /\bReadable[\w$]*\s*\.\s*from\b/.test(program) },
   { file: join(preludeDir, "internal", "stream_pipeline.js"), reached: (_code, program) => /\bpipeline\b/.test(program) },
   { file: join(preludeDir, "internal", "stream_transform.js"), reached: (_code, program) => /\b(?:Transform|PassThrough)\b/.test(program) },
   { file: join(preludeDir, "internal", "stream_web_adapters.js"), reached: (_code, program) => /\b(?:toWeb|fromWeb)\b/.test(program) },

@@ -34,7 +34,7 @@ import * as __internal_streams_utils from "./utils.js";
 
 'use strict';
 
-export default Duplex;
+export { Duplex, Duplex as default };
 
 const { Stream } = __internal_streams_legacy;
 const Readable = __internal_streams_readable.default;

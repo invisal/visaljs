@@ -8,13 +8,13 @@ import { Buffer } from "./buffer.js";
 import { feature, lazyConstructor, lazyFunction } from "./internal/features.js";
 import { addAbortSignal } from "./internal/streams/add_abort_signal.js";
 import { destroyer } from "./internal/streams/destroy.js";
-import Duplex from "./internal/streams/duplex.js";
+import { Duplex } from "./internal/streams/duplex.js";
 import { eos, finished as eosFinished } from "./internal/streams/end_of_stream.js";
 import { Stream } from "./internal/streams/legacy.js";
-import Readable from "./internal/streams/readable.js";
+import { Readable } from "./internal/streams/readable.js";
 import { getDefaultHighWaterMark, setDefaultHighWaterMark } from "./internal/streams/state.js";
 import { isDestroyed, isDisturbed, isErrored, isIterable, isNodeStream, isReadable, isWebStream, isWritable } from "./internal/streams/utils.js";
-import Writable from "./internal/streams/writable.js";
+import { Writable } from "./internal/streams/writable.js";
 
 const customPromisify = Symbol.for("nodejs.util.promisify.custom");
 

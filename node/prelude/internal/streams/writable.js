@@ -37,7 +37,7 @@ import * as __internal_util from "./validators.js";
 
 'use strict';
 
-export default Writable;
+export { Writable, Writable as default };
 Writable.WritableState = WritableState;
 
 const EE = __events.default;

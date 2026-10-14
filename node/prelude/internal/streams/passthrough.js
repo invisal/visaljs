@@ -27,7 +27,7 @@ import * as __internal_streams_transform from "./transform.js";
 
 'use strict';
 
-export default PassThrough;
+export { PassThrough, PassThrough as default };
 
 const Transform = __internal_streams_transform.default;
 Object.setPrototypeOf(PassThrough.prototype, Transform.prototype);

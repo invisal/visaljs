@@ -34,7 +34,7 @@ import * as __string_decoder from "../../string_decoder.js";
 
 'use strict';
 
-export default Readable;
+export { Readable, Readable as default };
 Readable.ReadableState = ReadableState;
 
 const EE = __events.default;
