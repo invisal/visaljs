@@ -44,7 +44,8 @@ const ansi = new RegExp(
 
 const kCustomPromisifiedSymbol = Symbol.for("nodejs.util.promisify.custom");
 /* names to make an object of when the callback gets several values, e.g. ['bytesRead', 'buffer'] */
-const kCustomPromisifyArgsSymbol = Symbol("customPromisifyArgs");
+/* (registered: node:fs names its functions' values without importing node:util) */
+const kCustomPromisifyArgsSymbol = Symbol.for("visaljs.util.customPromisifyArgs");
 
 /** A function taking a callback (err, value) as one returning a promise: Node's
  *  internal/util.js promisify, with its util.promisify.custom. */

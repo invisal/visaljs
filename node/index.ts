@@ -133,14 +133,21 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "perf_observe.js"), reached: (_code, program) => /\bPerformance(?:Observer|ObserverEntryList|ResourceTiming)\b/.test(program) },
   { file: join(preludeDir, "internal", "perf_histogram.js"), reached: (_code, program) => /\b(?:createHistogram|monitorEventLoopDelay)\b/.test(program) },
   /* node:fs's and node:fs/promises' larger or rarer functions: named bare, or as fs's or promises' */
+  /* fs's streams (Node's, over node:stream) */
+  { file: join(preludeDir, "internal", "fs_streams.js"), reached: (_code, program) => FS_STREAMS.test(program) },
+  /* stat's `bigint: true` option (the bundle keeps an option's name) */
+  { file: join(preludeDir, "internal", "fs_bigint_stats.js"), reached: (_code, program) => /\bbigint\s*:/.test(program) },
   { file: join(preludeDir, "internal", "fs_statfs.js"), reached: (_code, program) => /\b(?:statfs|statfsSync|StatFs)\b/.test(program) },
   { file: join(preludeDir, "internal", "fs_dir.js"), reached: (_code, program) => FS_DIR.test(program) },
   { file: join(preludeDir, "internal", "fs_cp.js"), reached: (_code, program) => FS_CP.test(program) },
   { file: join(preludeDir, "internal", "fs_glob.js"), reached: (_code, program) => FS_GLOB.test(program) || /\bmatchesGlob\b/.test(program) },
   { file: join(preludeDir, "internal", "fs_watch.js"), reached: (_code, program) => FS_WATCH.test(program) },
   { file: join(preludeDir, "internal", "fs_blob.js"), reached: (_code, program) => /\bopenAsBlob\b/.test(program) },
-  /* fs/promises' open: as promises', or a bare open(…) call (imported) */
-  { file: join(preludeDir, "internal", "fs_filehandle.js"), reached: (_code, program) => FS_OPEN.test(program) || /\bFileHandle\b/.test(program) },
+  /* fs/promises' open and FileHandle: as promises', or a bare open(…) call (imported); or a program
+   * that names node:fs's promises and calls some open() (`const fs = require("fs").promises;
+   * fs.open(…)`: the bundle renames fs) */
+  { file: join(preludeDir, "internal", "fs_filehandle.js"), reached: (_code, program) =>
+      FS_OPEN.test(program) || /\bFileHandle\b/.test(program) || (/\bpromises\b/.test(program) && /\.\s*open\s*\(/.test(program)) },
   /* process's other members (some link libuv): named as process's, or by a distinctive name */
   { file: join(preludeDir, "internal", "process_more.js"), reached: (_code, program) => PROCESS_MORE.test(program) },
   /* process.memoryUsage(): it links libuv */
@@ -182,11 +189,12 @@ const UTIL_DIFF = utilNamed("diff");
  *  fs or promises (fs.x, fs_default.x, promises.x, fsPromises.x, require_fs().x). */
 const fsNamed = (names: string) =>
   new RegExp(`(?<![.\\w$])(?:${names})\\b|\\b(?:fs|promises|fsPromises)[\\w$]*\\s*\\.\\s*(?:${names})\\b|\\brequire_(?:fs|promises)\\(\\)\\s*\\.\\s*(?:${names})\\b`);
+const FS_STREAMS = /\b(?:createReadStream|createWriteStream|ReadStream|WriteStream|FileReadStream|FileWriteStream)\b/;
 const FS_DIR = fsNamed("opendir|opendirSync|Dir");
 const FS_CP = fsNamed("cp|cpSync");
 const FS_GLOB = fsNamed("glob|globSync");
 const FS_WATCH = fsNamed("watch|watchFile|unwatchFile");
-const FS_OPEN = /\b[\w$]*[pP]romises[\w$]*\s*\.\s*open\b|\brequire_promises\(\)\s*\.\s*open\b|(?<![.\w$])open\s*\(/;
+const FS_OPEN = /\b[\w$]*[pP]romises[\w$]*\s*\.\s*open\b|\brequire_promises\(\)\s*\.\s*open\b|(?<![.\w$])open(?:\$\d+)?\s*\(/;
 /* process's members in internal/process_more.js: as process's (process.x, process_default.x), or bare
  * when distinctive (imported from node:process) */
 const PROCESS_MORE = new RegExp(`\\bprocess[\\w$]*\\s*\\.\\s*(?:${PROCESS_DISTINCT}|${PROCESS_COMMON})\\b|(?<![.\\w$])(?:${PROCESS_DISTINCT})\\b`);

@@ -84,3 +84,25 @@ export function assignFunctionName(name, fn, descriptor = kEmptyObject) {
     value: name,
   });
 }
+
+export function validateInt32(value, name, min = -2147483648, max = 2147483647) {
+  if (typeof value !== "number") throw new ERR_INVALID_ARG_TYPE(name, "number", value);
+  if (!Number.isInteger(value)) throw new ERR_OUT_OF_RANGE(name, "an integer", value);
+  if (value < min || value > max) throw new ERR_OUT_OF_RANGE(name, `>= ${min} && <= ${max}`, value);
+}
+
+export function validateUint32(value, name, positive = false) {
+  if (typeof value !== "number") throw new ERR_INVALID_ARG_TYPE(name, "number", value);
+  if (!Number.isInteger(value)) throw new ERR_OUT_OF_RANGE(name, "an integer", value);
+  const min = positive ? 1 : 0;
+  const max = 4294967295;
+  if (value < min || value > max) throw new ERR_OUT_OF_RANGE(name, `>= ${min} && <= ${max}`, value);
+}
+
+export function validateBuffer(buffer, name = "buffer") {
+  if (!ArrayBuffer.isView(buffer)) throw new ERR_INVALID_ARG_TYPE(name, ["Buffer", "TypedArray", "DataView"], buffer);
+}
+
+export function validateString(value, name) {
+  if (typeof value !== "string") throw new ERR_INVALID_ARG_TYPE(name, "string", value);
+}

@@ -136,7 +136,7 @@ describe("running units", () => {
     expect(run(negative("@d class A {}"))[0]).toMatchObject({ outcome: "fail" });
     /* an invalid regex literal is an early error */
     expect(run(negative("/(/;")).map((r) => r.outcome)).toEqual(["pass", "pass"]);
-  });
+  }, 120000);  /* the program the front end accepts is compiled, as the tests below */
 
   it("compiles, runs and classifies the rest, one batch", () => {
     const results = run(

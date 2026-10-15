@@ -27,6 +27,7 @@
 #define unlink _unlink
 #define F_OK 0
 #else
+#include <signal.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
 #endif
@@ -46,6 +47,12 @@ char *js_host_path_arg(JSContext *ctx, uint32_t argc, const JSValue *argv, uint3
     s[n] = '\0';
     return s;
 }
+
+#ifndef _WIN32
+/* a write past RLIMIT_FSIZE fails with EFBIG instead of killing the process, as in Node (which
+ * ignores SIGXFSZ at startup) */
+__attribute__((constructor)) static void ignore_sigxfsz(void) { signal(SIGXFSZ, SIG_IGN); }
+#endif
 
 static JSValue errno_result(int e) {
     return js_int32(js_node_uv_error(e ? e : EIO));
@@ -68,6 +75,12 @@ JSValue js_host_fs_read_file(JSContext *ctx, JSValue callee, JSValue this_val, u
 #endif
     free(path);
     if (!f) return errno_result(e);
+    /* a file of 2 GiB or more: EFBIG, which the prelude reports as Node's ERR_FS_FILE_TOO_LARGE */
+    struct stat fst;
+    if (fstat(fileno(f), &fst) == 0 && (fst.st_mode & S_IFMT) == S_IFREG && (uint64_t)fst.st_size > 0x7fffffff) {
+        fclose(f);
+        return errno_result(EFBIG);
+    }
     size_t length = 0, cap = 4096;
     char *buf = malloc(cap);
     if (!buf) js_fatal("out of memory");

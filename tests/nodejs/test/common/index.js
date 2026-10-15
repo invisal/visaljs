@@ -14,6 +14,7 @@ const isFreeBSD = process.platform === 'freebsd';
 const isOpenBSD = process.platform === 'openbsd';
 const isSunOS = process.platform === 'sunos';
 const isAIX = process.platform === 'aix';
+const isIBMi = process.platform === 'os400';
 
 function noop() {}
 
@@ -174,7 +175,125 @@ function platformTimeout(ms) {
   return ms;
 }
 
+function canCreateSymLink() {
+  /* Node's: creating a symlink needs privileges on Windows only */
+  if (isWindows) {
+    const whoamiPath = path.join(process.env.SystemRoot, 'System32', 'whoami.exe');
+    try {
+      const { execSync } = require('child_process');
+      const output = execSync(`${whoamiPath} /priv`, { timeout: 1000 });
+      return output.includes('SeCreateSymbolicLinkPrivilege');
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+const _mustNotMutateObjectDeepProxies = new WeakMap();
+
+function mustNotMutateObjectDeep(original) {
+  if (original === null || typeof original !== 'object') {
+    return original;
+  }
+  const cachedProxy = _mustNotMutateObjectDeepProxies.get(original);
+  if (cachedProxy) {
+    return cachedProxy;
+  }
+  const handler = {
+    __proto__: null,
+    defineProperty(target, property) {
+      assert.fail(`Expected no side effects, got ${inspect(property)} defined`);
+    },
+    deleteProperty(target, property) {
+      assert.fail(`Expected no side effects, got ${inspect(property)} deleted`);
+    },
+    get(target, prop, receiver) {
+      return mustNotMutateObjectDeep(Reflect.get(target, prop, receiver));
+    },
+    preventExtensions(target) {
+      assert.fail('Expected no side effects, got extensions prevented on ' + inspect(target));
+    },
+    set(target, property, value) {
+      assert.fail(`Expected no side effects, got ${inspect(value)} assigned to ${inspect(property)}`);
+    },
+    setPrototypeOf(target, prototype) {
+      assert.fail(`Expected no side effects, got set prototype to ${prototype}`);
+    },
+  };
+  const proxy = new Proxy(original, handler);
+  _mustNotMutateObjectDeepProxies.set(original, proxy);
+  return proxy;
+}
+
+function _expectWarning(name, expected, code) {
+  if (typeof expected === 'string') {
+    expected = [[expected, code]];
+  } else if (!Array.isArray(expected)) {
+    expected = Object.entries(expected).map(([a, b]) => [b, a]);
+  } else if (expected.length !== 0 && !Array.isArray(expected[0])) {
+    expected = [[expected[0], expected[1]]];
+  }
+  if (name === 'DeprecationWarning') {
+    expected.forEach(([, code]) => assert(code, `Missing deprecation code: ${expected}`));
+  }
+  return mustCall((warning) => {
+    const expectedProperties = expected.shift();
+    if (!expectedProperties) {
+      assert.fail(`Unexpected extra warning received: ${warning}`);
+    }
+    const [message, code] = expectedProperties;
+    assert.strictEqual(warning.name, name);
+    if (typeof message === 'string') {
+      assert.strictEqual(warning.message, message);
+    } else {
+      assert.match(warning.message, message);
+    }
+    assert.strictEqual(warning.code, code);
+  }, expected.length);
+}
+
+let catchWarning;
+
+function expectWarning(nameOrMap, expected, code) {
+  if (catchWarning === undefined) {
+    catchWarning = {};
+    process.on('warning', (warning) => {
+      if (!catchWarning[warning.name]) {
+        throw new TypeError(`"${warning.name}" was triggered without being expected.\n` + inspect(warning));
+      }
+      catchWarning[warning.name](warning);
+    });
+  }
+  if (typeof nameOrMap === 'string') {
+    catchWarning[nameOrMap] = _expectWarning(nameOrMap, expected, code);
+  } else {
+    Object.keys(nameOrMap).forEach((name) => {
+      catchWarning[name] = _expectWarning(name, nameOrMap[name]);
+    });
+  }
+}
+
+/* a command for a POSIX shell with its values passed through the environment (Node's) */
+function escapePOSIXShell(cmdParts, ...args) {
+  if (isWindows) {
+    return [String.raw({ raw: cmdParts }, ...args)];
+  }
+  const env = { ...process.env };
+  let cmd = cmdParts[0];
+  for (let i = 0; i < args.length; i++) {
+    const envVarName = `ESCAPED_${i}`;
+    env[envVarName] = args[i];
+    cmd += '${' + envVarName + '}' + cmdParts[i + 1];
+  }
+  return [cmd, { env }];
+}
+
 module.exports = {
+  canCreateSymLink,
+  escapePOSIXShell,
+  expectWarning,
+  mustNotMutateObjectDeep,
   allowGlobals: noop,
   expectsError,
   getArrayBufferViews,
@@ -182,6 +301,7 @@ module.exports = {
   invalidArgTypeHelper,
   isAIX,
   isFreeBSD,
+  isIBMi,
   isLinux,
   isMacOS,
   isOpenBSD,
