@@ -15,6 +15,7 @@ export const {
   isAIX,
   isFreeBSD,
   isIBMi,
+  isInsideDirWithUnusualChars,
   isLinux,
   isMacOS,
   isOpenBSD,

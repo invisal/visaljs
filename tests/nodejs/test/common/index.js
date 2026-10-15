@@ -318,4 +318,13 @@ module.exports = {
   get hasCrypto() { return true; },
   get hasIntl() { return true; },
   get fixturesDir() { return path.join(__dirname, '..', 'fixtures'); },
+  /* Node's: characters in the test directory's path some tests can't cope with */
+  get isInsideDirWithUnusualChars() {
+    return __dirname.includes('%') ||
+           (!isWindows && __dirname.includes('\\')) ||
+           __dirname.includes('$') ||
+           __dirname.includes('\n') ||
+           __dirname.includes('\r') ||
+           __dirname.includes('\t');
+  },
 };

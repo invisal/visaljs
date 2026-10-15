@@ -60,6 +60,7 @@ const CASES: [string, string, string][] = [
   ["fs_dir", "a.cjs", 'const fs = require("fs");\nfs.opendirSync(".").closeSync();'],
   ["fs_cp", "a.mjs", 'import { cp } from "node:fs/promises";\nawait cp("a", "b", { recursive: true });'],
   ["fs_glob", "a.mjs", 'import { glob } from "node:fs/promises";\nfor await (const f of glob("*.js")) console.log(f);'],
+  ["fs_glob", "a.cjs", 'require("fs").watch(".", { ignore: "*.log" }).close();'],  /* a watch's ignore patterns */
   ["fs_watch", "a.cjs", 'const fs = require("fs");\nfs.watch(".", () => {});'],
   ["fs_blob", "a.mjs", 'import { openAsBlob } from "node:fs";\nconsole.log(await openAsBlob("a"));'],
   ["fs_filehandle", "a.mjs", 'import fs from "node:fs/promises";\nconst h = await fs.open("a");\nawait h.close();'],

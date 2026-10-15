@@ -60,6 +60,20 @@ static const struct { int code, uv; const char *name, *message; } ERRORS[] = {
     E(ENOSYS, "function not implemented"),
     E(ENOMEM, "not enough memory"),
     E(E2BIG, "argument list too long"),
+    E(EFAULT, "bad address in system call argument"),
+    E(EINTR, "interrupted system call"),
+    E(EMSGSIZE, "message too long"),
+    E(ENOTSOCK, "socket operation on non-socket"),
+    E(ENOTSUP, "operation not supported on socket"),
+    E(EOVERFLOW, "value too large for defined data type"),
+    E(EPROTO, "protocol error"),
+    E(ERANGE, "result too large"),
+    E(ESPIPE, "invalid seek"),
+    E(ETXTBSY, "text file is busy"),
+    E(EXDEV, "cross-device link not permitted"),
+    E(ENXIO, "no such device or address"),
+    E(EMLINK, "too many links"),
+    E(ENOTTY, "inappropriate ioctl for device"),
 };
 #undef E
 
