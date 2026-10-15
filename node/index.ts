@@ -146,7 +146,7 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   /* process.memoryUsage(): it links libuv */
   { file: join(preludeDir, "internal", "process_memory.js"), reached: (code) => /\bprocess\b/.test(code) && /\bmemoryUsage\b/.test(code) },
   /* Node's timer globals, returning Timeouts: when the code may use one (TIMER_USE), or node:timers */
-  { file: join(preludeDir, "internal", "timers_global.js"), reached: (code) => TIMER_USE.test(code) },
+  { file: join(preludeDir, "internal", "timers_global.js"), reached: (code, program) => TIMER_USE.test(code) || TIMER_DISPOSE.test(program) },
   /* the performance globals (node:perf_hooks'): when the program's own code, or a package's, names one */
   { file: join(preludeDir, "internal", "performance_global.js"), reached: (_code, program) => /\b[Pp]erformance(?:Entry|Mark|Measure)?\b/.test(program) },
   /* the FormData global, and Request's and Response's formData() */
@@ -195,6 +195,9 @@ const UTIL_DEBUG = utilNamed("debug");
 const UTIL_MORE = /\b(?:callbackify|transferableAbort(?:Controller|Signal)|toUSVString|getCallSites|setTraceSigInt|convertProcessSignalToExitCode|_extend)\b/;
 const UTIL_MORE_MEMBERS = utilNamed("aborted|isArray");
 /* a Timeout's methods, node:timers, or a callback that clears its own timer: `this` is the Timeout */
+/* a Timeout disposed of: timer[Symbol.dispose](), or a `using` declaration (the program's own code,
+ * or a package's: the prelude's streams name Symbol.dispose too) */
+const TIMER_DISPOSE = /\bSymbol\s*\.\s*(?:asyncD|d)ispose\b|\b(?:await\s+)?using\s+[\w$]+\s*=/;
 const TIMER_USE = /\.(?:unref|hasRef|refresh)\s*\(|\bclass Timeout\b|\bclear(?:Interval|Timeout)\s*\(\s*this\s*\)/;
 const EMITTER_METHOD = /(?:\.|\[\s*["'`])\s*(?:on|once|off|emit|addListener|prependListener|prependOnceListener|removeListener|removeAllListeners|listeners|rawListeners|listenerCount|eventNames|setMaxListeners|getMaxListeners)\b/;
 
