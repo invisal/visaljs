@@ -1,0 +1,52 @@
+# Publishes the `visaljs` package to npm when a version tag is pushed: bump cli/package.json's
+# version on main, then
+#
+#   git tag v0.0.8 && git push origin v0.0.8
+#
+# npm authenticates the job by trusted publishing (OIDC, no token): the package's settings on
+# npmjs.com name this repository and release.yml. The package gets provenance, and the tag a
+# GitHub release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prebuilt:
+    uses: ./.github/workflows/prebuilt.yml
+
+  publish:
+    name: Publish to npm
+    needs: prebuilt
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: write # the GitHub release
+      id-token: write # npm's trusted publishing and provenance
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - name: Tag matches cli/package.json
+        run: |
+          version=$(node -p "require('./cli/package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME, but cli/package.json is $version"; exit 1
+          fi
+      - uses: actions/download-artifact@v8
+        with:
+          name: prebuilt
+          path: build/prebuilt
+      - run: node cli/scripts/dist.ts --all-prebuilt
+      - run: npm publish ./cli/dist --provenance --access public
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
