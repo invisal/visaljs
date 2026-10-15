@@ -14,10 +14,12 @@
 #include "js_atoms.h"
 #include "js_buffer.h"
 #include "js_convert.h"
+#include "js_generator.h"
 #include "js_exception.h"
 #include "js_host.h"
 #include "js_ops.h"
 #include "js_promise.h"
+#include "js_symbol.h"
 #include "js_web.h"
 #include "jscontext.h"
 #include "jsstring.h"
@@ -137,6 +139,65 @@ static bool class_named(JSValue v, const char *name) {
  * is an ordinary object to a body, and formData() rejects. */
 static JSValue form_data_serialize, form_data_parse;  /* EMPTY (zero) until set: not callable */
 
+/* An async iterable body, as undici (Node's fetch) takes one: a Node Readable (what Next.js passes,
+ * a request's body), an async generator. Its stream pulls each chunk from the iterator: bytes (a
+ * buffer source, copied) or a string (as UTF-8). The source's data is the iterator record; the
+ * closures' is [controller, record]. */
+static JSValue chunk_bytes(JSContext *ctx, JSValue v) {
+    uint8_t *p;
+    size_t n;
+    if (js_buffer_source_bytes(v, &p, &n)) return u8_of(ctx, p, n);
+    if (!js_is_string(v)) return js_throw_type_error(ctx, "Received non-Uint8Array chunk");
+    JSStrView view = js_string_view(ctx, v);
+    size_t len = js_view_to_utf8(view, NULL, 0);
+    JSValue bytes = js_new_uint8_array(ctx, len);
+    if (js_is_exception(bytes)) return JS_EXCEPTION;
+    js_buffer_source_bytes(bytes, &p, &n);
+    js_view_to_utf8(view, (char *)p, len);
+    return bytes;
+}
+
+BUILTIN(iterable_next) {
+    (void)this_val, (void)new_target, (void)argc;
+    JSValue data = js_closure_data(callee);
+    JSValue controller = js_get_elem(ctx, data, js_int32(0)), rec = js_get_elem(ctx, data, js_int32(1));
+    JSValue value = js_async_iter_value(ctx, rec, ARG(0));  /* EMPTY when done */
+    if (!js_is_exception(value) && js_is_empty(value)) return js_readable_stream_close(ctx, controller) < 0 ? JS_EXCEPTION : JS_UNDEFINED;
+    JSValue bytes = js_is_exception(value) ? JS_EXCEPTION : chunk_bytes(ctx, value);
+    if (js_is_exception(bytes) || js_readable_stream_enqueue(ctx, controller, bytes) < 0) {
+        js_readable_stream_error(ctx, controller, js_take_exception(ctx));
+    }
+    return JS_UNDEFINED;
+}
+
+BUILTIN(iterable_failed) {
+    (void)this_val, (void)new_target, (void)argc;
+    js_readable_stream_error(ctx, js_get_elem(ctx, js_closure_data(callee), js_int32(0)), ARG(0));
+    return JS_UNDEFINED;
+}
+
+static JSValue iterable_pull(JSContext *ctx, JSValue controller, JSValue rec) {
+    JSValue result = js_async_iter_next(ctx, rec);
+    if (js_is_exception(result)) return JS_EXCEPTION;
+    JSValue settled_result = js_promise_resolve(ctx, result);
+    if (js_is_exception(settled_result)) return JS_EXCEPTION;
+    JSValue items[2] = { controller, rec };
+    JSValue data = js_new_array_from(ctx, items, 2);
+    if (js_is_exception(data)) return JS_EXCEPTION;
+    JSValue derived = js_new_promise(ctx);
+    js_promise_then_internal(ctx, settled_result, js_new_closure_native(ctx, iterable_next, 1, data),
+        js_new_closure_native(ctx, iterable_failed, 1, data), derived);
+    return derived;
+}
+
+static JSValue iterable_cancel(JSContext *ctx, JSValue rec, JSValue reason) {
+    (void)reason;
+    JSValue r = js_async_iter_return(ctx, rec);
+    return js_is_empty(r) ? JS_UNDEFINED : r;
+}
+
+static const JSStreamSource ITERABLE_SOURCE = { iterable_pull, iterable_cancel };
+
 /* Extract a body (§5.3 "extract"): its bytes or stream, and the Content-Type it implies (EMPTY
  * for none). 0, or -1. */
 static int extract(JSContext *ctx, JSCell *owner, Body *b, JSValue init, JSValue *content_type) {
@@ -179,6 +240,18 @@ static int extract(JSContext *ctx, JSCell *owner, Body *b, JSValue init, JSValue
                     *content_type = type;
                     return 0;
                 }
+            }
+        }
+        if (js_is_object(init)) {
+            JSValue method = js_get_value(ctx, init, JS_SYMBOL(asyncIterator));
+            if (js_is_exception(method)) return -1;
+            if (js_is_callable(method)) {
+                JSValue rec = js_async_iter_start(ctx, init);
+                if (js_is_exception(rec)) return -1;
+                JSValue stream = js_new_readable_stream(ctx, &ITERABLE_SOURCE, rec, 0);
+                if (js_is_exception(stream)) return -1;
+                js_store(ctx, owner, &b->stream, stream);
+                return 0;
             }
         }
         bool params = class_named(init, "URLSearchParams");

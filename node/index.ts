@@ -189,7 +189,7 @@ const FS_WATCH = fsNamed("watch|watchFile|unwatchFile");
 const FS_OPEN = /\b[\w$]*[pP]romises[\w$]*\s*\.\s*open\b|\brequire_promises\(\)\s*\.\s*open\b|(?<![.\w$])open\s*\(/;
 /* process's members in internal/process_more.js: as process's (process.x, process_default.x), or bare
  * when distinctive (imported from node:process) */
-const PROCESS_MORE = new RegExp(`\\bprocess[\\w$]*\\s*\\.\\s*(?:${PROCESS_DISTINCT}|${PROCESS_COMMON})\\b|(?<![.\\w$])(?:${PROCESS_DISTINCT})\\b`);
+const PROCESS_MORE = new RegExp(`\\bprocess[\\w$]*\\s*\\.\\s*(?:${PROCESS_DISTINCT}|${PROCESS_COMMON})\\b|(?<![.\\w$])(?:${PROCESS_DISTINCT})\\b|\\bhrtime\\s*\\.\\s*bigint\\b`);
 const EVENTS_ON = /(?<![.\w$])on\s*\(|\b(?:events|EventEmitter)[\w$]*\s*\.\s*on\b|\brequire_events\(\)\s*\.\s*on\b/;
 const UTIL_DEBUG = utilNamed("debug");
 const UTIL_MORE = /\b(?:callbackify|transferableAbort(?:Controller|Signal)|toUSVString|getCallSites|setTraceSigInt|convertProcessSignalToExitCode|_extend)\b/;

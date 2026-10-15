@@ -1,0 +1,16 @@
+require.extensions: object, its .js: function
+inspector.url(): undefined
+hrtime.bigint: bigint, positive: true
+deprecated: add() is old
+wrapped: 5
+Request(Readable): {"b":2}
+Request(async generator): {"a":1}
+Response(Readable): hi
+/write "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nVary: Accept-Encoding\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n1\r\na\r\n1\r\nb\r\n0\r\n\r\n"
+/end "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nVary: Accept-Encoding\r\nConnection: close\r\nContent-Length: 2\r\n\r\nab"
+/implicit "HTTP/1.1 202 Accepted\r\nContent-Type: text/plain\r\nVary: Accept-Encoding\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n0\r\n\r\n"
+/flush "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nVary: Accept-Encoding\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n7\r\nflushed\r\n0\r\n\r\n"
+/no-message "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nVary: Accept-Encoding\r\nConnection: close\r\nContent-Length: 2\r\n\r\n{}"
+/empty "HTTP/1.1 204 No Content\r\nContent-Type: text/plain\r\nVary: Accept-Encoding\r\nConnection: close\r\n\r\n"
+/plain "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\nContent-Length: 2\r\n\r\nab"
+mtime: 1001

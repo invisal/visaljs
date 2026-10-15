@@ -297,9 +297,23 @@ export class ServerResponse extends OutgoingMessage {
     return this;
   }
 
+  /* the head a write sends without writeHead, through writeHead as Node's: a wrapper of it runs
+   * (on-headers: compression sets Vary and Content-Encoding there). Middleware calls it too, before
+   * writing (compression). `length`: the whole body's, when end() knows it */
+  _implicitHeader(length) {
+    this._implicitLength = length;
+    try {
+      this.writeHead(this.statusCode);
+    } finally {
+      this._implicitLength = undefined;
+    }
+  }
+
   /* sends the head now: the body that follows is chunked */
   flushHeaders() {
-    if (!this.headersSent) httpWrite(this._conn, this._renderHead(undefined));
+    if (!this.headersSent && Object.hasOwn(this, "writeHead")) this._implicitHeader(undefined);  /* a wrapper sees it */
+    const head = this._takeHead(undefined);
+    if (head) httpWrite(this._conn, head);
   }
 
   destroy(error) {
@@ -338,7 +352,7 @@ export class ServerResponse extends OutgoingMessage {
     }
     /* Node renders the head now (sent with the first write): without a known length, the body
      * is chunked even when end() brings all of it */
-    if (!this.headersSent) this._pendingHead = this._renderHead(undefined);
+    if (!this.headersSent) this._pendingHead = this._renderHead(this._implicitLength);
     return this;
   }
 
@@ -354,7 +368,8 @@ export class ServerResponse extends OutgoingMessage {
   _renderHead(length) {
     const status = this.statusCode;
     const noBody = status === 204 || status === 304 || (status >= 100 && status < 200);
-    let head = "HTTP/1.1 " + status + " " + (this.statusMessage ?? STATUS_CODES[status] ?? "unknown") + "\r\n";
+    /* an empty statusMessage gets the standard one, as in Node (Next.js's route handlers set "") */
+    let head = "HTTP/1.1 " + status + " " + (this.statusMessage || STATUS_CODES[status] || "unknown") + "\r\n";
     for (const [, [name, value]] of this._headers) {
       if (Array.isArray(value)) for (const v of value) head += name + ": " + v + "\r\n";
       else head += name + ": " + value + "\r\n";
@@ -398,6 +413,8 @@ export class ServerResponse extends OutgoingMessage {
       return false;
     }
     if (typeof chunk === "string" && typeof encoding === "string" && encoding !== "utf8" && encoding !== "utf-8") chunk = Buffer.from(chunk, encoding);
+    /* a writeHead of the response's own (a wrapper) sees the implicit head, as in Node */
+    if (!this.headersSent && Object.hasOwn(this, "writeHead")) this._implicitHeader(undefined);
     const head = this._takeHead(undefined);
     if (head) httpWrite(this._conn, head);
     if (chunk !== undefined && chunk !== null && chunkLength(chunk) > 0 && !this._head) {
@@ -422,6 +439,7 @@ export class ServerResponse extends OutgoingMessage {
     }
     if (this.writableEnded) return this;
     if (typeof chunk === "string" && typeof encoding === "string" && encoding !== "utf8" && encoding !== "utf-8") chunk = Buffer.from(chunk, encoding);
+    if (!this.headersSent && Object.hasOwn(this, "writeHead")) this._implicitHeader(chunk !== undefined && chunk !== null ? chunkLength(chunk) : 0);
     if (!this.headersSent) {
       const hasChunk = chunk !== undefined && chunk !== null;
       const length = hasChunk ? chunkLength(chunk) : 0;

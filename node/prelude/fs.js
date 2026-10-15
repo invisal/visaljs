@@ -109,10 +109,11 @@ const S_IFMT = 0o170000, S_IFREG = 0o100000, S_IFDIR = 0o040000, S_IFLNK = 0o120
 export class Stats {
   constructor(dev, mode, nlink, uid, gid, rdev, blksize, ino, size, blocks, atimeMs, mtimeMs, ctimeMs, birthtimeMs) {
     Object.assign(this, { dev, mode, nlink, uid, gid, rdev, blksize, ino, size, blocks, atimeMs, mtimeMs, ctimeMs, birthtimeMs });
-    this.atime = new Date(atimeMs);
-    this.mtime = new Date(mtimeMs);
-    this.ctime = new Date(ctimeMs);
-    this.birthtime = new Date(birthtimeMs);
+    /* the milliseconds rounded, as Node's dateFromMs: an ETag made from mtime (send's) is Node's */
+    this.atime = new Date(Math.round(atimeMs));
+    this.mtime = new Date(Math.round(mtimeMs));
+    this.ctime = new Date(Math.round(ctimeMs));
+    this.birthtime = new Date(Math.round(birthtimeMs));
   }
 
   isFile() { return (this.mode & S_IFMT) === S_IFREG; }

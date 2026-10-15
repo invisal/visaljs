@@ -4,15 +4,15 @@
   "summary": {
     "modules": {
       "complete": 28,
-      "partial": 25,
+      "partial": 27,
       "stub": 1,
-      "missing": 4,
+      "missing": 2,
       "total": 58
     },
     "exports": {
-      "implemented": 1132,
-      "stubbed": 33,
-      "missing": 119,
+      "implemented": 1142,
+      "stubbed": 39,
+      "missing": 103,
       "total": 1284
     }
   },
@@ -900,36 +900,40 @@
       "notes": "HTTP over node:tls, as Node's: Server is a tls.Server whose secure connections get http.Server's requests (the C parser fed the decrypted bytes), Agent connects with tls.connect and reuses TLS sessions by origin, request and get are http's with port 443. SNI comes from the Host header, as in Node."
     },
     "inspector": {
-      "status": "missing",
-      "implemented": [],
-      "stubbed": [],
-      "missing": [
-        "DOMStorage",
+      "status": "partial",
+      "implemented": [
         "Network",
         "NetworkResources",
-        "Session",
         "close",
         "console",
+        "url"
+      ],
+      "stubbed": [
+        "Session",
         "open",
-        "url",
         "waitForDebugger"
       ],
-      "notes": "Loading it throws ERR_INSPECTOR_NOT_AVAILABLE, as in a Node built without the inspector: a compiled program has no V8 inspector to connect to."
+      "missing": [
+        "DOMStorage"
+      ],
+      "notes": "A compiled program has no V8 inspector to connect to: it loads as in a process no debugger is attached to (url() is undefined, close() does nothing), and open, waitForDebugger and a Session throw."
     },
     "inspector/promises": {
-      "status": "missing",
-      "implemented": [],
-      "stubbed": [],
-      "missing": [
-        "DOMStorage",
+      "status": "partial",
+      "implemented": [
         "Network",
         "NetworkResources",
-        "Session",
         "close",
         "console",
+        "url"
+      ],
+      "stubbed": [
+        "Session",
         "open",
-        "url",
         "waitForDebugger"
+      ],
+      "missing": [
+        "DOMStorage"
       ]
     },
     "module": {

@@ -35,6 +35,15 @@ function errnoException(err, syscall) {
 
 /* ---- the working directory, the mask, time and resources ------------------------------------- */
 
+/* nanoseconds as a BigInt, from the runtime's [seconds, nanoseconds] */
+Object.defineProperty(p.hrtime, "bigint", {
+  value: function bigint() {
+    const [s, ns] = p.hrtime();
+    return BigInt(s) * 1000000000n + BigInt(ns);
+  },
+  writable: true, enumerable: true, configurable: true,
+});
+
 define("chdir", function chdir(directory) {
   validateString(directory, "directory");
   const err = procChdir(directory);
