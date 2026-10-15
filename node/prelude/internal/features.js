@@ -53,3 +53,20 @@ export function provideClass(Wrapper, Class) {
   Object.defineProperty(Class.prototype, "constructor", { value: Wrapper, writable: true, configurable: true });
   Object.setPrototypeOf(Wrapper, Object.getPrototypeOf(Class));
 }
+
+/** A class as Node's constructor functions are: callable without new (`http.Server(…)`, as
+ *  `new http.Server(…)`), and subclassed and tested with instanceof as the class. */
+export function callableClass(Class, name = Class.name) {
+  const Callable = function (...args) {
+    return Reflect.construct(Class, args, new.target ?? Callable);
+  };
+  Object.defineProperty(Callable, "name", { value: name });
+  Object.defineProperty(Callable, "length", { value: Class.length });
+  Object.setPrototypeOf(Callable, Object.getPrototypeOf(Class));
+  for (const key of Reflect.ownKeys(Class)) {
+    if (key !== "length" && key !== "name" && key !== "prototype") Object.defineProperty(Callable, key, Object.getOwnPropertyDescriptor(Class, key));
+  }
+  Callable.prototype = Class.prototype;
+  Object.defineProperty(Class.prototype, "constructor", { value: Callable, writable: true, configurable: true });
+  return Callable;
+}

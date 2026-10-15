@@ -272,4 +272,9 @@ function setRequestSocket(agent, req, socket) {
   socket.setTimeout(req.timeout);
 }
 
-export const globalAgent = new Agent({ keepAlive: true, scheduling: "lifo", timeout: 5000 });
+export let globalAgent = new Agent({ keepAlive: true, scheduling: "lifo", timeout: 5000 });
+
+/* http.globalAgent's setter: the agent requests use by default from then on, as Node's */
+export function setGlobalAgent(agent) {
+  globalAgent = agent;
+}

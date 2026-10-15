@@ -308,6 +308,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   utilFormat: { c: "js_util_format", length: 0 },
   utilFormatWithOptions: { c: "js_util_format_with_options", length: 1 },
   utilTypeTag: { c: "js_util_type_tag", length: 1 },          // (value) → its internal kind: "Date", "Proxy", "Uint8Array", … | ""
+  eventTargetListeners: { c: "js_event_target_listeners", length: 2 },  // (target, type) → its listeners, in order | undefined
   /* node:crypto: the runtime's own (Web Crypto runs on the same C; runtime/src/crypto_host.c) */
   cryptoHashNew: { c: "js_crypto_hash_new", length: 2 },      // (algorithm, outputLength) → hash | null
   cryptoHashInfo: { c: "js_crypto_hash_info", length: 1 },    // (algorithm) → digest length | -1 unknown | -(len + 1) XOF
@@ -380,7 +381,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   /* node:http: llhttp on node:net's sockets (src/host_http.c); a connection is its socket's handle id */
   httpParsers: { c: "js_host_http_parsers", length: 5 },      // (onHead, onBody, onComplete, onUpgrade, onError) → parsers
   httpAttach: { c: "js_host_http_attach", length: 4 },        // (conn, parsers, response, maxHeaderSize) → 0 | -errno: bytes go to llhttp
-  httpDetach: { c: "js_host_http_detach", length: 1 },        // (conn): bytes go to JS again
+  httpDetach: { c: "js_host_http_detach", length: 2 },        // (conn, afterRead): bytes go to JS again (afterRead: once the read is parsed)
   httpExpired: { c: "js_host_http_expired", length: 3 },      // (parsers, headersTimeout, requestTimeout) → [conn, …] over time
   httpWrite: { c: "js_host_http_write", length: 2 },          // (conn, string | Uint8Array) → written (corked)
   httpFlush: { c: "js_host_http_flush", length: 1 },          // (conn): the corked output, now

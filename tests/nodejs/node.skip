@@ -16,6 +16,7 @@ test-zlib-brotli-kmaxlength-rangeerror.js  patches buffer.kMaxLength before requ
 test-zlib-zstd-kmaxlength-rangeerror.js  patches buffer.kMaxLength before require('zlib')
 
 # domain (deprecated, DEP0032): its binding to timers and errors isn't provided
+test-http-client-response-domain.js      domain
 test-timers-reset-process-domain-on-throw.js  domain
 test-timers-immediate-queue-throw.js     domain
 
@@ -34,3 +35,9 @@ test-fs-cp-async-file-url.mjs            a path relative to Node's checkout (./t
 
 # Node's internal handle list
 test-fs-watch-recursive-assert-leaks.js  process._getActiveHandles (Node's internal handle list)
+
+# Node's libuv handle objects (socket._handle), which a compiled program's sockets don't have
+test-http-client-spurious-aborted.js     patches res.socket._handle.close
+
+# the internet: a remote host's name looked up
+test-http-client-req-error-dont-double-fire.js  ../common/internet (a remote host)

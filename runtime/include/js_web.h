@@ -57,6 +57,9 @@ bool js_is_abort_signal(JSValue v);
 void js_abort_signal_abort(JSContext *ctx, JSValue signal, JSValue reason);
 /* A new signal that aborts when `source` does (AbortSignal.any([source])). */
 JS_WARN_UNUSED JSValue js_abort_signal_follow(JSContext *ctx, JSValue source);
+/* node:events' primitive: an EventTarget's listeners for a type, in the order added (getEventListeners,
+ * listenerCount); undefined for a value that isn't an EventTarget. */
+JSValue js_event_target_listeners(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
 
 /* headers.c (the headers component): Headers for Request and Response. */
 typedef enum JSHeadersGuard { JS_HEADERS_NONE, JS_HEADERS_IMMUTABLE } JSHeadersGuard;

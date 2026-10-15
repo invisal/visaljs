@@ -70,6 +70,7 @@ struct Conn {
     bool     detached;   /* upgraded, or a parse error: the parser doesn't read any more */
     bool     executing;  /* llhttp is running on it: it can't be freed yet */
     bool     released;   /* let go of while executing: freed when llhttp returns */
+    bool     detach_after;  /* detached when llhttp is done with the read (httpDetach's afterRead) */
     bool     upgrading;  /* JS took the upgrade the head asked for */
     bool     active;     /* a message is under way (or the connection is new): timeouts count */
     bool     head_done;  /* its head is complete: what follows are its body and trailers */
@@ -239,14 +240,19 @@ static Conn *conn_of(int id) {
     return (size_t)id < nconns ? conns[id] : NULL;
 }
 
-static void parse_error(Conn *c, llhttp_errno_t e) {
+/* the parse error, with Node's bytesParsed and rawPacket: how far into the read llhttp got, and
+ * the read (none for a message cut short at the end of the stream) */
+static void parse_error(Conn *c, llhttp_errno_t e, const char *bytes, size_t n) {
     c->detached = true;
     c->active = false;
     JSContext *ctx = ctx_();
     const char *code = c->overflow ? "HPE_HEADER_OVERFLOW" : llhttp_errno_name(e);
     const char *reason = c->overflow ? "Header overflow" : llhttp_get_error_reason(&c->parser);
-    JSValue args[3] = { js_int32(c->id), js_new_string_cstr(ctx, code), js_new_string_cstr(ctx, reason ? reason : "") };
-    (void)js_uv_call(c->parsers->on_error, 3, args, NULL);
+    const char *pos = bytes ? llhttp_get_error_pos(&c->parser) : NULL;
+    int32_t parsed = pos && pos >= bytes && pos <= bytes + n ? (int32_t)(pos - bytes) : 0;
+    JSValue args[5] = { js_int32(c->id), js_new_string_cstr(ctx, code), js_new_string_cstr(ctx, reason ? reason : ""), js_int32(parsed),
+                        bytes ? bytes_value(ctx, bytes, n) : JS_UNDEFINED };
+    (void)js_uv_call(c->parsers->on_error, 5, args, NULL);
 }
 
 static void free_conn(Conn *c) {
@@ -270,6 +276,24 @@ static void release_conn(Conn *c) {
     else free_conn(c);
 }
 
+/* The socket's bytes go to JS again: the corked output first, then the parser let go of. */
+static void detach_conn(Conn *c) {
+    if (c->queued) flush_conn(c);
+    if (c->id >= 0) js_net_hook(c->id, NULL, NULL);
+    release_conn(c);
+}
+
+/* llhttp is done with a read: a parser let go of meanwhile is freed, or detached if asked to be. */
+static void read_done(Conn *c) {
+    c->executing = false;
+    if (c->released) {
+        free_conn(c);
+    } else if (c->detach_after) {
+        c->detach_after = false;
+        detach_conn(c);
+    }
+}
+
 /* A connection's bytes: parsed while attached; EOF and errors go on to JS (the socket's 'end'
  * and 'error'). False when the parser doesn't take them. */
 static bool parse_input(Conn *c, ssize_t n, const char *bytes) {
@@ -280,10 +304,9 @@ static bool parse_input(Conn *c, ssize_t n, const char *bytes) {
             /* a request cut short is the server's parse error; a client's response cut short shows
              * as its 'aborted', when the socket closes (as Node's socketOnEnd ignores finish()) */
             llhttp_errno_t e = llhttp_finish(&c->parser);
-            if (e != HPE_OK && !c->detached && !c->response) parse_error(c, e);
+            if (e != HPE_OK && !c->detached && !c->response) parse_error(c, e, NULL, 0);
         }
-        c->executing = false;
-        if (c->released) free_conn(c);
+        read_done(c);
         return false;
     }
     const char *at = bytes, *end = bytes + n;
@@ -291,7 +314,7 @@ static bool parse_input(Conn *c, ssize_t n, const char *bytes) {
         llhttp_errno_t e = llhttp_execute(&c->parser, at, (size_t)(end - at));
         if (e == HPE_OK || c->detached) break;  /* released or upgraded by a callback: stop here */
         if (e != HPE_PAUSED_UPGRADE) {
-            parse_error(c, e);  /* nothing runs once a callback failed in JS: the loop is ending */
+            parse_error(c, e, bytes, (size_t)n);  /* nothing runs once a callback failed in JS: the loop is ending */
             break;
         }
         const char *pos = llhttp_get_error_pos(&c->parser);
@@ -306,8 +329,7 @@ static bool parse_input(Conn *c, ssize_t n, const char *bytes) {
         (void)js_uv_call(c->parsers->on_upgrade, 2, args, NULL);
         break;
     }
-    c->executing = false;
-    if (c->released) free_conn(c);
+    read_done(c);
     return true;
 }
 
@@ -395,15 +417,15 @@ JSValue js_host_http_attach(JSContext *ctx, JSValue callee, JSValue this_val, ui
     return js_int32(0);
 }
 
-/* httpDetach(conn): the socket's bytes go to JS again (its corked output goes first) */
+/* httpDetach(conn, afterRead): the socket's bytes go to JS again (its corked output goes first);
+ * with afterRead, from a parser callback, once llhttp is done with the read, as Node's client frees
+ * its parser after the read (what follows a response in it is still parsed) */
 JSValue js_host_http_detach(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
     (void)ctx, (void)callee, (void)this_val, (void)new_target;
     Conn *c = argc > 0 && js_is_int32(argv[0]) ? conn_of(js_as_int32(argv[0])) : NULL;
-    if (c) {
-        if (c->queued) flush_conn(c);
-        if (c->id >= 0) js_net_hook(c->id, NULL, NULL);
-        release_conn(c);
-    }
+    if (!c) return JS_UNDEFINED;
+    if (argc > 1 && js_truthy(argv[1]) && c->executing) c->detach_after = true;
+    else detach_conn(c);
     return JS_UNDEFINED;
 }
 

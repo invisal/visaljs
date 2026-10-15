@@ -122,7 +122,9 @@ uv_stream_t *js_net_stream(int id) {
 }
 
 bool js_net_hook(int id, const JSNetHook *hook, void *data) {
-    NetHandle *h = open_handle(id);
+    /* a hook is set on an open socket, but taken off a closing one too: its close calls the hook,
+     * whose data (node:http's parser) may be freed by then */
+    NetHandle *h = hook ? open_handle(id) : (id >= 0 && (size_t)id < nhandles ? handles[id] : NULL);
     if (!h) return false;
     h->hook = hook;
     h->hook_data = data;
