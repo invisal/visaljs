@@ -207,7 +207,8 @@ function batchEntry(files: string[]): string {
 /** Runs one test from a binary, in an empty directory (tests may write files). */
 async function runTest(file: string, binary: string): Promise<Result> {
   const cwd = mkdtempSync(join(out, "cwd-"));
-  const r = await run(binary, [], cwd, TIMEOUT_MS, { VISALJS_NODEJS_TEST: file, JS_HEAP_LIMIT_MB: HEAP_LIMIT_MB });
+  /* NODE_TEST_DIR: test/common/tmpdir.js's root, the test's own directory */
+  const r = await run(binary, [], cwd, TIMEOUT_MS, { VISALJS_NODEJS_TEST: file, JS_HEAP_LIMIT_MB: HEAP_LIMIT_MB, NODE_TEST_DIR: cwd });
   rmSync(cwd, { recursive: true, force: true });
   if (r.status === null) return { file, outcome: "timeout", detail: r.output, seconds: r.seconds };
   return { file, outcome: r.status === 0 ? "pass" : "fail", detail: r.output, seconds: r.seconds };
@@ -250,7 +251,7 @@ try {
     const reason = skip.get(file) ?? cannotRun(readFileSync(join(PARALLEL, file), "utf8"));
     if (reason !== undefined) return report({ file, outcome: "skip", detail: reason, seconds: 0 });
     const cwd = mkdtempSync(join(out, "cwd-"));
-    const node = await run(process.execPath, [join(PARALLEL, file)], cwd, TIMEOUT_MS);
+    const node = await run(process.execPath, [join(PARALLEL, file)], cwd, TIMEOUT_MS, { NODE_TEST_DIR: cwd });
     rmSync(cwd, { recursive: true, force: true });
     if (node.status !== 0) return report({ file, outcome: "shim", detail: node.output, seconds: node.seconds });
     runnable.push(file);

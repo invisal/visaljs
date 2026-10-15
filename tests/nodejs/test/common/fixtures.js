@@ -22,9 +22,14 @@ function readFixtureSync(args, enc) {
   return fs.readFileSync(fixturesPath(args), enc);
 }
 
+function readFixtureKey(name, enc) {
+  return fs.readFileSync(fixturesPath('keys', name), enc);
+}
+
 module.exports = {
   fixturesDir,
   path: fixturesPath,
   fileURL: fixturesFileURL,
   readSync: readFixtureSync,
+  readKey: readFixtureKey,
 };
