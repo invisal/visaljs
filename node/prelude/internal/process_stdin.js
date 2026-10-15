@@ -5,7 +5,7 @@
 // driver adds it: implicitModules in node/index.ts).
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import { netGuessHandle, netReadStop } from "visaljs:host";
-import { ReadStream as FileReadStream } from "../fs.js";
+import { ReadStream as FileReadStream } from "./fs_streams.js";
 import { Socket } from "../net.js";
 import { Readable } from "../stream.js";
 import { ReadStream as TTYReadStream } from "../tty.js";

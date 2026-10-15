@@ -207,7 +207,8 @@ function batchEntry(files: string[]): string {
 /** Runs one test from a binary, in an empty directory (tests may write files). */
 async function runTest(file: string, binary: string): Promise<Result> {
   const cwd = mkdtempSync(join(out, "cwd-"));
-  const r = await run(binary, [], cwd, TIMEOUT_MS, { VISALJS_NODEJS_TEST: file, JS_HEAP_LIMIT_MB: HEAP_LIMIT_MB });
+  /* NODE_TEST_DIR: test/common/tmpdir.js's root, the test's own directory */
+  const r = await run(binary, [], cwd, TIMEOUT_MS, { VISALJS_NODEJS_TEST: file, JS_HEAP_LIMIT_MB: HEAP_LIMIT_MB, NODE_TEST_DIR: cwd });
   rmSync(cwd, { recursive: true, force: true });
   if (r.status === null) return { file, outcome: "timeout", detail: r.output, seconds: r.seconds };
   return { file, outcome: r.status === 0 ? "pass" : "fail", detail: r.output, seconds: r.seconds };
@@ -250,7 +251,7 @@ try {
     const reason = skip.get(file) ?? cannotRun(readFileSync(join(PARALLEL, file), "utf8"));
     if (reason !== undefined) return report({ file, outcome: "skip", detail: reason, seconds: 0 });
     const cwd = mkdtempSync(join(out, "cwd-"));
-    const node = await run(process.execPath, [join(PARALLEL, file)], cwd, TIMEOUT_MS);
+    const node = await run(process.execPath, [join(PARALLEL, file)], cwd, TIMEOUT_MS, { NODE_TEST_DIR: cwd });
     rmSync(cwd, { recursive: true, force: true });
     if (node.status !== 0) return report({ file, outcome: "shim", detail: node.output, seconds: node.seconds });
     runnable.push(file);
@@ -267,8 +268,10 @@ try {
      * again without it; when it names none, each test is built alone */
     while ("error" in b) {
       const error = b.error;
-      /* only its errors: a warning names a test too ("Import x will always be undefined") */
-      const errors = error.split("\n").filter((line) => /\berror\b/i.test(line) && !/\bwarning\b/i.test(line)).join("\n");
+      /* only its errors: a warning names a test too ("Import x will always be undefined"). The
+       * front end's are `file:line:column: SyntaxError: …` or `…: not supported yet: …`; without
+       * them, a batch with a test using unsupported syntax was built again one test at a time */
+      const errors = error.split("\n").filter((line) => /error|not supported yet/i.test(line) && !/\bwarning\b/i.test(line)).join("\n");
       const named = batch.filter((f) => errors.includes(join(PARALLEL, f)));
       if (named.length === 0 || named.length === batch.length) {
         for (const file of batch) firstResults.push(await alone(file));

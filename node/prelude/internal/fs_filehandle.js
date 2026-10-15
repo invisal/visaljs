@@ -9,10 +9,35 @@ import {
   openSync, readSync, readvSync, writeSync, writevSync,
 } from "../fs.js";
 import { createInterface } from "../readline.js";
-import { invalidArgType, notSupported } from "./errors.js";
+import { notSupported } from "./errors.js";
 import { features } from "./features.js";
+import {
+  getOptions, kIoMaxLength, validateBufferArray, validateOffsetLengthRead, validateOffsetLengthWrite, validatePosition,
+  validateStringAfterArrayBufferView,
+} from "./fs_utils.js";
+import "./fs_streams.js";  /* its streams */
+import { AbortError, codes } from "./streams/errors.js";
+import { kEmptyObject, validateAbortSignal, validateBuffer, validateInteger, validateObject } from "./streams/validators.js";
 
+const { ERR_FS_FILE_TOO_LARGE, ERR_INVALID_ARG_VALUE } = codes;
 const kReadChunk = 512 * 1024;
+const kWriteFileMaxChunkSize = 512 * 1024;
+
+function checkAborted(signal) {
+  if (signal?.aborted) throw new AbortError(undefined, { cause: signal.reason });
+}
+
+/* an iterable, or async iterable, of chunks: not a string or bytes */
+const isCustomIterable = (obj) =>
+  obj != null && typeof obj !== "string" && !ArrayBuffer.isView(obj) &&
+  (typeof obj[Symbol.asyncIterator] === "function" || typeof obj[Symbol.iterator] === "function");
+
+/* Node's validateEncoding: hex takes whole bytes */
+function validateEncoding(data, encoding) {
+  if (typeof encoding === "string" && encoding.toLowerCase() === "hex" && data.length % 2 !== 0) {
+    throw new ERR_INVALID_ARG_VALUE("encoding", encoding, `is invalid for data of length ${data.length}`);
+  }
+}
 
 /* EBADF for a handle that's closed, as Node's */
 function closedError(syscall) {
@@ -48,45 +73,84 @@ export class FileHandle extends EventEmitter {
     });
   }
 
-  /** read(buffer, offset, length, position) or read({ buffer, offset, length, position }):
-   *  { bytesRead, buffer }. */
-  read(buffer, offset, length, position) {
-    if (buffer === undefined || (buffer !== null && typeof buffer === "object" && !ArrayBuffer.isView(buffer))) {
-      ({ buffer = Buffer.alloc(16384), offset = 0, length, position = null } = buffer ?? {});
-    } else if (offset !== null && typeof offset === "object") {
-      ({ offset = 0, length, position = null } = offset);
-    }
-    offset ??= 0;
-    length ??= buffer.byteLength - offset;
-    return this.#call("read", (fd) => ({ bytesRead: readSync(fd, buffer, offset, length, position ?? null), buffer }));
+  /** read(buffer, offset, length, position), read(buffer, options) or read(options): { bytesRead,
+   *  buffer }. Node's argument handling (lib/internal/fs/promises.js). */
+  read(bufferOrParams, offset, length, position) {
+    return this.#call("read", (fd) => {
+      let buffer = bufferOrParams;
+      if (!ArrayBuffer.isView(buffer)) {
+        if (bufferOrParams !== undefined && bufferOrParams !== null) validateObject(bufferOrParams, "options");
+        ({ buffer = Buffer.alloc(16384), offset = 0, length = buffer.byteLength - offset, position = null } = bufferOrParams ?? kEmptyObject);
+        validateBuffer(buffer);
+      }
+      if (offset !== null && typeof offset === "object") {
+        ({ offset = 0, length = buffer.byteLength - offset, position = null } = offset);
+      }
+      if (offset == null) offset = 0;
+      else validateInteger(offset, "offset", 0);
+      length ??= buffer.byteLength - offset;
+      if (position == null) position = -1;
+      else validatePosition(position, "position", length);
+      if (length === 0) return { __proto__: null, bytesRead: length, buffer };
+      if (buffer.byteLength === 0) throw new ERR_INVALID_ARG_VALUE("buffer", buffer, "is empty and cannot be written");
+      validateOffsetLengthRead(offset, length, buffer.byteLength);
+      return { __proto__: null, bytesRead: readSync(fd, buffer, offset, length, position) || 0, buffer };
+    });
   }
 
-  /** write(buffer[, offset[, length[, position]]]) or write(string[, position[, encoding]]):
-   *  { bytesWritten, buffer }. */
-  write(data, offsetOrOptions, length, position) {
+  /** write(buffer[, offset[, length[, position]]]), write(buffer, options) or write(string[, position[,
+   *  encoding]]): { bytesWritten, buffer }. */
+  write(buffer, offsetOrOptions, length, position) {
     return this.#call("write", (fd) => {
-      if (typeof data === "string") return { bytesWritten: writeSync(fd, data, offsetOrOptions, length), buffer: data };
+      if (buffer?.byteLength === 0) return { __proto__: null, bytesWritten: 0, buffer };
       let offset = offsetOrOptions;
-      if (offset !== null && typeof offset === "object") ({ offset = 0, length, position = null } = offset);
-      return { bytesWritten: writeSync(fd, data, offset ?? 0, length ?? data.byteLength - (offset ?? 0), position), buffer: data };
+      if (ArrayBuffer.isView(buffer)) {
+        if (typeof offset === "object") {
+          ({ offset = 0, length = buffer.byteLength - offset, position = null } = offsetOrOptions ?? kEmptyObject);
+        }
+        if (offset == null) offset = 0;
+        else validateInteger(offset, "offset", 0);
+        if (typeof length !== "number") length = buffer.byteLength - offset;
+        if (typeof position !== "number") position = null;
+        validateOffsetLengthWrite(offset, length, buffer.byteLength);
+        return { __proto__: null, bytesWritten: writeSync(fd, buffer, offset, length, position) || 0, buffer };
+      }
+      validateStringAfterArrayBufferView(buffer, "buffer");
+      validateEncoding(buffer, length);
+      return { __proto__: null, bytesWritten: writeSync(fd, buffer, offset, length) || 0, buffer };
     });
   }
 
   readv(buffers, position) {
-    return this.#call("read", (fd) => ({ bytesRead: readvSync(fd, buffers, position), buffers }));
+    return this.#call("read", (fd) => {
+      validateBufferArray(buffers);
+      return { __proto__: null, bytesRead: readvSync(fd, buffers, typeof position === "number" ? position : null), buffers };
+    });
   }
 
   writev(buffers, position) {
-    return this.#call("write", (fd) => ({ bytesWritten: writevSync(fd, buffers, position), buffers }));
+    return this.#call("write", (fd) => {
+      validateBufferArray(buffers);
+      if (buffers.length === 0) return { __proto__: null, bytesWritten: 0, buffers };
+      return { __proto__: null, bytesWritten: writevSync(fd, buffers, typeof position === "number" ? position : null), buffers };
+    });
   }
 
-  /** The rest of the file from its current position: a Buffer, or a string with an encoding. */
+  /** The rest of the file from its current position: a Buffer, or a string with an encoding. An
+   *  abort signal is checked before and between reads, as Node's. */
   readFile(options) {
-    const encoding = typeof options === "string" ? options : options?.encoding;
-    return this.#call("read", (fd) => {
+    return this.#call("read", async (fd) => {
+      options = getOptions(options, { flag: "r" });
+      const { signal, encoding } = options;
+      validateAbortSignal(signal, "options.signal");
+      checkAborted(signal);
+      const st = fstatSync(fd);
+      if (st.isFile() && st.size > kIoMaxLength) throw new ERR_FS_FILE_TOO_LARGE(st.size);
       const chunks = [];
       let total = 0;
       for (;;) {
+        await undefined;  /* a turn for an abort, as Node's reads on its thread pool */
+        checkAborted(signal);
         const chunk = Buffer.allocUnsafe(kReadChunk);
         const n = readSync(fd, chunk, 0, kReadChunk, null);
         if (n === 0) break;
@@ -94,28 +158,45 @@ export class FileHandle extends EventEmitter {
         total += n;
       }
       const all = Buffer.concat(chunks, total);
-      return encoding ? all.toString(encoding) : all;
+      return encoding && encoding !== "buffer" ? all.toString(encoding) : all;
     });
   }
 
-  /** The data written from the current position (a string, bytes, or an iterable of them). */
+  /** The data written from the current position: a string, bytes, or an iterable or stream of them,
+   *  in chunks, an abort signal checked between them (Node's writeFileHandle). */
   writeFile(data, options) {
-    const encoding = typeof options === "string" ? options : options?.encoding ?? "utf8";
-    return this.#call("write", async (fd) => {
-      if (typeof data === "string" || ArrayBuffer.isView(data)) {
-        const bytes = typeof data === "string" ? Buffer.from(data, encoding) : data;
-        let off = 0;
-        while (off < bytes.byteLength) off += writeSync(fd, bytes, off, bytes.byteLength - off, null);
+    return this.#call("write", async () => {
+      options = getOptions(options, { encoding: "utf8", mode: 0o666, flag: "w", flush: false });
+      if (!ArrayBuffer.isView(data) && !isCustomIterable(data)) {
+        validateStringAfterArrayBufferView(data, "data");
+        data = Buffer.from(data, options.encoding || "utf8");
+      }
+      const { signal, encoding } = options;
+      validateAbortSignal(signal, "options.signal");
+      checkAborted(signal);
+      if (isCustomIterable(data)) {
+        for await (const buf of data) {
+          checkAborted(signal);
+          const toWrite = ArrayBuffer.isView(buf) ? buf : Buffer.from(buf, encoding || "utf8");
+          let remaining = toWrite.byteLength;
+          while (remaining > 0) {
+            const writeSize = Math.min(kWriteFileMaxChunkSize, remaining);
+            const { bytesWritten } = await this.write(toWrite, toWrite.byteLength - remaining, writeSize);
+            remaining -= bytesWritten;
+            checkAborted(signal);
+          }
+        }
         return;
       }
-      if (data === null || typeof data !== "object") {
-        throw invalidArgType("data", "of type string or an instance of Buffer, TypedArray, DataView, AsyncIterable, Iterable, or Stream", data);
-      }
-      for await (const chunk of data) {
-        const bytes = typeof chunk === "string" ? Buffer.from(chunk, encoding) : chunk;
-        let off = 0;
-        while (off < bytes.byteLength) off += writeSync(fd, bytes, off, bytes.byteLength - off, null);
-      }
+      data = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      let remaining = data.byteLength;
+      if (remaining === 0) return;
+      do {
+        checkAborted(signal);
+        const { bytesWritten } = await this.write(data, 0, Math.min(kWriteFileMaxChunkSize, data.byteLength));
+        remaining -= bytesWritten;
+        data = new Uint8Array(data.buffer, data.byteOffset + bytesWritten, data.byteLength - bytesWritten);
+      } while (remaining > 0);
     });
   }
 
@@ -124,8 +205,7 @@ export class FileHandle extends EventEmitter {
   }
 
   stat(options) {
-    if (options?.bigint) return Promise.reject(notSupported("FileHandle.stat's bigint option"));
-    return this.#call("fstat", (fd) => fstatSync(fd));
+    return this.#call("fstat", (fd) => fstatSync(fd, options ?? { bigint: false }));
   }
 
   truncate(len = 0) {
@@ -152,13 +232,13 @@ export class FileHandle extends EventEmitter {
     return this.#call("fchown", (fd) => void fchownSync(fd, uid, gid));
   }
 
-  /* streams on the handle's fd, which they leave open: the handle closes it */
-  createReadStream(options) {
-    return createReadStream(null, { ...options, fd: this.#fd, autoClose: false });
+  /* streams on the handle, as Node's: they read and write through it, and close it */
+  createReadStream(options = undefined) {
+    return createReadStream(undefined, { ...options, fd: this });
   }
 
-  createWriteStream(options) {
-    return createWriteStream(null, { ...options, fd: this.#fd, autoClose: false });
+  createWriteStream(options = undefined) {
+    return createWriteStream(undefined, { ...options, fd: this });
   }
 
   /** The lines: node:readline's interface on a read stream. */
@@ -204,4 +284,4 @@ function promisesOpen(path, flags = "r", mode = 0o666) {
   });
 }
 
-Object.assign(features, { promisesOpen });
+Object.assign(features, { promisesOpen, FileHandle });

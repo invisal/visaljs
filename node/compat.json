@@ -3,16 +3,16 @@
   "node": "v24.21.0",
   "summary": {
     "modules": {
-      "complete": 28,
-      "partial": 27,
+      "complete": 29,
+      "partial": 26,
       "stub": 1,
       "missing": 2,
       "total": 58
     },
     "exports": {
-      "implemented": 1142,
+      "implemented": 1144,
       "stubbed": 39,
-      "missing": 103,
+      "missing": 101,
       "total": 1284
     }
   },
@@ -740,6 +740,7 @@
         "mkdir",
         "mkdirSync",
         "mkdtemp",
+        "mkdtempDisposableSync",
         "mkdtempSync",
         "open",
         "openAsBlob",
@@ -789,13 +790,12 @@
       ],
       "stubbed": [],
       "missing": [
-        "Utf8Stream",
-        "mkdtempDisposableSync"
+        "Utf8Stream"
       ],
       "notes": "The synchronous calls, and the callback and promise forms over them (the I/O happens when called, not on a thread pool). readdir (recursive too), opendir and Dir, cp (Node's checks and messages), glob (minimatch's patterns: braces, classes, extglobs, **), statfs, readv and writev, openAsBlob, and watch (inotify, kqueue, … through libuv) and watchFile (a stat poller): the larger ones are linked into programs that name them. Not yet: the bigint option of watchFile, and Buffer paths in places."
     },
     "fs/promises": {
-      "status": "partial",
+      "status": "complete",
       "implemented": [
         "access",
         "appendFile",
@@ -812,6 +812,7 @@
         "lutimes",
         "mkdir",
         "mkdtemp",
+        "mkdtempDisposable",
         "open",
         "opendir",
         "readFile",
@@ -831,9 +832,7 @@
         "writeFile"
       ],
       "stubbed": [],
-      "missing": [
-        "mkdtempDisposable"
-      ],
+      "missing": [],
       "notes": "node:fs's calls as promises, and open's FileHandle (read, write, readv, writev, readFile, writeFile, stat, truncate, sync, utimes, chmod, chown, streams, readLines, close, Symbol.asyncDispose, 'close'); glob and watch as async iterators. lchmod is ERR_METHOD_NOT_IMPLEMENTED, as on Node outside macOS. Not yet: FileHandle.readableWebStream."
     },
     "http": {

@@ -4,12 +4,17 @@ import common from './index.js';
 
 export const {
   allowGlobals,
+  canCreateSymLink,
+  escapePOSIXShell,
+  expectWarning,
+  mustNotMutateObjectDeep,
   expectsError,
   getArrayBufferViews,
   getBufferSources,
   invalidArgTypeHelper,
   isAIX,
   isFreeBSD,
+  isIBMi,
   isLinux,
   isMacOS,
   isOpenBSD,
