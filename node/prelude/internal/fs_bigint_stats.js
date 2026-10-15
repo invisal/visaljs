@@ -1,7 +1,7 @@
 // fs's BigIntStats: a stat call's figures as BigInts, its times in nanoseconds too (atimeNs, …), for
 // the `bigint: true` option, as Node's. A module of its own, linked into programs that name the
 // option (implicitModules in node/index.ts): it names BigInt, which links the runtime's BigInt.
-import { lazyDateFields, StatsBase } from "../fs.js";
+import { lazyDateFields, StatsBase } from "./fs_stats.js";
 import { features } from "./features.js";
 
 const kNsPerMsBigInt = BigInt(1000000);

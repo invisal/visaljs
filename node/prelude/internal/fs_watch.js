@@ -3,7 +3,7 @@
 // Node's. Linked into programs that name them (internal/features.js).
 import { fsPollStart, fsWatchClose, fsWatchRef, fsWatchStart } from "visaljs:host";
 import { EventEmitter } from "../events.js";
-import { statsFrom } from "../fs.js";
+import { statsFrom } from "./fs_stats.js";
 import { resolve } from "../path.js";
 import { codeError, invalidArgType, systemError } from "./errors.js";
 import { features } from "./features.js";

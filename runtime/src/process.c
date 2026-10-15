@@ -329,7 +329,7 @@ NATIVE(process_hrtime) {
 
 /* process.hrtime.bigint(): the time in nanoseconds; a program that calls it has BigInt */
 NATIVE(process_hrtime_bigint) {
-    UNUSED_ARGS;
+    UNUSED_ARGS, (void)argc, (void)argv;
     if (!ctx->rt->bigint) return js_throw_type_error(ctx, "BigInt is not available");
     return ctx->rt->bigint->from_uint64(ctx, (uint64_t)(js_os_now_ms_precise() * 1e6));
 }
