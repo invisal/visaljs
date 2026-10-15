@@ -3,6 +3,10 @@
 # the long ones in shards, and the cross-platform check (the fast tier of the apps on Linux, macOS
 # and Windows). Nightly (nightly.yml): the programs under GC stress, every app, and the benchmarks.
 # Every job runs on GitHub's runners.
+#
+# The suites are workflows of their own (runtime.yml, test262.yml, nodejs.yml, programs.yml,
+# cross-platform.yml) that this one calls, with what changed deciding which; the setup every job
+# shares is .github/actions/setup.
 name: CI
 
 # Pull requests only: a merge to main brings commits their pull request already tested, and a
@@ -50,10 +54,12 @@ jobs:
           fi
           files=$(git diff --name-only "$BASE" HEAD)
           echo "$files"
-          code='^(runtime|node|compiler|ir|optimizer)/|^package-lock\.json$|^\.github/workflows/ci\.yml$'
+          # the workflows the pull request runs, and their setup
+          workflows='^\.github/workflows/(ci|runtime|test262|nodejs|programs|cross-platform)\.yml$|^\.github/actions/'
+          code="^(runtime|node|compiler|ir|optimizer)/|^package-lock\.json$|$workflows"
           echo "runtime=$(echo "$files" | grep -qE "$code|^tests/runner/|^tests/test262" && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "programs=$(echo "$files" | grep -qE "$code|^cli/|^tests/programs/|^vitest\.config\.ts$" && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "ctest=$(echo "$files" | grep -qE '^runtime/|^\.github/workflows/ci\.yml$' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "ctest=$(echo "$files" | grep -qE "^runtime/|$workflows" && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "nodejs=$(echo "$files" | grep -qE "$code|^cli/|^tests/nodejs/" && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "apps=$(echo "$files" | grep -qE "$code|^cli/|^tests/apps/|^tests/differential/http\.ts$" && echo true || echo false)" >> "$GITHUB_OUTPUT"
           # the other way around: anything but the docs, the website, the benchmarks and the other
@@ -66,11 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup
       - run: npm run lint
       - run: npm run typecheck
 
@@ -83,11 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup
       # the apps (tests/apps) aren't workspaces: each has its own lockfile (the HTTP differential tests run them)
       - run: npm run apps:install
       # the runtime's and the host's libraries, compiled once before the tests build programs in
@@ -105,11 +103,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: ./.github/actions/setup
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
       # built on 22, the program still behaves like (and says it's) the Node in .nvmrc
       - run: |
           echo 'console.log("node", process.versions.node.split(".")[0]);' > hello.js
@@ -117,205 +113,40 @@ jobs:
           test "$(./hello)" = "node $(cut -d. -f1 .nvmrc)"
 
   runtime:
-    # gcc and clang; plain, ASan + UBSan, and GC stress (a collection at every allocation).
-    name: Runtime tests (${{ matrix.cc }}, ${{ matrix.mode }})
+    # gcc and clang; plain, ASan + UBSan, and GC stress
+    name: Runtime tests
     needs: changes
     if: needs.changes.outputs.ctest == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        cc: [gcc, clang]
-        mode: [plain, sanitize, gc-stress]
-    steps:
-      - uses: actions/checkout@v7
-      - name: Configure
-        env:
-          CC: ${{ matrix.cc }}
-        run: >
-          cmake -S runtime -B build/runtime
-          -DCMAKE_BUILD_TYPE=Debug
-          -DJSRT_SANITIZE=${{ matrix.mode == 'sanitize' && 'ON' || 'OFF' }}
-          -DJSRT_GC_STRESS=${{ matrix.mode == 'gc-stress' && 'ON' || 'OFF' }}
-      - run: cmake --build build/runtime
-      - run: ctest --test-dir build/runtime --output-on-failure
+    uses: ./.github/workflows/runtime.yml
 
   test262:
-    # The suite in shards, one job each, so it spreads over every runner: adding one is adding a
-    # number to the list (the count is the matrix's size). Each shard is checked against its part
-    # of tests/test262.results and fails on a regression; with --update it saves its Summary
-    # (build/test262-shard-I.json) for test262-snapshot. Locally, only a part:
-    # npm run test262 -- language/statements/debugger
-    name: test262 (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    name: test262
     needs: changes
     if: needs.changes.outputs.runtime == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: true
-          # the branch itself, not the merge with main: the snapshot is committed to it
-          ref: ${{ github.head_ref || github.ref }}
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      # the runner's own tests, with the harness files the checkout brings: once, on the first shard
-      - if: matrix.shard == 1
-        run: npx vitest run tests/runner
-      - run: npm run test262 -- --update --shard=${{ matrix.shard }}/${{ strategy.job-total }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: test262-shard-${{ matrix.shard }}
-          path: build/test262-shard-${{ matrix.shard }}.json
-
-  test262-snapshot:
-    # Every shard passed: their Summaries merged are the full suite's, written as one --update
-    # would (tests/test262.results, build/test262-summary.json). On a pull request, newly passing
-    # units are committed to its branch as the new snapshot (a push with GITHUB_TOKEN starts no
-    # new run), and the counts are uploaded as an artifact.
-    name: test262 snapshot
-    needs: test262
-    runs-on: ubuntu-latest
     permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref || github.ref }}
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: test262-shard-*
-          path: build/shards
-          merge-multiple: true
-      - run: npm run test262 -- --merge build/shards/*.json
-      - uses: actions/upload-artifact@v7
-        with:
-          name: test262-summary
-          path: build/test262-summary.json
-      - name: Commit the snapshot
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        run: |
-          if git diff --quiet tests/test262.results; then
-            echo "The snapshot is unchanged." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          added=$(git diff --numstat tests/test262.results | cut -f1)
-          git config user.name "github-actions[bot]"
-          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
-          git commit -q -m "test262: snapshot, $added newly passing" tests/test262.results
-          git push origin "HEAD:${{ github.head_ref }}"
-          echo "Committed the snapshot: $added newly passing units." >> "$GITHUB_STEP_SUMMARY"
+      contents: write  # the snapshot, committed to the pull request's branch
+    uses: ./.github/workflows/test262.yml
+    with:
+      shards: "[1, 2, 3, 4]"
 
   nodejs:
-    # Node's own tests (tests/nodejs/test/parallel, copied by tests/nodejs/sync.ts), compiled by
-    # visaljs: a test that passes in tests/nodejs/node.results and fails now is a regression.
-    # Newly passing tests are recorded locally: npm run nodejs -- --update. In shards, one job
-    # each, as test262's: adding one is adding a number to the list. The shards are balanced by
-    # tests/nodejs/node.timings: each uploads what its tests took (node-timings-N), which
-    # `node tests/nodejs/timings.ts` merges in when a module's tests are added.
-    name: Node's tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    name: Node's tests
     needs: changes
     if: needs.changes.outputs.nodejs == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      # one build at a time, two C files at once: a test that runs away on memory stops at its heap
-      # limit, and the builds stay well within the runner's memory
-      # --failures: why each failing test fails, in the log
-      - run: npm run nodejs -- --jobs=1 --build-jobs=2 --failures --shard=${{ matrix.shard }}/${{ strategy.job-total }} --timings-out=node-timings-${{ matrix.shard }}
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: node-timings-${{ matrix.shard }}
-          path: node-timings-${{ matrix.shard }}
-          retention-days: 14
+    uses: ./.github/workflows/nodejs.yml
+    with:
+      shards: "[1, 2, 3, 4]"
 
   programs:
-    # The end-to-end programs (tests/programs): each compiled, run, and its output compared with
-    # Node's, in shards (VISALJS_PROGRAMS_SHARD), one job each: adding one is adding a number to
-    # the list. Shard 1 also builds hello world with the driver's defaults and runs it, and runs
-    # the file's other tests. Linux only, for now.
-    name: Programs (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    name: Programs
     needs: changes
     if: needs.changes.outputs.programs == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      # the runtime's and the host's libraries, compiled once before the tests build programs in
-      # parallel, and hello world with the driver's defaults
-      - run: node cli/src/cli.ts build tests/programs/hello.js -o hello
-      - name: Check output
-        if: matrix.shard == 1
-        run: |
-          ./hello > out.txt
-          diff -u tests/programs/hello.expected out.txt
-      - run: npx vitest run tests/programs
-        env:
-          VISALJS_PROGRAMS_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+    uses: ./.github/workflows/programs.yml
+    with:
+      shards: "[1, 2, 3]"
 
   cross-platform:
-    # The compiler on each platform: the fast tier of the apps (tests/apps/check.ts), http-hello,
-    # express, hono and zod, each compiled and checked against Node. Windows builds with Zig (the README:
-    # MSVC isn't supported), and doesn't fail the run until it passes.
-    # Locally: node tests/apps/check.ts
-    name: Cross-platform check (${{ matrix.os }})
+    name: Cross-platform check
     needs: changes
     if: needs.changes.outputs.apps == 'true'
-    runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    env:
-      ZIG: 0.16.0
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - name: Install Zig
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $dir = "$env:RUNNER_TOOL_CACHE\zig-$env:ZIG"
-          if (-not (Test-Path "$dir\zig.exe")) {
-            Invoke-WebRequest "https://ziglang.org/download/$env:ZIG/zig-x86_64-windows-$env:ZIG.zip" -OutFile "$env:RUNNER_TEMP\zig.zip"
-            Expand-Archive "$env:RUNNER_TEMP\zig.zip" -DestinationPath "$env:RUNNER_TEMP\zig"
-            Move-Item (Get-ChildItem "$env:RUNNER_TEMP\zig")[0].FullName $dir
-          }
-          Add-Content $env:GITHUB_PATH $dir
-          Add-Content $env:GITHUB_ENV "CC=zig cc"
-      - run: npm ci
-      - run: node tests/apps/check.ts --tier=fast
-
+    uses: ./.github/workflows/cross-platform.yml
