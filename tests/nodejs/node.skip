@@ -28,3 +28,9 @@ test-stream-writable-samecb-singletick.js  async_hooks.createHook TickObject
 # setImmediate gives an Immediate (not its id) when the program uses one as an object (.unref(),
 # Symbol.dispose…): this checks its constructor's name, which the rules don't look for
 test-timers-clearImmediate-als.js        Immediate's constructor.name
+
+# a test that expects the working directory to be Node's checkout (./test/fixtures/…)
+test-fs-cp-async-file-url.mjs            a path relative to Node's checkout (./test/fixtures/copy)
+
+# Node's internal handle list
+test-fs-watch-recursive-assert-leaks.js  process._getActiveHandles (Node's internal handle list)

@@ -140,7 +140,8 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "fs_statfs.js"), reached: (_code, program) => /\b(?:statfs|statfsSync|StatFs)\b/.test(program) },
   { file: join(preludeDir, "internal", "fs_dir.js"), reached: (_code, program) => FS_DIR.test(program) },
   { file: join(preludeDir, "internal", "fs_cp.js"), reached: (_code, program) => FS_CP.test(program) },
-  { file: join(preludeDir, "internal", "fs_glob.js"), reached: (_code, program) => FS_GLOB.test(program) || /\bmatchesGlob\b/.test(program) },
+  { file: join(preludeDir, "internal", "fs_glob.js"), reached: (_code, program) =>
+      FS_GLOB.test(program) || /\bmatchesGlob\b/.test(program) || (FS_WATCH.test(program) && /\bignore\b/.test(program)) },
   { file: join(preludeDir, "internal", "fs_watch.js"), reached: (_code, program) => FS_WATCH.test(program) },
   { file: join(preludeDir, "internal", "fs_blob.js"), reached: (_code, program) => /\bopenAsBlob\b/.test(program) },
   /* fs/promises' open and FileHandle: as promises', or a bare open(…) call (imported); or a program
