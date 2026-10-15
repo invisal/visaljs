@@ -1,11 +1,12 @@
 // fs.ReadStream and fs.WriteStream, as Node's lib/internal/fs/streams.js: Readable and Writable
 // over fs's callback calls (open, read, write, writev, fsync, close), or a custom `fs` option's,
 // or a FileHandle's. Functions, as Node's are: callable without new, and graceful-fs calls them on
-// its own instances (apply).
+// its own instances (apply). Linked into programs that name them (implicitModules in
+// node/index.ts), which then link node:stream: fs's wrappers (lazyConstructor) reach them.
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
-import fs from "../fs.js";
+import fs, { ReadStream as ReadStreamWrapper, WriteStream as WriteStreamWrapper } from "../fs.js";
 import { Readable, Writable, finished } from "../stream.js";
-import { features } from "./features.js";
+import { features, provideClass } from "./features.js";
 import { copyObject, getOptions, getValidatedFd, toPathIfFileURL, validatePath } from "./fs_utils.js";
 import { errorOrDestroy } from "./streams/destroy.js";
 import { codes } from "./streams/errors.js";
@@ -535,3 +536,6 @@ Object.defineProperty(WriteStream.prototype, "pending", {
   },
   configurable: true,
 });
+
+provideClass(ReadStreamWrapper, ReadStream);
+provideClass(WriteStreamWrapper, WriteStream);

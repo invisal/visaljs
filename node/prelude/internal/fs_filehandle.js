@@ -11,6 +11,7 @@ import {
 import { createInterface } from "../readline.js";
 import { invalidArgType, notSupported } from "./errors.js";
 import { features } from "./features.js";
+import "./fs_streams.js";  /* its streams */
 
 const kReadChunk = 512 * 1024;
 

@@ -9,7 +9,7 @@ import {
   fsWriteFile,
 } from "visaljs:host";
 import { systemError } from "./internal/errors.js";
-import { feature, lazyClass, lazyFunction } from "./internal/features.js";
+import { feature, lazyClass, lazyConstructor, lazyFunction } from "./internal/features.js";
 import {
   copyObject, emitRecursiveRmdirWarning, getOptions, getValidatedFd, getValidatedPath, getValidMode, kIoMaxLength, kMaxUserId, parseFileMode,
   rmIsDirectory, stringToFlags, toUnixTimestamp, validateBufferArray, validateOffsetLengthRead, validateOffsetLengthWrite, validatePosition,
@@ -20,7 +20,6 @@ import {
   kEmptyObject, validateBoolean, validateBuffer, validateFunction, validateInteger, validateObject, validateOneOf,
 } from "./internal/streams/validators.js";
 import { dirname, resolve } from "./path.js";
-import { ReadStream, WriteStream } from "./internal/fs_streams.js";
 
 const { ERR_FS_FILE_TOO_LARGE, ERR_INVALID_ARG_VALUE } = codes;
 
@@ -1195,7 +1194,10 @@ export function rm(path, options, callback) {
   defer(callback, doRm, path, options);
 }
 
-/* ---- streams: internal/fs_streams.js, Node's --------------------------------------------- */
+/* ---- streams: Node's, in a module of their own (internal/fs_streams.js) ------------------- */
+
+export const ReadStream = lazyConstructor("ReadStream", 2);
+export const WriteStream = lazyConstructor("WriteStream", 2);
 
 export function createReadStream(path, options) {
   return new ReadStream(path, options);
@@ -1229,8 +1231,6 @@ export const openAsBlob = lazyFunction("openAsBlob", 2);
 /* lchmod: macOS's only (O_SYMLINK), as Node's */
 export const lchmod = undefined;
 export const lchmodSync = undefined;
-
-export { ReadStream, WriteStream };
 
 /* the names Node keeps for its streams */
 export const FileReadStream = ReadStream;

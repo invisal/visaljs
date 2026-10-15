@@ -133,6 +133,8 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "perf_observe.js"), reached: (_code, program) => /\bPerformance(?:Observer|ObserverEntryList|ResourceTiming)\b/.test(program) },
   { file: join(preludeDir, "internal", "perf_histogram.js"), reached: (_code, program) => /\b(?:createHistogram|monitorEventLoopDelay)\b/.test(program) },
   /* node:fs's and node:fs/promises' larger or rarer functions: named bare, or as fs's or promises' */
+  /* fs's streams (Node's, over node:stream) */
+  { file: join(preludeDir, "internal", "fs_streams.js"), reached: (_code, program) => FS_STREAMS.test(program) },
   /* stat's `bigint: true` option (the bundle keeps an option's name) */
   { file: join(preludeDir, "internal", "fs_bigint_stats.js"), reached: (_code, program) => /\bbigint\s*:/.test(program) },
   { file: join(preludeDir, "internal", "fs_statfs.js"), reached: (_code, program) => /\b(?:statfs|statfsSync|StatFs)\b/.test(program) },
@@ -184,6 +186,7 @@ const UTIL_DIFF = utilNamed("diff");
  *  fs or promises (fs.x, fs_default.x, promises.x, fsPromises.x, require_fs().x). */
 const fsNamed = (names: string) =>
   new RegExp(`(?<![.\\w$])(?:${names})\\b|\\b(?:fs|promises|fsPromises)[\\w$]*\\s*\\.\\s*(?:${names})\\b|\\brequire_(?:fs|promises)\\(\\)\\s*\\.\\s*(?:${names})\\b`);
+const FS_STREAMS = /\b(?:createReadStream|createWriteStream|ReadStream|WriteStream|FileReadStream|FileWriteStream)\b/;
 const FS_DIR = fsNamed("opendir|opendirSync|Dir");
 const FS_CP = fsNamed("cp|cpSync");
 const FS_GLOB = fsNamed("glob|globSync");
