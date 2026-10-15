@@ -4,6 +4,8 @@
 // (prebuilt.ts) in build/prebuilt: build them first, or download the workflow's (prebuilt.yml).
 //
 //   node cli/scripts/dist.ts && npm publish ./cli/dist
+//
+// --all-prebuilt fails the build when a target has no prebuilt libraries (release.yml's).
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -91,5 +93,8 @@ function copyPrebuilt() {
     copied.push(t.name);
   }
   console.log(`prebuilt libraries: ${copied.length ? copied.join(", ") : "none"}`);
-  if (missing.length) console.warn(`not prebuilt: ${missing.join(", ")} (npm run prebuilt, or download prebuilt.yml's artifact into build/prebuilt)`);
+  if (missing.length) {
+    console.warn(`not prebuilt: ${missing.join(", ")} (npm run prebuilt, or download prebuilt.yml's artifact into build/prebuilt)`);
+    if (process.argv.includes("--all-prebuilt")) process.exit(1);
+  }
 }

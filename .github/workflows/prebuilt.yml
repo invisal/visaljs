@@ -1,13 +1,14 @@
 # The prebuilt libraries (cli/scripts/prebuilt.ts): every platform's third-party C libraries,
-# cross-compiled with Zig on the Linux runner. By hand from the Actions tab, for a release:
-# download the artifact into build/prebuilt, and the dist build puts them in the package.
+# cross-compiled with Zig on the Linux runner. release.yml calls it and puts them in the package;
+# by hand from the Actions tab, download the artifact into build/prebuilt for a local dist build:
 #
 #   gh run download <run-id> -n prebuilt -D build/prebuilt
-#   node cli/scripts/dist.ts && npm publish ./cli/dist
+#   node cli/scripts/dist.ts
 name: Prebuilt libraries
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 env:
   ZIG: 0.16.0
