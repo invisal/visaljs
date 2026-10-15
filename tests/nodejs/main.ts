@@ -268,8 +268,10 @@ try {
      * again without it; when it names none, each test is built alone */
     while ("error" in b) {
       const error = b.error;
-      /* only its errors: a warning names a test too ("Import x will always be undefined") */
-      const errors = error.split("\n").filter((line) => /\berror\b/i.test(line) && !/\bwarning\b/i.test(line)).join("\n");
+      /* only its errors: a warning names a test too ("Import x will always be undefined"). The
+       * front end's are `file:line:column: SyntaxError: …` or `…: not supported yet: …`; without
+       * them, a batch with a test using unsupported syntax was built again one test at a time */
+      const errors = error.split("\n").filter((line) => /error|not supported yet/i.test(line) && !/\bwarning\b/i.test(line)).join("\n");
       const named = batch.filter((f) => errors.includes(join(PARALLEL, f)));
       if (named.length === 0 || named.length === batch.length) {
         for (const file of batch) firstResults.push(await alone(file));
