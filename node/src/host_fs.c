@@ -27,6 +27,7 @@
 #define unlink _unlink
 #define F_OK 0
 #else
+#include <signal.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
 #endif
@@ -46,6 +47,12 @@ char *js_host_path_arg(JSContext *ctx, uint32_t argc, const JSValue *argv, uint3
     s[n] = '\0';
     return s;
 }
+
+#ifndef _WIN32
+/* a write past RLIMIT_FSIZE fails with EFBIG instead of killing the process, as in Node (which
+ * ignores SIGXFSZ at startup) */
+__attribute__((constructor)) static void ignore_sigxfsz(void) { signal(SIGXFSZ, SIG_IGN); }
+#endif
 
 static JSValue errno_result(int e) {
     return js_int32(js_node_uv_error(e ? e : EIO));

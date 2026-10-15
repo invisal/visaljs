@@ -143,8 +143,11 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "fs_glob.js"), reached: (_code, program) => FS_GLOB.test(program) || /\bmatchesGlob\b/.test(program) },
   { file: join(preludeDir, "internal", "fs_watch.js"), reached: (_code, program) => FS_WATCH.test(program) },
   { file: join(preludeDir, "internal", "fs_blob.js"), reached: (_code, program) => /\bopenAsBlob\b/.test(program) },
-  /* fs/promises' open: as promises', or a bare open(…) call (imported) */
-  { file: join(preludeDir, "internal", "fs_filehandle.js"), reached: (_code, program) => FS_OPEN.test(program) || /\bFileHandle\b/.test(program) },
+  /* fs/promises' open and FileHandle: as promises', or a bare open(…) call (imported); or a program
+   * that names node:fs's promises and calls some open() (`const fs = require("fs").promises;
+   * fs.open(…)`: the bundle renames fs) */
+  { file: join(preludeDir, "internal", "fs_filehandle.js"), reached: (_code, program) =>
+      FS_OPEN.test(program) || /\bFileHandle\b/.test(program) || (/\bpromises\b/.test(program) && /\.\s*open\s*\(/.test(program)) },
   /* process's other members (some link libuv): named as process's, or by a distinctive name */
   { file: join(preludeDir, "internal", "process_more.js"), reached: (_code, program) => PROCESS_MORE.test(program) },
   /* process.memoryUsage(): it links libuv */

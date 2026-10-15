@@ -7,7 +7,7 @@ import { statsFrom } from "./fs_stats.js";
 import { resolve } from "../path.js";
 import { codeError, invalidArgType, systemError } from "./errors.js";
 import { features } from "./features.js";
-import { getValidatedPath } from "./fs_utils.js";
+import { getOptions, getValidatedPath } from "./fs_utils.js";
 
 const UV_RENAME = 1;
 
@@ -65,9 +65,7 @@ export class FSWatcher extends EventEmitter {
 }
 
 function watchOptions(options) {
-  if (typeof options === "string") options = { encoding: options };
-  else if (options === undefined || options === null) options = {};
-  else if (typeof options !== "object") throw invalidArgType("options", "of type object", options);
+  options = getOptions(options);  /* Node's: a string is the encoding, which is checked */
   const { persistent = true, recursive = false, encoding = "utf8", signal } = options;
   if (typeof persistent !== "boolean") throw invalidArgType("options.persistent", "of type boolean", persistent);
   if (typeof recursive !== "boolean") throw invalidArgType("options.recursive", "of type boolean", recursive);

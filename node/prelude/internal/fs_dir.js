@@ -3,8 +3,11 @@
 // (internal/features.js).
 import { fsReaddir } from "visaljs:host";
 import { Dir as DirWrapper, Dirent } from "../fs.js";
-import { codeError, invalidArgType, systemError, validateFunction } from "./errors.js";
+import { codeError, systemError, validateFunction } from "./errors.js";
 import { features, provideClass } from "./features.js";
+import { getOptions, getValidatedPath } from "./fs_utils.js";
+import { codes } from "./streams/errors.js";
+import { validateUint32 } from "./streams/validators.js";
 
 const closed = () => codeError(Error, "ERR_DIR_CLOSED", "Directory handle was closed");
 
@@ -35,9 +38,11 @@ class Dir {
     this.#path = path;
     this.#entries = entries;
     this.#recursive = Boolean(options?.recursive);
+    validateUint32({ bufferSize: 32, ...options }.bufferSize, "options.bufferSize", true);  /* as Node's: a given null too */
   }
 
   get path() {
+    if (!(#path in this)) throw new codes.ERR_INVALID_THIS("Dir");
     return this.#path;
   }
 
@@ -136,29 +141,25 @@ class Dir {
   }
 }
 
-function validatePath(path) {
-  if (typeof path !== "string" && !(path instanceof URL)) throw invalidArgType("path", "of type string or an instance of Buffer or URL", path);
-  return typeof path === "string" ? path : decodeURIComponent(path.pathname);
-}
-
 function opendirSync(path, options) {
-  path = validatePath(path);
-  if (options?.bufferSize !== undefined && (!Number.isInteger(options.bufferSize) || options.bufferSize < 1)) {
-    throw codeError(RangeError, "ERR_OUT_OF_RANGE", `The value of "options.bufferSize" is out of range. It must be >= 1 && <= 4294967295. Received ${options.bufferSize}`);
-  }
+  path = getValidatedPath(path);
+  options = getOptions(options, { encoding: "utf8" });
   return new Dir(path, entriesOf(path), options);
 }
 
+/* the arguments checked now, as Node's; the directory opened, then the Dir made, on a later tick */
 function opendir(path, options, callback) {
-  if (typeof options === "function") [options, callback] = [undefined, options];
+  callback = typeof options === "function" ? options : callback;
   validateFunction(callback, "callback");
-  let dir, error = null;
+  path = getValidatedPath(path);
+  options = getOptions(options, { encoding: "utf8" });
+  let entries, error = null;
   try {
-    dir = opendirSync(path, options);
+    entries = entriesOf(path);
   } catch (e) {
     error = e;
   }
-  process.nextTick(() => (error ? callback(error) : callback(null, dir)));
+  process.nextTick(() => (error ? callback(error) : callback(null, new Dir(path, entries, options))));
 }
 
 Object.assign(features, { opendirSync, opendir, opendirPromise: async (path, options) => opendirSync(path, options) });

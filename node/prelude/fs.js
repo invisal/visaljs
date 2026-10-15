@@ -6,7 +6,6 @@
 // else strings in any of Buffer's encodings.
 import {
   errnoName, fsCall, fsClose, fsConstants, fsExists, fsMkdir, fsOpen, fsRead, fsReaddir, fsReadFile, fsRealpath, fsStat, fsUnlink, fsUtimes, fsWrite,
-  fsWriteFile,
 } from "visaljs:host";
 import { systemError } from "./internal/errors.js";
 import { lazyClass, lazyConstructor, lazyFunction } from "./internal/features.js";
@@ -54,7 +53,8 @@ function makeCallback(cb) {
   return cb;
 }
 
-/* the operation now, its result or error to the callback on a later tick, as Node's request's */
+/* the operation now, its result or error to the callback on a later turn of the event loop, as
+ * Node's request completes (timers run between a stream's reads, as in Node) */
 function defer(callback, fn, ...args) {
   let result, error = null;
   try {
@@ -63,7 +63,7 @@ function defer(callback, fn, ...args) {
     error = e;
   }
   /* a call without a result gives the callback only its error (null), as Node's */
-  process.nextTick(() => (error ? callback(error) : result === undefined ? callback(null) : callback(null, result)));
+  setImmediate(() => (error ? callback(error) : result === undefined ? callback(null) : callback(null, result)));
 }
 
 function checkAborted(signal, callback) {
@@ -371,21 +371,21 @@ export function readFile(path, options, callback) {
     stringToFlags(options.flag, "options.flag");
     path = getValidatedPath(path);
   }
-  /* on a later tick, as Node's opens and reads: an abort before then stops it */
-  process.nextTick(() => {
+  /* on a later turn of the event loop, as Node's opens and reads on its thread pool: an abort before
+   * then stops it */
+  setImmediate(() => {
     if (checkAborted(options.signal, callback)) return;
     defer(callback, doReadFile, path, options);
   });
 }
 
-/* writeFile's work, its data as bytes or a string and its options checked */
-function doWriteFile(path, data, options) {
+/* writeFile's work, its data as bytes or a string and its options checked. With `flush`, the file is
+ * synced through fs.fsyncSync (a program may replace it, as Node's calls it); `keepOpen` leaves the
+ * descriptor open and unsynced, returned for the callback API's fs.fsync. */
+function doWriteFile(path, data, options, keepOpen = false) {
   const flag = options.flag || "w";
   const flush = options.flush ?? false;
-  if (!isFd(path) && !flush && options.mode === 0o666 && (flag === "w" || flag === "a") && (typeof data !== "string" || isUtf8(options.encoding))) {
-    check(fsWriteFile(path, data, flag === "a"), "open", path);
-    return;
-  }
+  /* opened, written and closed: an error names the call that failed, as Node's */
   if (typeof data === "string") data = Buffer.from(data, options.encoding || "utf8");
   const userFd = isFd(path);
   const fd = userFd ? path : doOpen(path, stringToFlags(flag), parseFileMode(options.mode, "mode", 0o666));
@@ -396,9 +396,13 @@ function doWriteFile(path, data, options) {
       offset += written;
       length -= written;
     }
-    if (flush) check(fsCall(FS_FSYNC, fd), "fsync");
+    if (keepOpen) return fd;
+    if (flush) fs.fsyncSync(fd);
+  } catch (e) {
+    keepOpen = false;
+    throw e;
   } finally {
-    if (!userFd) doClose(fd);
+    if (!userFd && !keepOpen) doClose(fd);
   }
 }
 
@@ -430,10 +434,28 @@ export function writeFile(path, data, options, callback) {
     if (checkAborted(options.signal, callback)) return;
     path = getValidatedPath(path);
   }
-  /* on a later tick, as Node's opens and writes: an abort before then stops it */
-  process.nextTick(() => {
+  /* on a later turn of the event loop, as Node's opens and writes on its thread pool: an abort before
+   * then stops it */
+  setImmediate(() => {
     if (checkAborted(options.signal, callback)) return;
-    defer(callback, doWriteFile, path, data, options);
+    if (!options.flush) return defer(callback, doWriteFile, path, data, options);
+    /* the flush through fs.fsync, then the close, as Node's writeAll */
+    let fd;
+    try {
+      fd = doWriteFile(path, data, options, true);
+    } catch (e) {
+      return process.nextTick(callback, e);
+    }
+    fs.fsync(fd, (err) => {
+      if (!isFd(path)) {
+        try {
+          doClose(fd);
+        } catch (e) {
+          err ??= e;
+        }
+      }
+      callback(err ?? null);
+    });
   });
 }
 
@@ -523,7 +545,7 @@ export function stat(path, options = { bigint: false, throwIfNoEntry: true }, ca
   callback = makeCallback(callback);
   path = getValidatedPath(path);
   if (checkAborted(options.signal, callback)) return;
-  defer(callback, doStat, path, true, "stat", options.bigint, true);
+  defer(callback, doStat, path, true, "stat", options.bigint, options.throwIfNoEntry);
 }
 
 export function lstat(path, options = { bigint: false }, callback) {
@@ -1133,6 +1155,21 @@ export function createWriteStream(path, options) {
 export { default as promises } from "./fs_promises.js";
 import promises from "./fs_promises.js";
 
+/* ---- util.promisify's results ------------------------------------------------------------ */
+
+/* the callback's values as an object's (node:util's symbol); exists' promise, of a boolean */
+const kCustomPromisifyArgs = Symbol.for("visaljs.util.customPromisifyArgs");
+Object.defineProperty(read, kCustomPromisifyArgs, { value: ["bytesRead", "buffer"], enumerable: false });
+Object.defineProperty(write, kCustomPromisifyArgs, { value: ["bytesWritten", "buffer"], enumerable: false });
+Object.defineProperty(readv, kCustomPromisifyArgs, { value: ["bytesRead", "buffers"], enumerable: false });
+Object.defineProperty(writev, kCustomPromisifyArgs, { value: ["bytesWritten", "buffers"], enumerable: false });
+Object.defineProperty(exists, Symbol.for("nodejs.util.promisify.custom"), {
+  value: function exists(path) {
+    return new Promise((resolve) => fs.exists(path, resolve));
+  },
+  enumerable: false,
+});
+
 /* ---- the features in modules of their own ------------------------------------------------- */
 
 /* their own modules, linked when the program names them (internal/features.js) */
@@ -1181,7 +1218,8 @@ const fs = {
   },
 };
 
-/* access()'s modes on fs itself: hidden, deprecated getters in Node 24 (DEP0176), warning once */
+/* access()'s modes on fs itself: hidden, deprecated getters in Node 24 (DEP0176), warning once,
+ * without a setter */
 let warnedModes = false;
 for (const [name, value] of [["F_OK", 0], ["R_OK", 4], ["W_OK", 2], ["X_OK", 1]]) {
   Object.defineProperty(fs, name, {
@@ -1193,9 +1231,6 @@ for (const [name, value] of [["F_OK", 0], ["R_OK", 4], ["W_OK", 2], ["X_OK", 1]]
         process.emitWarning(`fs.${name} is deprecated, use fs.constants.${name} instead`, "DeprecationWarning", "DEP0176");
       }
       return value;
-    },
-    set(v) {
-      Object.defineProperty(fs, name, { value: v, writable: true, enumerable: true, configurable: true });
     },
   });
 }
