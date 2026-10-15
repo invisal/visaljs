@@ -29,7 +29,12 @@ jobs:
           submodules: true
           # the branch itself, not the merge with main: the snapshot is committed to it
           ref: ${{ github.head_ref || github.ref }}
-      - uses: ./.github/actions/setup
+      # .github/actions/setup's steps, inline: the branch may be older than the action
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       # the runner's own tests, with the harness files the checkout brings: once, on the first shard
       - if: matrix.shard == 1
         run: npx vitest run tests/runner
@@ -49,7 +54,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.head_ref || github.ref }}
-      - uses: ./.github/actions/setup
+      # .github/actions/setup's steps, inline: the branch may be older than the action
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       - uses: actions/download-artifact@v8
         with:
           pattern: test262-shard-*
