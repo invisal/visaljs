@@ -30,6 +30,8 @@ class Dir {
   #busy = false;
 
   constructor(path, entries, options) {
+    /* Node's takes the directory's handle first: a program can't make one */
+    if (path == null) throw codeError(TypeError, "ERR_MISSING_ARGS", 'The "handle" argument must be specified');
     this.#path = path;
     this.#entries = entries;
     this.#recursive = Boolean(options?.recursive);

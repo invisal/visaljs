@@ -327,6 +327,13 @@ NATIVE(process_hrtime) {
     return js_new_array_from(ctx, items, 2);
 }
 
+/* process.hrtime.bigint(): the time in nanoseconds; a program that calls it has BigInt */
+NATIVE(process_hrtime_bigint) {
+    UNUSED_ARGS;
+    if (!ctx->rt->bigint) return js_throw_type_error(ctx, "BigInt is not available");
+    return ctx->rt->bigint->from_uint64(ctx, (uint64_t)(js_os_now_ms_precise() * 1e6));
+}
+
 void js_emit_warning(JSContext *ctx, JSValue message, const char *type, const char *code) {
     const char *quiet = getenv("NODE_NO_WARNINGS");  /* as Node: "1" silences them */
     if (quiet && strcmp(quiet, "1") == 0) return;
@@ -536,7 +543,13 @@ static JSValue new_process(JSContext *ctx) {
 #endif
     define_fn(ctx, p, "exit", process_exit, 1);
     define_fn(ctx, p, "nextTick", process_next_tick, 1);
-    define_fn(ctx, p, "hrtime", process_hrtime, 1);
+    {
+        JSValue key = js_atom_from_cstr(ctx, "hrtime");
+        JSValue hrtime = js_new_native(ctx, process_hrtime, key, 1, JS_FN_STRICT);
+        if (js_is_exception(hrtime)) return JS_EXCEPTION;
+        define_fn(ctx, js_as_object(hrtime), "bigint", process_hrtime_bigint, 0);
+        js_define_data(ctx, p, key, hrtime, JS_PROP_DEFAULT);
+    }
     define_fn(ctx, p, "emitWarning", process_emit_warning, 3);
     /* exitCode: an accessor, as in Node (enumerable, not configurable) */
     JSValue get = js_new_native(ctx, exit_code_get, js_atom_from_cstr(ctx, "get exitCode"), 0, JS_FN_STRICT);

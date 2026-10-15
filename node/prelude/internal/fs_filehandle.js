@@ -124,8 +124,7 @@ export class FileHandle extends EventEmitter {
   }
 
   stat(options) {
-    if (options?.bigint) return Promise.reject(notSupported("FileHandle.stat's bigint option"));
-    return this.#call("fstat", (fd) => fstatSync(fd));
+    return this.#call("fstat", (fd) => fstatSync(fd, options ?? { bigint: false }));
   }
 
   truncate(len = 0) {
@@ -204,4 +203,4 @@ function promisesOpen(path, flags = "r", mode = 0o666) {
   });
 }
 
-Object.assign(features, { promisesOpen });
+Object.assign(features, { promisesOpen, FileHandle });

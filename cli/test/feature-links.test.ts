@@ -54,6 +54,7 @@ const CASES: [string, string, string][] = [
   ["source_map", "a.cjs", 'const { SourceMap } = require("module");\nconsole.log(SourceMap);'],
   ["perf_observe", "a.cjs", 'const { PerformanceObserver } = require("perf_hooks");\nnew PerformanceObserver(() => {}).observe({ entryTypes: ["mark"] });'],
   ["perf_histogram", "a.cjs", 'const { monitorEventLoopDelay } = require("perf_hooks");\nmonitorEventLoopDelay().enable();'],
+  ["fs_bigint_stats", "a.cjs", 'console.log(require("fs").statSync(".", { bigint: true }).size);'],
   ["fs_statfs", "a.cjs", 'require("fs").statfs("/", console.log);'],
   ["fs_dir", "a.cjs", 'const fs = require("fs");\nfs.opendirSync(".").closeSync();'],
   ["fs_cp", "a.mjs", 'import { cp } from "node:fs/promises";\nawait cp("a", "b", { recursive: true });'],

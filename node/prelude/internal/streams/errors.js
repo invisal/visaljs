@@ -165,7 +165,31 @@ export const codes = {
   ERR_STREAM_CANNOT_PIPE: E("ERR_STREAM_CANNOT_PIPE", "Cannot pipe, not readable", Error),
   ERR_STREAM_ALREADY_FINISHED: E("ERR_STREAM_ALREADY_FINISHED", "Cannot call %s after a stream was finished", Error),
   ERR_INVALID_STATE: E("ERR_INVALID_STATE", "Invalid state: %s", Error),
+  ERR_INCOMPATIBLE_OPTION_PAIR: E("ERR_INCOMPATIBLE_OPTION_PAIR", 'Option "%s" cannot be used in combination with option "%s"', TypeError),
+  ERR_DIR_CLOSED: E("ERR_DIR_CLOSED", "Directory handle was closed", Error),
+  ERR_FS_FILE_TOO_LARGE: E("ERR_FS_FILE_TOO_LARGE", "File size (%s) is greater than 2 GiB", RangeError),
+  ERR_INVALID_THIS: E("ERR_INVALID_THIS", 'Value of "this" must be of type %s', TypeError),
+  ERR_MISSING_OPTION: E("ERR_MISSING_OPTION", "%s is required", TypeError),
+  ERR_FEATURE_UNAVAILABLE_ON_PLATFORM: E("ERR_FEATURE_UNAVAILABLE_ON_PLATFORM",
+    "The feature %s is unavailable on the current platform, which is being used to run Node.js", TypeError),
 };
+
+/** Node's SystemError for fs (ERR_FS_EISDIR, ERR_FS_CP_*): "<prefix>: <syscall> returned <code>
+ *  (<message>) <path>", with the context as properties. */
+export function fsSystemError(key, prefix, context) {
+  let message = `${prefix}: ${context.syscall} returned ${context.code} (${context.message})`;
+  if (context.path !== undefined) message += ` ${context.path}`;
+  if (context.dest !== undefined) message += ` => ${context.dest}`;
+  const err = codeError(Error, key, message);
+  err.name = "SystemError";
+  Object.defineProperties(err, {
+    info: { value: context, enumerable: true, configurable: true, writable: false },
+    errno: { value: context.errno, enumerable: true, configurable: true, writable: true },
+    syscall: { value: context.syscall, enumerable: true, configurable: true, writable: true },
+    path: { value: context.path, enumerable: true, configurable: true, writable: true },
+  });
+  return err;
+}
 codes.ERR_INVALID_STATE.TypeError = E("ERR_INVALID_STATE", "Invalid state: %s", TypeError);
 
 export class AbortError extends Error {
