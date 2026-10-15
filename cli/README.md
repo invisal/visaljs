@@ -19,8 +19,24 @@ visaljs build            # 📄 Entry: server.js (package.json "scripts.start") 
 
 It takes, in order, the first of these whose file exists: the one command in `"bin"` (with several,
 it asks which), the file `"scripts.start"` runs with `node`, `"main"`, and `index.js`. Arguments in
-the start script aren't built into the binary: give them when you run it. A
-[vinext](https://github.com/cloudflare/vinext) app is detected instead, and built with its own
+the start script aren't built into the binary: give them when you run it.
+
+A [Next.js](https://nextjs.org) app is detected instead (`next` in its dependencies). `visaljs build`
+runs `next build` (as a standalone build: `next.config` stays as it is), then compiles Next's own
+production server, the one `next start` runs, with the app's routes built in. The binary serves
+`.next/` and `public/` from the working directory, as `next start` does:
+
+```sh
+cd my-next-app
+visaljs build            # next build, then the server → ./my-next-app
+PORT=3000 ./my-next-app  # to deploy: copy my-next-app, .next/ (without .next/cache) and public/
+```
+
+It compiles Turbopack builds (`next build`'s default): tested with the App Router's static and
+dynamic pages, client components and route handlers ([`tests/apps/nextjs`](../tests/apps/nextjs)).
+Not tested yet: the Pages Router, middleware and `next/image`. Not supported: a webpack build
+(`next build --webpack`); a static export (`output: "export"`) has no server to compile. A
+[vinext](https://github.com/cloudflare/vinext) app (Next.js on Vite) is built with its own
 `vite build` first.
 
 Needs Node 22 or later and a C compiler (`cc`, `gcc` or `clang`). Linux and macOS; on Windows,

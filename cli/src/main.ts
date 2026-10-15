@@ -29,7 +29,8 @@ const USAGE = `usage: visaljs build [entry.js | project directory] [options]
        visaljs licenses   print the licenses to ship with a binary you distribute
 
 A project (the current directory when none is given) builds its framework's production server: a
-vinext app is built with its own \`vite build\` first, then its server is compiled. Any other
+Next.js app is built with \`next build\` (as a standalone build, next.config unchanged) and a
+vinext app with its own \`vite build\` first, then the server is compiled with the app. Any other
 project builds the file its package.json starts: its one "bin" command, the file "scripts.start"
 runs with node, or "main"; else index.js. The binary is named after the command or the project.
 
@@ -332,7 +333,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   }
   const bytes = statSync(output).size;
   report.finish("🎉", (time) => `Built ${displayPath(resolve(output))} in ${time}: ${size(bytes)}, ${sizeQuip(bytes)}`);
-  if (framework?.fw.notes && style) for (const note of framework.fw.notes(framework.root)) report.note(`    • ${note}`);
+  if (framework?.fw.notes && style) for (const note of framework.fw.notes(framework.root, resolve(output))) report.note(`    • ${note}`);
   return 0;
 }
 

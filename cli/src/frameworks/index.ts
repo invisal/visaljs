@@ -6,6 +6,7 @@
 // are the same for every program. A framework is a module in this folder, listed in FRAMEWORKS.
 import type { Plugin } from "rolldown";
 
+import { next } from "./next.ts";
 import { vinext } from "./vinext.ts";
 
 export { FrameworkError } from "./error.ts";
@@ -26,11 +27,13 @@ export interface Framework {
   plugins?(root: string): Plugin[];
   /** Packages its code may require() at run time, for the bundler's require table (bundle.ts). */
   requires?(root: string): string[];
-  /** What the build report says about the result: a feature it lacks under visaljs, say. */
-  notes?(root: string): string[];
+  /** What the build report says about the result (the binary at `output`): how to run it, a
+   *  feature it lacks under visaljs. */
+  notes?(root: string, output: string): string[];
 }
 
-export const FRAMEWORKS: readonly Framework[] = [vinext];
+/* vinext first: a vinext app depends on next too */
+export const FRAMEWORKS: readonly Framework[] = [vinext, next];
 
 /** The framework of the project in `root`, or undefined. */
 export function detectFramework(root: string): Framework | undefined {
