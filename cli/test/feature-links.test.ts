@@ -64,6 +64,7 @@ const CASES: [string, string, string][] = [
   ["process_more", "a.cjs", 'console.log(process.uptime());'],
   ["process_memory", "a.cjs", 'console.log(process.memoryUsage().rss);'],
   ["timers_global", "a.cjs", 'setTimeout(() => {}, 1000).unref();'],
+  ["timers_global", "b.cjs", 'const timer = setTimeout(() => {}, 10);\ntimer[Symbol.dispose]();'],
   ["performance_global", "a.cjs", 'console.log(performance.now());'],
   ["form_data", "a.cjs", 'const body = new FormData();\nbody.append("a", "1");\nfetch("http://x", { method: "POST", body });'],
   ["form_data", "b.mjs", 'const fd = await new Response("a=1", { headers: { "content-type": "application/x-www-form-urlencoded" } }).formData();\nconsole.log(fd);'],

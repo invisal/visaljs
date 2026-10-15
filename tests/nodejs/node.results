@@ -284,7 +284,6 @@ test-timers-args.js
 test-timers-clear-null-does-not-throw-error.js
 test-timers-clear-object-does-not-throw-error.js
 test-timers-clear-timeout-interval-equivalent.js
-test-timers-clearImmediate-als.js
 test-timers-clearImmediate.js
 test-timers-destroyed.js
 test-timers-dispose.js

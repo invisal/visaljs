@@ -9,8 +9,10 @@ tests/nodejs/
   main.ts          the runner
   sync.ts          copies tests from Node's repository
   modules.ts       which module a test is for, by its file name
+  timings.ts       merges what CI measured into node.timings
   node.results     the tests that pass: one that stops passing fails CI
   node.skip        tests that can't run here, with the reason
+  node.timings     what each test takes on CI, which the shards are balanced by
   NODE_VERSION     the Node the copies are from (node/compat.json's)
   test/
     common/        ours: the helpers Node's tests use (Node's own needs its internals)
@@ -25,8 +27,23 @@ npm run nodejs                              # every copied test
 npm run nodejs -- test-path test-events-    # the tests these file names start with
 npm run nodejs -- --failures test-util-     # and why each one failed
 npm run nodejs -- --update                  # record newly passing tests in node.results
-npm run nodejs -- --shard=1/2               # the first of two parts (CI runs one job each)
+npm run nodejs -- --shard=1/4               # the first of four parts (CI runs one job each)
 ```
+
+## Shards and timings
+
+CI runs the tests in shards, each module's tests in one shard (they share their builds), balanced
+by `node.timings`: what each test took on a CI runner, its share of its batch's build and its run.
+Each shard uploads what it measured as an artifact (`node-timings-1`, …). When a module's tests are
+added, or the shards drift apart, merge a run's into `node.timings` and commit it:
+
+```sh
+gh run download <run-id> --pattern 'node-timings-*' --dir build/timings
+node tests/nodejs/timings.ts build/timings/*/*
+```
+
+A time within a third (or a second) of the recorded one is kept, so the file changes when a
+test's cost does, not with a runner's noise. A test with no time weighs the median.
 
 Tests are compiled in batches of 20: a generated entry file, in a temporary directory, requires
 the one test `VISALJS_NODEJS_TEST` names, so a batch is one build and each test still runs in its

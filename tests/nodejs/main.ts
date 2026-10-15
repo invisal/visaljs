@@ -14,7 +14,8 @@
 //
 // Passing tests are compared with the snapshot node.results: a test that passed there and fails
 // now is a regression (exit 1). --update records newly passing tests, and what each test took
-// (node.timings). --failures prints why each test failed. --shard=I/N runs the I-th of N parts
+// (node.timings). --timings-out=FILE writes what each test took (CI merges them into node.timings:
+// timings.ts). --failures prints why each test failed. --shard=I/N runs the I-th of N parts
 // (1-based), for CI: whole modules, balanced by node.timings. --jobs=N builds N batches at once
 // (default: a third of the cores), each compiling its C --build-jobs=M files at a time (default 3).
 // A build of the crypto or TLS tests compiles ~77k lines of C: on a machine with little memory,
@@ -26,12 +27,12 @@ import { join, sep } from "node:path";
 import { parseArgs } from "node:util";
 
 import { moduleOf } from "./modules.ts";
+import { mergeTimings, readTimings, writeTimings } from "./timings.ts";
 
 const HERE = import.meta.dirname;
 const PARALLEL = join(HERE, "test", "parallel");
 const RESULTS = join(HERE, "node.results");
 const SKIP = join(HERE, "node.skip");
-const TIMINGS = join(HERE, "node.timings");
 const CLI = join(HERE, "..", "..", "cli", "src", "cli.ts");
 const BATCH_SIZE = 20;
 const TIMEOUT_MS = 30_000;
@@ -48,6 +49,7 @@ const { values, positionals } = parseArgs({
     shard: { type: "string" },
     jobs: { type: "string" },
     "build-jobs": { type: "string" },
+    "timings-out": { type: "string" },
   },
 });
 const cores = availableParallelism();
@@ -63,18 +65,6 @@ function shardArg(): [number, number] | undefined {
     process.exit(2);
   }
   return [+m[1]!, +m[2]!];
-}
-
-/** node.timings: `test-file seconds`, one a line: what each test took when --update last ran it
- *  (its share of its batch's build, and its run), to balance the shards. */
-function readTimings(): Map<string, number> {
-  const out = new Map<string, number>();
-  if (!existsSync(TIMINGS)) return out;
-  for (const line of readFileSync(TIMINGS, "utf8").split("\n")) {
-    const [file, seconds] = line.trim().split(/\s+/);
-    if (file && seconds) out.set(file, Number(seconds));
-  }
-  return out;
 }
 
 /** Which of `n` shards each file is in (0-based). A module's tests stay together, so they share
@@ -346,15 +336,11 @@ if (regressions.length) {
   }
 }
 
-/* --update: what each test took, for the shards. A time within a third of the recorded one is kept,
- * so the file changes when a test's cost does, not with the machine's noise. */
+/* what each test took, for the shards: --timings-out writes it as measured (CI's, merged by
+ * timings.ts), --update merges it into node.timings */
+const measured = new Map([...results.values()].filter((r) => r.seconds !== undefined).map((r) => [r.file, Math.round(r.seconds! * 10) / 10]));
+if (values["timings-out"]) writeTimings(measured, values["timings-out"]);
 if (values.update) {
-  /* the tests still copied: a removed one's time goes */
-  const next = new Map([...timings].filter(([f]) => existsSync(join(PARALLEL, f))));
-  for (const r of results.values()) {
-    if (r.seconds === undefined) continue;
-    const old = timings.get(r.file);
-    if (old === undefined || Math.abs(r.seconds - old) > Math.max(1, old / 3)) next.set(r.file, Math.round(r.seconds * 10) / 10);
-  }
-  if (next.size) writeFileSync(TIMINGS, [...next].sort(([a], [b]) => a.localeCompare(b)).map(([f, t]) => `${f} ${t}`).join("\n") + "\n");
+  const next = mergeTimings(timings, measured);
+  if (next.size) writeTimings(next);
 }

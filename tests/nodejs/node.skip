@@ -25,3 +25,6 @@ test-stream-ispaused.js                  Function() constructor
 test-stream-pipeline-http2.js            http2
 # async_hooks' resource events (init/before/after) aren't emitted
 test-stream-writable-samecb-singletick.js  async_hooks.createHook TickObject
+# setImmediate gives an Immediate (not its id) when the program uses one as an object (.unref(),
+# Symbol.dispose…): this checks its constructor's name, which the rules don't look for
+test-timers-clearImmediate-als.js        Immediate's constructor.name
