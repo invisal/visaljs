@@ -1,0 +1,36 @@
+# The compiler on each platform: the fast tier of the apps (tests/apps/check.ts): http-hello,
+# express, hono and zod, each compiled and checked against Node. Windows builds with Zig (the
+# README: MSVC isn't supported), and doesn't fail the run until it passes. Called by ci.yml; every
+# app runs nightly (nightly.yml). Locally: node tests/apps/check.ts
+name: Cross-platform check
+
+on:
+  workflow_call:
+
+jobs:
+  check:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      ZIG: 0.16.0
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Zig
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TOOL_CACHE\zig-$env:ZIG"
+          if (-not (Test-Path "$dir\zig.exe")) {
+            Invoke-WebRequest "https://ziglang.org/download/$env:ZIG/zig-x86_64-windows-$env:ZIG.zip" -OutFile "$env:RUNNER_TEMP\zig.zip"
+            Expand-Archive "$env:RUNNER_TEMP\zig.zip" -DestinationPath "$env:RUNNER_TEMP\zig"
+            Move-Item (Get-ChildItem "$env:RUNNER_TEMP\zig")[0].FullName $dir
+          }
+          Add-Content $env:GITHUB_PATH $dir
+          Add-Content $env:GITHUB_ENV "CC=zig cc"
+      - uses: ./.github/actions/setup
+      - run: node tests/apps/check.ts --tier=fast

@@ -1,0 +1,28 @@
+# The runtime's unit tests (ctest), gcc and clang; plain, ASan + UBSan, and GC stress (a collection
+# at every allocation). Called by ci.yml.
+name: Runtime tests
+
+on:
+  workflow_call:
+
+jobs:
+  runtime:
+    name: ${{ matrix.cc }}, ${{ matrix.mode }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+        mode: [plain, sanitize, gc-stress]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+        run: >
+          cmake -S runtime -B build/runtime
+          -DCMAKE_BUILD_TYPE=Debug
+          -DJSRT_SANITIZE=${{ matrix.mode == 'sanitize' && 'ON' || 'OFF' }}
+          -DJSRT_GC_STRESS=${{ matrix.mode == 'gc-stress' && 'ON' || 'OFF' }}
+      - run: cmake --build build/runtime
+      - run: ctest --test-dir build/runtime --output-on-failure

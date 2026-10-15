@@ -1,0 +1,44 @@
+# The end-to-end programs (tests/programs): each compiled, run, and its output compared with
+# Node's, in shards (VISALJS_PROGRAMS_SHARD), one job each: adding one is adding a number to
+# `shards`. Called by ci.yml on every pull request (shard 1 also builds hello world with the
+# driver's defaults and checks it, and runs the file's other tests), and by nightly.yml with
+# gc-stress: against a checking runtime (every 100th allocation collects, every pointer the marker
+# follows is checked, dead cells are poisoned). Linux only, for now.
+name: Programs
+
+on:
+  workflow_call:
+    inputs:
+      shards:
+        description: the shards, a JSON list ([1, 2, 3])
+        type: string
+        default: "[1, 2, 3]"
+      gc-stress:
+        description: under the checking runtime
+        type: boolean
+        default: false
+
+jobs:
+  programs:
+    name: shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(inputs.shards) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      # the runtime's and the host's libraries, compiled once before the tests build programs in
+      # parallel, and hello world with the driver's defaults
+      - run: node cli/src/cli.ts build tests/programs/hello.js -o hello
+      - name: Check output
+        if: matrix.shard == 1 && !inputs.gc-stress
+        run: |
+          ./hello > out.txt
+          diff -u tests/programs/hello.expected out.txt
+      - run: npx vitest run tests/programs
+        env:
+          VISALJS_PROGRAMS_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+          VISALJS_GC_CHECKS: ${{ inputs.gc-stress && 'stress' || '' }}
+          JS_GC_STRESS_INTERVAL: ${{ inputs.gc-stress && '100' || '' }}

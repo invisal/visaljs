@@ -49,14 +49,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
+      - uses: ./.github/actions/setup
       - uses: oven-sh/setup-bun@v2
       - name: wrk
         run: command -v wrk || sudo -n apt-get install -y wrk
-      - run: npm ci
       - run: npm run apps:install -- express hono
       - name: Benchmark
         run: |
@@ -83,11 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup
       - name: Benchmark
         run: |
           set -o pipefail
@@ -108,13 +100,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
+      - uses: ./.github/actions/setup
       - name: wrk
         run: command -v wrk || sudo -n apt-get install -y wrk
-      - run: npm ci
       - name: Benchmark
         run: |
           set -o pipefail
@@ -126,29 +114,15 @@ jobs:
         run: if [ -f gc.md ]; then cat gc.md >> "$GITHUB_STEP_SUMMARY"; fi
 
   gc-checks:
-    # The program tests against a checking runtime: every 100th allocation collects, every
-    # pointer the marker follows is checked, and dead cells are poisoned. In shards, as ci.yml's.
-    # The runtime's own tests run under stress on every pull request (ci.yml).
-    name: Programs under GC stress (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    # The program tests against a checking runtime (programs.yml's gc-stress), in shards. The
+    # runtime's own tests run under stress on every pull request (ci.yml).
+    name: Programs under GC stress
     needs: changes
     if: needs.changes.outputs.run == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npx vitest run tests/programs
-        env:
-          VISALJS_GC_CHECKS: stress
-          JS_GC_STRESS_INTERVAL: "100"
-          VISALJS_PROGRAMS_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+    uses: ./.github/workflows/programs.yml
+    with:
+      shards: "[1, 2, 3]"
+      gc-stress: true
 
   apps:
     # Every app compiled and checked against Node (tests/apps/check.ts --tier=full), express-postgres
@@ -181,11 +155,7 @@ jobs:
         options: --health-cmd "mysqladmin ping -h 127.0.0.1" --health-interval 2s --health-timeout 5s --health-retries 60
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup
       - run: node tests/apps/check.ts --tier=full --require-databases
         env:
           VISALJS_POSTGRES_URL: postgres://app:app@localhost:5432/app

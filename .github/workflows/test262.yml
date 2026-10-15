@@ -1,0 +1,77 @@
+# test262 in shards, one job each, so it spreads over every runner: adding one is adding a number to
+# `shards`. Each shard is checked against its part of tests/test262.results and fails on a
+# regression; with --update it saves its Summary (build/test262-shard-I.json). Then the snapshot:
+# the Summaries merged are the full suite's, written as one --update would (tests/test262.results,
+# build/test262-summary.json); on a pull request, newly passing units are committed to its branch
+# as the new snapshot (a push with GITHUB_TOKEN starts no new run). Called by ci.yml.
+# Locally, only a part: npm run test262 -- language/statements/debugger
+name: test262
+
+on:
+  workflow_call:
+    inputs:
+      shards:
+        description: the shards, a JSON list ([1, 2, 3, 4])
+        type: string
+        default: "[1, 2, 3, 4]"
+
+jobs:
+  test262:
+    name: shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(inputs.shards) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+          # the branch itself, not the merge with main: the snapshot is committed to it
+          ref: ${{ github.head_ref || github.ref }}
+      - uses: ./.github/actions/setup
+      # the runner's own tests, with the harness files the checkout brings: once, on the first shard
+      - if: matrix.shard == 1
+        run: npx vitest run tests/runner
+      - run: npm run test262 -- --update --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: test262-shard-${{ matrix.shard }}
+          path: build/test262-shard-${{ matrix.shard }}.json
+
+  snapshot:
+    name: snapshot
+    needs: test262
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: test262-shard-*
+          path: build/shards
+          merge-multiple: true
+      - run: npm run test262 -- --merge build/shards/*.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: test262-summary
+          path: build/test262-summary.json
+      - name: Commit the snapshot
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          BRANCH: ${{ github.head_ref }}  # a branch name is text from the pull request: not in the script itself
+        run: |
+          if git diff --quiet tests/test262.results; then
+            echo "The snapshot is unchanged." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          added=$(git diff --numstat tests/test262.results | cut -f1)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "test262: snapshot, $added newly passing" tests/test262.results
+          git push origin "HEAD:$BRANCH"
+          echo "Committed the snapshot: $added newly passing units." >> "$GITHUB_STEP_SUMMARY"

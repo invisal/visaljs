@@ -1,0 +1,37 @@
+# Node's own tests (tests/nodejs/test/parallel, copied by tests/nodejs/sync.ts), compiled by
+# visaljs: a test that passes in tests/nodejs/node.results and fails now is a regression. Newly
+# passing tests are recorded locally: npm run nodejs -- --update. In shards, one job each: adding
+# one is adding a number to `shards`. The shards are balanced by tests/nodejs/node.timings: each
+# uploads what its tests took (node-timings-N), which `node tests/nodejs/timings.ts` merges in when
+# a module's tests are added. Called by ci.yml.
+name: Node's tests
+
+on:
+  workflow_call:
+    inputs:
+      shards:
+        description: the shards, a JSON list ([1, 2, 3, 4])
+        type: string
+        default: "[1, 2, 3, 4]"
+
+jobs:
+  nodejs:
+    name: shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(inputs.shards) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      # one build at a time, two C files at once: a test that runs away on memory stops at its heap
+      # limit, and the builds stay well within the runner's memory; --failures: why each failing
+      # test fails, in the log
+      - run: npm run nodejs -- --jobs=1 --build-jobs=2 --failures --shard=${{ matrix.shard }}/${{ strategy.job-total }} --timings-out=node-timings-${{ matrix.shard }}
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: node-timings-${{ matrix.shard }}
+          path: node-timings-${{ matrix.shard }}
+          retention-days: 14
