@@ -234,6 +234,39 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     expect(bundle).not.toMatch(/\["other"/);  /* resolves to no package */
   });
 
+  it("builds a Next.js project's production server, and says why it can't", async () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, "package.json"), '{ "dependencies": { "next": "16.4.1", "react": "19.3.1" } }');
+    expect(await run("build", dir, "--emit-c", join(dir, "c"))).toMatchObject({ code: 1, stderr: `visaljs: next isn't installed in ${dir}: run npm install first\n` });
+    expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
+      code: 1,
+      stderr: `visaljs: ${dir} has no Next.js build (no .next/required-server-files.json): run \`next build\`, or build without --no-framework-build\n`,
+    });
+    /* output: "export": static files, no server */
+    mkdirSync(join(dir, "out"));
+    writeFileSync(join(dir, "out", "index.html"), "<html></html>");
+    expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining(`visaljs: ${dir} is a static export (output: "export" in next.config): it has no server to compile.`),
+    });
+    /* a build that isn't standalone: its traces leave out start-server's files */
+    mkdirSync(join(dir, ".next", "server", "app"), { recursive: true });
+    writeFileSync(join(dir, ".next", "required-server-files.json"), '{ "config": {} }');
+    expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining(`visaljs: ${dir}'s .next isn't a standalone build, whose traces visaljs bundles from: build without --no-framework-build`),
+    });
+    /* a webpack build: no Turbopack runtime among the chunks */
+    writeFileSync(join(dir, ".next", "required-server-files.json"), '{ "config": { "output": "standalone" } }');
+    expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining(`visaljs: ${dir}'s .next was built with webpack (next build --webpack): visaljs compiles Turbopack builds`),
+    });
+    /* a vinext app depends on next too: it's vinext's */
+    writeFileSync(join(dir, "package.json"), '{ "dependencies": { "next": "16.4.1", "vinext": "1.0.1" } }');
+    expect((await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).stderr).toContain("has no vinext build");
+  });
+
   it("builds a project directory through its framework, and says why it can't", async () => {
     const dir = tempDir();
     expect(await run("build", dir)).toMatchObject({ code: 1, stderr: `visaljs: ${dir}: no entry file: checked a package.json and index.js: give an entry file\n` });

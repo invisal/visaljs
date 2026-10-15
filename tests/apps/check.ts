@@ -111,6 +111,17 @@ const APP_CHECKS: Record<string, App> = {
       requests: [[get("/"), get("/posts/3"), get("/api/hello?name=visaljs"), send("POST", "/api/hello", '{"a":1}'), get("/missing")]],
     },
   },
+  nextjs: {
+    tier: "full",
+    check: {
+      kind: "http",
+      node: ["node_modules/next/dist/bin/next", "start"],
+      requests: [
+        [get("/"), get("/posts/7"), get("/api/hello?name=visaljs"), send("POST", "/api/hello", '{"a":1}')],
+        [get("/robots.txt"), get("/missing"), head("/")],
+      ],
+    },
+  },
   "express-postgres": {
     tier: "full",
     database: "postgres",

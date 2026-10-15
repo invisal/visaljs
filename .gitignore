@@ -18,6 +18,9 @@ tests/apps/*/todo
 tests/apps/*/validate
 tests/apps/*/tsc
 tests/apps/*/render
+tests/apps/nextjs/nextjs
+tests/apps/nextjs/.next/
+tests/apps/nextjs/next-env.d.ts
 tests/apps/*/*.exe
 tests/apps/*/*.lib
 tests/apps/typescript/sample/dist/

@@ -88,9 +88,7 @@ function recordedNodeExports(compat: Compat): Record<string, string[]> {
 
 /** visaljs's exports: a program importing every provided module, compiled and run. */
 async function visaljsExports(): Promise<Record<string, ReturnType<typeof exportsOf>>> {
-  /* node:inspector and node:inspector/promises throw when they load (no inspector in a compiled
-   * program): nothing to count */
-  const names = Object.keys(modules).filter((name) => !name.startsWith("_") && name !== "inspector" && name !== "inspector/promises").sort();
+  const names = Object.keys(modules).filter((name) => !name.startsWith("_")).sort();
   const dir = mkdtempSync(join(tmpdir(), "visaljs-compat-"));
   try {
     const probe = join(dir, "probe.mjs");

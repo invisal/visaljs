@@ -1,0 +1,16 @@
+{
+  "name": "@visaljs-apps/nextjs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A Next.js 16 app (App Router, Turbopack), compiled by visaljs: its own production server",
+  "main": ".",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "16.4.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}

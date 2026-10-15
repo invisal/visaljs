@@ -44,6 +44,15 @@ function notFound(id) {
   return e;
 }
 
+/* require.extensions and Module._extensions (deprecated, still read: a hook saves the old one): a
+ * compiled program has no files to load, so each loader says so */
+const extensions = { __proto__: null };
+for (const ext of [".js", ".json", ".node"]) {
+  extensions[ext] = function (module, filename) {
+    throw withCode(new Error(`Cannot load ${filename}: a compiled program has no files to load at run time`), "ERR_UNKNOWN_FILE_EXTENSION");
+  };
+}
+
 export function createRequire(filename) {
   if (typeof filename !== "string" && !(typeof URL === "function" && filename instanceof URL)) {
     throw withCode(new TypeError("The argument 'filename' must be a file URL object, file URL string, or absolute path string. Received " +
@@ -62,6 +71,7 @@ export function createRequire(filename) {
   require.resolve.paths = () => null;
   require.cache = { __proto__: null };
   require.main = undefined;
+  require.extensions = extensions;
   return require;
 }
 
@@ -230,7 +240,7 @@ const ModuleWithHelpers = /* @__PURE__ */ Object.assign(Module, {
   findPackageJSON, globalPaths, Module, wrapper,
   wrap: (script) => wrapper[0] + script + wrapper[1],
   _cache: { __proto__: null },
-  _extensions: { __proto__: null },
+  _extensions: extensions,
   /* a built-in resolves to itself; a compiled program has no files to resolve to */
   _resolveFilename(request) {
     if (isBuiltin(request)) return request;

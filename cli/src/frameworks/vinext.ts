@@ -7,30 +7,12 @@
 // default) is built for Node: its own Vite config, without the Cloudflare plugin (WORKERS_CONFIG).
 import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { promisify } from "node:util";
 
 import { FrameworkError } from "./error.ts";
 import type { Framework } from "./index.ts";
-
-interface PackageJson {
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  scripts?: Record<string, string>;
-}
-
-/** The project's package.json, or {} without one. */
-function packageJson(root: string): PackageJson {
-  const file = join(root, "package.json");
-  return existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as PackageJson) : {};
-}
-
-/** The project's package.json's dependencies and devDependencies. */
-function dependencies(root: string): Record<string, string> {
-  const pkg = packageJson(root);
-  return { ...pkg.devDependencies, ...pkg.dependencies };
-}
+import { dependencies, packageBin, packageJson } from "./project.ts";
 
 /** The Vite config file and mode the project's build script gives `vite build` (-c, -m), if any. */
 export function buildScriptOptions(root: string): { config?: string; mode?: string } {
@@ -76,20 +58,6 @@ const flat = async (plugins) => (await Promise.all((plugins ?? []).map(async (p)
 const plugins = (await flat(loaded?.config.plugins)).filter((p) => !p.name?.startsWith("vite-plugin-cloudflare"));
 export default { ...loaded?.config, root, plugins };
 `;
-
-/** The script a package installed in the project runs as `name` (its package.json's "bin"). */
-function packageBin(root: string, pkg: string, name: string): string {
-  let manifest: string;
-  try {
-    manifest = createRequire(join(root, "package.json")).resolve(`${pkg}/package.json`);
-  } catch {
-    throw new FrameworkError(`${pkg} isn't installed in ${root}: run npm install first`);
-  }
-  const { bin } = JSON.parse(readFileSync(manifest, "utf8")) as { bin?: string | Record<string, string> };
-  const script = typeof bin === "string" ? bin : bin?.[name];
-  if (!script) throw new FrameworkError(`${pkg} has no ${name} command`);
-  return join(dirname(manifest), script);
-}
 
 const MARKER = join("dist", "server", "vinext-server.json");  /* written by vinext's build */
 const BUILD_ENTRIES = ["dist/server/index.js", "dist/server/entry.js"];  /* App Router's, Pages Router's */
