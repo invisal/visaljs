@@ -15,7 +15,8 @@ import { compileJobs, compileProgram, describeCompiler, findCompilers, gcCheckFl
 import { evalCalls, evalWarning } from "./eval.ts";
 import { licensesText } from "./licenses.ts";
 import { DEFAULT_HOSTS, hostPrimitives } from "./hosts.ts";
-import { detectFramework, type Framework, FrameworkError, FRAMEWORKS } from "./frameworks/index.ts";
+import { EntryError, type ProjectEntry, projectEntry } from "./entry.ts";
+import { detectFramework, type Framework, FrameworkError } from "./frameworks/index.ts";
 import { compileRegExps, regexpLiterals } from "./regexp.ts";
 import { count, lineCount, Report, type ReportStyle, size, sizeQuip } from "./report.ts";
 
@@ -28,7 +29,9 @@ const USAGE = `usage: visaljs build [entry.js | project directory] [options]
        visaljs licenses   print the licenses to ship with a binary you distribute
 
 A project (the current directory when none is given) builds its framework's production server: a
-vinext app is built with its own \`vite build\` first, then its server is compiled.
+vinext app is built with its own \`vite build\` first, then its server is compiled. Any other
+project builds the file its package.json starts: its one "bin" command, the file "scripts.start"
+runs with node, or "main"; else index.js. The binary is named after the command or the project.
 
 options:
   -o <file>          output binary
@@ -147,20 +150,29 @@ interface BuildOptions {
 }
 
 async function build(entry: string, options: BuildOptions, io: Io): Promise<number> {
-  /* a project directory: its framework's production server (frameworks/), built below */
+  /* a project directory: its framework's production server (frameworks/), built below, or the
+   * file its package.json starts (entry.ts) */
   let framework: { fw: Framework; root: string } | undefined;
+  let project: (ProjectEntry & { root: string }) | undefined;
   let source = "";
   if (statSync(entry, { throwIfNoEntry: false })?.isDirectory()) {
     const root = resolve(entry);
     const fw = detectFramework(root);
-    if (!fw) {
-      io.stderr(`visaljs: ${entry === "." ? "the current directory" : entry} isn't a project of a framework visaljs knows ` +
-        `(${FRAMEWORKS.map((f) => f.name).join(", ")}): give an entry file\n`);
-      return 1;
+    if (fw) {
+      framework = { fw, root };
+      entry = join(root, "visaljs-entry.js");  /* generated: its imports resolve from the project */
+    } else {
+      try {
+        project = { ...projectEntry(root), root };
+      } catch (e) {
+        if (!(e instanceof EntryError)) throw e;
+        io.stderr(`visaljs: ${entry === "." ? "the current directory" : entry}: ${e.message}: give an entry file\n`);
+        return 1;
+      }
+      entry = project.file;
     }
-    framework = { fw, root };
-    entry = join(root, "visaljs-entry.js");  /* generated: its imports resolve from the project */
-  } else {
+  }
+  if (!framework) {
     try {
       source = readFileSync(entry, "utf8");
     } catch (e) {
@@ -177,6 +189,10 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   let frameworkExtras = {};
   /* a production build, as bundlers make for a server (--node-env= leaves it to the environment) */
   const nodeEnv = options["node-env"] === "" ? undefined : options["node-env"] ?? "production";
+  if (project && style) {
+    report.note(` 📄 Entry: ${relative(project.root, project.file).replaceAll("\\", "/")} (${project.from})`);
+    if (project.ignoredArgs.length) report.note(`    • its arguments (${project.ignoredArgs.join(" ")}) aren't built in: give them when you run the binary`);
+  }
   if (framework) {
     const { fw, root } = framework;
     if (style) report.note(` 🧭 A ${fw.name} app: compiling its production server`);
@@ -279,8 +295,14 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
     report.finish("📂", (time) => `Wrote ${files.length > 1 ? `${files.length} files to ${displayPath(resolve(options["emit-c"]!))}` : displayPath(resolve(options["emit-c"]!, "program.c"))} in ${time}`);
     return 0;
   }
-  let output = options.output ?? (framework ? join(framework.root, basename(framework.root)) : basename(entry).replace(/\.[cm]?js$/, ""));
+  let output = options.output ?? (framework ? join(framework.root, basename(framework.root))
+    : project ? join(project.root, project.name) : basename(entry).replace(/\.[cm]?js$/, ""));
   if (process.platform === "win32" && !extname(output)) output += ".exe";  /* the linker would add it anyway */
+  /* a bin file without an extension, or a directory of the command's name: the binary would replace it */
+  if (resolve(output) === resolve(entry) || statSync(output, { throwIfNoEntry: false })?.isDirectory()) {
+    io.stderr(`visaljs: the binary would be ${displayPath(resolve(output))}, which is ${resolve(output) === resolve(entry) ? "the entry file" : "a directory"}: give another with -o\n`);
+    return 1;
+  }
   const opt = [...(options.debug ? ["-O0"] : ["-O2"]), ...gcCheckFlags()];
   const dir = scratchDir();
   try {

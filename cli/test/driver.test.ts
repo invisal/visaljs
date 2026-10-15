@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { modules } from "@visaljs/node";
 
 import { compileProgram, DiagnosticFilter, libraryArchive, prebuiltArchive, prebuiltKey, toolchainHint } from "../src/cc.ts";
+import { EntryError, nodeCommand, projectEntry } from "../src/entry.ts";
 import { buildScriptOptions } from "../src/frameworks/vinext.ts";
 import { type Io, main, VERSION } from "../src/main.ts";
 import { prebuiltLibraries, TARGETS } from "../scripts/prebuilt.ts";
@@ -59,7 +60,35 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
 
   it("takes at most one entry file or project directory for build: the current directory by default", async () => {
     expect((await run("build", "a.js", "b.js")).code).toBe(2);
-    expect(await run("build")).toMatchObject({ code: 1, stderr: "visaljs: the current directory isn't a project of a framework visaljs knows (vinext): give an entry file\n" });
+    /* the repository's root: no framework, and its package.json names no entry */
+    expect(await run("build")).toMatchObject({
+      code: 1,
+      stderr: `visaljs: the current directory: no entry file: checked package.json's "bin", "scripts.start" and "main", and index.js: give an entry file\n`,
+    });
+  });
+
+  it("builds a project from the entry its package.json starts, and says which", async () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "@acme/api", main: "index.js", scripts: { start: "NODE_ENV=production node -r dotenv/config server.js --port 80" } }));
+    writeFileSync(join(dir, "server.js"), "print(1);\n");
+    const plain = { report: { live: false, color: false } };
+    const r = await runWith(plain, "build", dir, "--emit-c", join(dir, "c"));
+    expect(r.code).toBe(0);
+    expect(r.stderr.split("\n").slice(0, 2)).toEqual([
+      ' 📄 Entry: server.js (package.json "scripts.start")',
+      "    • its arguments (--port 80) aren't built in: give them when you run the binary",
+    ]);
+    expect(readFileSync(join(dir, "c", "bundle.js"), "utf8")).toContain("print(1)");
+    expect(await run("build", join(dir, "missing"))).toMatchObject({ code: 1, stderr: expect.stringMatching(/cannot read/) });
+  });
+
+  it("refuses a binary that would replace its entry file", async () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "tool", bin: { tool: "tool" } }));
+    writeFileSync(join(dir, "tool"), "print(1);\n");
+    const r = await run("build", dir);
+    expect(r).toMatchObject({ code: 1, stderr: `visaljs: the binary would be ${join(dir, "tool")}, which is the entry file: give another with -o\n` });
+    expect(readFileSync(join(dir, "tool"), "utf8")).toBe("print(1);\n");
   });
 
   it("dumps the AST of a script", async () => {
@@ -207,7 +236,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
 
   it("builds a project directory through its framework, and says why it can't", async () => {
     const dir = tempDir();
-    expect(await run("build", dir)).toMatchObject({ code: 1, stderr: `visaljs: ${dir} isn't a project of a framework visaljs knows (vinext): give an entry file\n` });
+    expect(await run("build", dir)).toMatchObject({ code: 1, stderr: `visaljs: ${dir}: no entry file: checked a package.json and index.js: give an entry file\n` });
     writeFileSync(join(dir, "package.json"), '{ "dependencies": { "vinext": "1.0.1" } }');
     expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
       code: 1,
@@ -404,5 +433,63 @@ describe("prebuilt libraries", () => {
       expect(libs.map((l) => l.name).sort(), target.name).toEqual(["boringssl", "brotli", "uv", "zlib", "zstd"]);
       for (const l of libs) for (const f of [...l.sources, ...l.headers]) expect(existsSync(f), f).toBe(true);
     }
+  });
+});
+
+describe("project entries", () => {
+  const project = (pkg: object | undefined, files: string[]) => {
+    const dir = tempDir();
+    if (pkg) writeFileSync(join(dir, "package.json"), JSON.stringify(pkg));
+    for (const f of files) {
+      mkdirSync(join(dir, f, ".."), { recursive: true });
+      writeFileSync(join(dir, f), "");
+    }
+    return dir;
+  };
+  const entry = (dir: string) => {
+    const e = projectEntry(dir);
+    return { ...e, file: e.file.slice(dir.length + 1) };
+  };
+
+  it("finds the node command of a start script, past variables and options", () => {
+    expect(nodeCommand("node server.js")).toEqual({ file: "server.js", args: [] });
+    expect(nodeCommand("NODE_ENV=production node --enable-source-maps -r dotenv/config dist/app.js --port 80"))
+      .toEqual({ file: "dist/app.js", args: ["--port", "80"] });
+    expect(nodeCommand("npm run build && node dist/server.js")).toEqual({ file: "dist/server.js", args: [] });
+    expect(nodeCommand("next start")).toBeUndefined();
+    expect(nodeCommand("node")).toBeUndefined();
+  });
+
+  it("takes bin first, then scripts.start, then main, then index.js: the first whose file is there", () => {
+    const all = { name: "@acme/api", bin: { api: "./cli.js" }, main: "lib.js", scripts: { start: "node server.js" } };
+    expect(entry(project(all, ["cli.js", "server.js", "lib.js", "index.js"]))).toEqual({ file: "cli.js", from: 'package.json "bin"', name: "api", ignoredArgs: [] });
+    expect(entry(project(all, ["server.js", "lib.js"]))).toEqual({ file: "server.js", from: 'package.json "scripts.start"', name: "api", ignoredArgs: [] });
+    expect(entry(project(all, ["lib.js"]))).toEqual({ file: "lib.js", from: 'package.json "main"', name: "api", ignoredArgs: [] });
+    /* npm init's "main": "index.js" without the file, and a start script that isn't node's */
+    expect(() => projectEntry(project({ name: "web", main: "index.js", scripts: { start: "vite" } }, ["app.js"])))
+      .toThrow(`(package.json "main" names index.js, which isn't there)`);
+    expect(entry(project(undefined, ["index.js"]))).toMatchObject({ file: "index.js", from: "index.js" });
+  });
+
+  it("names the binary after the command, the package without its scope, else the directory", () => {
+    expect(entry(project({ bin: "./run.js", name: "@scope/thing" }, ["run.js"])).name).toBe("thing");
+    const dir = project({}, ["index.js"]);
+    expect(projectEntry(dir).name).toBe(dir.split(/[\\/]/).at(-1));
+  });
+
+  it("resolves a file as node does: server for server.js", () => {
+    expect(entry(project({ scripts: { start: "node server" } }, ["server.js"])).file).toBe("server.js");
+    expect(entry(project({ main: "lib/main" }, ["lib/main.cjs"])).file).toBe("lib/main.cjs");
+  });
+
+  it("asks for one of several commands, and says what it checked when nothing is there", () => {
+    const several = project({ bin: { a: "a.js", b: "b.js" } }, ["a.js", "b.js"]);
+    expect(() => projectEntry(several)).toThrow(EntryError);
+    expect(() => projectEntry(several)).toThrow(/package\.json "bin" names 2 commands: build one of them, visaljs build .*a\.js -o a, or visaljs build .*b\.js -o b/);
+    expect(() => projectEntry(project({ main: "dist/index.js", scripts: { start: "node dist/server.js" } }, []))).toThrow(
+      `no entry file: checked package.json's "bin", "scripts.start" and "main", and index.js ` +
+      `(package.json "scripts.start" names dist/server.js, which isn't there; package.json "main" names dist/index.js, which isn't there)`);
+    expect(() => projectEntry(project(undefined, []))).toThrow("no entry file: checked a package.json and index.js");
+    expect(() => projectEntry(project(undefined, ["package.json"]))).toThrow(/cannot read .*package\.json/);
   });
 });

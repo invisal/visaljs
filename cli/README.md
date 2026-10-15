@@ -9,6 +9,20 @@ visaljs build app.js -o app
 ./app
 ```
 
+In a project, `visaljs build` with no file finds the entry in `package.json`, and names the binary
+after the project:
+
+```sh
+cd my-api                # package.json: "name": "my-api", "scripts": { "start": "node server.js" }
+visaljs build            # 📄 Entry: server.js (package.json "scripts.start") → ./my-api
+```
+
+It takes, in order, the first of these whose file exists: the one command in `"bin"` (with several,
+it asks which), the file `"scripts.start"` runs with `node`, `"main"`, and `index.js`. Arguments in
+the start script aren't built into the binary: give them when you run it. A
+[vinext](https://github.com/cloudflare/vinext) app is detected instead, and built with its own
+`vite build` first.
+
 Needs Node 22 or later and a C compiler (`cc`, `gcc` or `clang`). Linux and macOS; on Windows,
 a clang-family compiler: [Zig](https://ziglang.org/) (`winget install zig.zig`) or LLVM-MinGW
 (MSVC isn't supported yet).
@@ -33,7 +47,13 @@ takes a minute. `VISALJS_PREBUILT=0` builds them anyway.
 ```
 
 ```
-usage: visaljs build <entry.js> [options]
+usage: visaljs build [entry.js | project directory] [options]
+       visaljs licenses   print the licenses to ship with a binary you distribute
+
+A project (the current directory when none is given) builds its framework's production server: a
+vinext app is built with its own `vite build` first, then its server is compiled. Any other
+project builds the file its package.json starts: its one "bin" command, the file "scripts.start"
+runs with node, or "main"; else index.js. The binary is named after the command or the project.
 
 options:
   -o <file>          output binary
@@ -41,6 +61,8 @@ options:
   --dump-ast         print the syntax tree and stop
   --dump-ir          print the IR and stop
   --debug            build without optimization (-O0), keeping symbols and debug info
+  --symbols          keep symbols and debug info in the optimized build (for profilers such as perf)
+  --no-optimize      skip the IR optimizer (to compare, or to rule it out)
   -j, --jobs <n>     compile at most n C files at once (default: one per processor, memory permitting)
   --embed-source     embed the source text: Function.prototype.toString returns it
   --all-builtins     install every built-in, not only those the program names
@@ -49,8 +71,10 @@ options:
   --node-env <name>  the value of process.env.NODE_ENV, fixed at build time (default: production);
                      empty: read from the environment at run time
   --no-bundle        skip the bundler: the input is one ES module (a bundle)
+  --no-framework-build  a project: compile its existing build output, without building it first
   --script           compile as a classic script (sloppy mode, no bundler)
   -q, --quiet        don't report each step of the build
+  --verbose          list each place a warning is about
   --version          print the version
   --help             print this help
 ```

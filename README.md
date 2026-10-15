@@ -10,6 +10,9 @@ visaljs build app.js -o app
 ./app
 ```
 
+In a project, `visaljs build` with no file builds what its `package.json` starts (`"bin"`,
+`"scripts.start"` or `"main"`), and names the binary after the project.
+
 A bare `node:http` server compiles to a 1.9 MB binary, and an Express 5 app to 6.6 MB. As a
 Node single executable application, each is about 125 MB.
 
