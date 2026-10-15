@@ -63,6 +63,7 @@ const CASES: [string, string, string][] = [
   ["fs_watch", "a.cjs", 'const fs = require("fs");\nfs.watch(".", () => {});'],
   ["fs_blob", "a.mjs", 'import { openAsBlob } from "node:fs";\nconsole.log(await openAsBlob("a"));'],
   ["fs_filehandle", "a.mjs", 'import fs from "node:fs/promises";\nconst h = await fs.open("a");\nawait h.close();'],
+  ["fs_filehandle", "a.mjs", 'import { open, writeFile } from "node:fs/promises";\nawait writeFile("a", "");\nawait (await open("a")).close();'],
   ["process_more", "a.cjs", 'console.log(process.uptime());'],
   ["process_memory", "a.cjs", 'console.log(process.memoryUsage().rss);'],
   ["timers_global", "a.cjs", 'setTimeout(() => {}, 1000).unref();'],

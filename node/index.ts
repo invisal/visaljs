@@ -194,7 +194,7 @@ const FS_DIR = fsNamed("opendir|opendirSync|Dir");
 const FS_CP = fsNamed("cp|cpSync");
 const FS_GLOB = fsNamed("glob|globSync");
 const FS_WATCH = fsNamed("watch|watchFile|unwatchFile");
-const FS_OPEN = /\b[\w$]*[pP]romises[\w$]*\s*\.\s*open\b|\brequire_promises\(\)\s*\.\s*open\b|(?<![.\w$])open\s*\(/;
+const FS_OPEN = /\b[\w$]*[pP]romises[\w$]*\s*\.\s*open\b|\brequire_promises\(\)\s*\.\s*open\b|(?<![.\w$])open(?:\$\d+)?\s*\(/;
 /* process's members in internal/process_more.js: as process's (process.x, process_default.x), or bare
  * when distinctive (imported from node:process) */
 const PROCESS_MORE = new RegExp(`\\bprocess[\\w$]*\\s*\\.\\s*(?:${PROCESS_DISTINCT}|${PROCESS_COMMON})\\b|(?<![.\\w$])(?:${PROCESS_DISTINCT})\\b`);
