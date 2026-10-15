@@ -102,7 +102,7 @@ async function rollupOnce(entry: string, hosts: readonly HostPackage[], implicit
       /* a constant NODE_ENV: `if (process.env.NODE_ENV === "production")` folds, and tree-shaking
        * drops the other branch (React's development build, half of the bundle) */
       ...(extras.nodeEnv === undefined ? {} : { transform: { define: { "process.env.NODE_ENV": JSON.stringify(extras.nodeEnv) } } }),
-      plugins: [hostModules(hosts), commonJS(), implicitEntry(entry, implicit), requireTable(hosts, required), ...generatedEntry(entry, extras.source), ...(extras.plugins ?? [])],
+      plugins: [hostModules(hosts), commonJS(), missingRequires(warn), depdWrappers(), implicitEntry(entry, implicit), requireTable(hosts, required), ...generatedEntry(entry, extras.source), ...(extras.plugins ?? [])],
     });
     try {
       const { output } = await build.generate({
@@ -228,6 +228,63 @@ function commonJS(): Plugin {
         marked = true;
       }
       return marked ? { code: s.toString(), map: s.generateMap({ hires: true }).toString() } : null;
+    },
+  };
+}
+
+/** A require() of a file that isn't there, or of a native addon (a .node file), throws when it's
+ *  reached, as in Node, instead of failing the build: packages require() files their published
+ *  build leaves out (a framework's dev server, in a branch production never takes: Next.js's
+ *  standalone output), and addons they fall back from (sharp, in a try). A warning says where. */
+function missingRequires(warn: (message: string, where: string) => void): Plugin {
+  return {
+    name: "visaljs-missing-requires",
+    async resolveId(source, importer, { kind }) {
+      if (kind !== "require-call" || !importer || source.startsWith("\0")) return null;
+      const relative = /^\.\.?(?:\/|$)/.test(source);
+      const resolved = relative || source.endsWith(".node") ? await this.resolve(source, importer, { skipSelf: true }) : null;
+      if (resolved && !resolved.id.endsWith(".node")) return null;  /* there: the plugins after this one resolve it */
+      if (!relative && !resolved) return null;
+      const what = resolved ? "a native addon, which visaljs can't load" : "not there";
+      warn(`${source} is ${what}: its require() throws if it's reached`, `${importer}: `);
+      return MISSING + JSON.stringify([source, resolved ? "ERR_DLOPEN_FAILED" : "MODULE_NOT_FOUND"]);
+    },
+    load(id) {
+      if (!id.startsWith(MISSING)) return null;
+      const [source, code] = JSON.parse(id.slice(MISSING.length)) as [string, string];
+      const message = code === "MODULE_NOT_FOUND" ? `Cannot find module '${source}'` : `${source}: visaljs can't load native addons`;
+      /* CommonJS: wrapped, so it runs (and throws) only when required */
+      return `throw Object.assign(new Error(${JSON.stringify(message)}), { code: ${JSON.stringify(code)} });\n`;
+    },
+  };
+}
+
+const MISSING = "\0visaljs-missing:";
+
+/** depd (deprecation warnings: Express 4, body-parser, http-errors, Next.js's send) wraps a
+ *  deprecated function with new Function, to give the wrapper the function's arity: a closure
+ *  instead, whose length is 0. new Function needs eval; depd's call is the same everywhere it's
+ *  bundled or vendored: `new Function("fn", "log", "deprecate", "message", "site", body)(…)`. */
+function depdWrappers(): Plugin {
+  const call = /\bnew Function\((?=\s*(["'])fn\1\s*,\s*\1log\1\s*,\s*\1deprecate\1\s*,\s*\1message\1\s*,\s*\1site\1\s*,)/g;
+  const helper = "function __visaljs_depdWrapper() { return function (fn, log, deprecate, message, site) { " +
+    "return function () { log.call(deprecate, message, site); return fn.apply(this, arguments); }; }; }\n";
+  return {
+    name: "visaljs-depd",
+    transform: {
+      filter: { code: /new Function\(\s*["']fn["']\s*,\s*["']log["']/ },
+      handler(code, id) {
+        if (id.startsWith("\0")) return null;
+        const s = new RolldownMagicString(code);
+        let found = false;
+        for (const m of code.matchAll(call)) {
+          s.update(m.index, m.index + m[0].length, "__visaljs_depdWrapper(");
+          found = true;
+        }
+        if (!found) return null;
+        s.append(`\n${helper}`);  /* a declaration: hoisted, and after any directive prologue */
+        return { code: s.toString(), map: s.generateMap({ hires: true, source: id }).toString() };
+      },
     },
   };
 }
