@@ -141,5 +141,7 @@ X(ic_weak_reset)
 
 /* test_weak.c */
 X(weak_map_ephemerons)
+X(weak_map_young_collection)
+X(weak_map_young_many_writes)
 X(weak_ref_kept_alive)
 X(finalization_registry_cleanup)

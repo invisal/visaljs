@@ -201,6 +201,9 @@ struct JSRuntime {
     int     (*on_handled_late)(JSContext *ctx, JSValue promise);
     uint8_t   failure;  /* the exit status after an uncaught error: 1, or on_uncaught's */
     struct JSWeakList { struct JSObject **items; size_t count, cap; } weak;  /* WeakMap/Set/Ref, registries */
+    /* WeakMap and WeakSet entries set since the last collection, by key (EMPTY: every entry of the
+     * table): the only ones a young collection looks at (weak.c). */
+    struct JSWeakWrites { struct JSWeakWrite { struct JSObject *table; JSValue key; } *items; size_t count, cap; } weak_writes;
     struct JSKeptAlive { JSValue *items; size_t count, cap; } kept_alive;    /* [[KeptAlive]]: roots until ClearKeptObjects */
     const struct JSComponent *const *components;  /* installed in every realm */
     size_t    ncomponents;

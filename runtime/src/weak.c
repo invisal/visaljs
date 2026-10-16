@@ -61,6 +61,8 @@ typedef struct WeakTable {
     JSObject   obj;
     WeakEntry *entries;  /* malloc'd, the heap's external memory; NULL until the first key */
     uint32_t   cap, count, used;  /* used: count + tombstones */
+    uint32_t   writes;       /* entries set since the last collection, listed in rt->weak_writes */
+    bool       all_written;  /* too many to list: a young collection looks at every entry */
 } WeakTable;
 
 static uint32_t hash_key(JSValue k) {
@@ -83,7 +85,27 @@ static void insert_fresh(WeakEntry *entries, uint32_t cap, JSValue key, JSValue 
     entries[i] = (WeakEntry){ key, value };
 }
 
+/* Lists an entry set since the last collection. An entry set before has an old key and an old
+ * value (the last collection marked both, or dropped the entry), so a young collection can't free
+ * either: it looks only at the listed ones (js_weak_ephemerons, js_weak_sweep). Past a quarter of
+ * the table, the table is listed whole instead, which bounds the list. */
+static void note_write(JSRuntime *rt, WeakTable *t, JSValue key) {
+    if (t->all_written) return;
+    if (t->writes >= 64 && t->writes >= t->count / 4) {
+        t->all_written = true;
+        key = JS_EMPTY;
+    }
+    t->writes++;
+    struct JSWeakWrites *l = &rt->weak_writes;
+    if (l->count == l->cap) {
+        l->cap = l->cap ? l->cap * 2 : 64;
+        l->items = xrealloc(l->items, l->cap * sizeof *l->items);
+    }
+    l->items[l->count++] = (struct JSWeakWrite){ &t->obj, key };
+}
+
 static void table_set(JSContext *ctx, WeakTable *t, JSValue key, JSValue value) {
+    note_write(ctx->rt, t, key);
     WeakEntry *e = find(t, key);
     if (e) {
         e->value = value;  /* malloc'd memory: no write barrier */
@@ -392,27 +414,83 @@ int js_run_finalization_cleanups(JSContext *ctx) {
 
 /* ---- The collector's side (gc.c) ------------------------------------------------------- */
 
-/* The ephemeron pass: marks the value of every live WeakMap entry whose key is marked.
- * true if anything new was marked (the caller drains and calls again). */
-bool js_weak_ephemerons(JSRuntime *rt, JSTracer *trc) {
+/* An entry's ephemeron step: its value marked when its key is. Returns whether it marked it. */
+static bool mark_value(JSTracer *trc, const WeakEntry *e) {
+    if (!js_is_cell(e->key) || !js_gc_is_marked(js_as_cell(e->key)) || is_live(e->value)) return false;
+    js_trace_value(trc, e->value);
+    return true;
+}
+
+static bool mark_values(JSTracer *trc, const WeakTable *t) {
     bool marked = false;
-    for (size_t i = 0; i < rt->weak.count; i++) {
-        JSObject *o = rt->weak.items[i];
-        if (o->shape->cls != &weak_map_class || !js_gc_is_marked(&o->cell)) continue;
-        WeakTable *t = (WeakTable *)o;
-        for (uint32_t k = 0; k < t->cap; k++) {
-            WeakEntry *e = &t->entries[k];
-            if (!js_is_cell(e->key) || !js_gc_is_marked(js_as_cell(e->key)) || is_live(e->value)) continue;
-            js_trace_value(trc, e->value);
-            marked = true;
+    for (uint32_t k = 0; k < t->cap; k++) marked |= mark_value(trc, &t->entries[k]);
+    return marked;
+}
+
+/* Drops the entry if its key died. */
+static void sweep_entry(WeakTable *t, WeakEntry *e) {
+    if (js_is_cell(e->key) && !js_gc_is_marked(js_as_cell(e->key))) {
+        e->key = TOMBSTONE;
+        e->value = JS_UNDEFINED;
+        t->count--;
+    }
+}
+
+static void sweep_entries(WeakTable *t) {
+    for (uint32_t k = 0; k < t->cap; k++) sweep_entry(t, &t->entries[k]);
+}
+
+/* The ephemeron pass: marks the value of every live WeakMap entry whose key is marked; a young
+ * collection, of the entries set since the last collection (note_write). true if anything new was
+ * marked (the caller drains and calls again). */
+bool js_weak_ephemerons(JSRuntime *rt, JSTracer *trc, bool full) {
+    bool marked = false;
+    if (full) {
+        for (size_t i = 0; i < rt->weak.count; i++) {
+            JSObject *o = rt->weak.items[i];
+            if (o->shape->cls == &weak_map_class && js_gc_is_marked(&o->cell)) marked |= mark_values(trc, (WeakTable *)o);
+        }
+        return marked;
+    }
+    for (size_t i = 0; i < rt->weak_writes.count; i++) {
+        struct JSWeakWrite w = rt->weak_writes.items[i];
+        if (w.table->shape->cls != &weak_map_class || !js_gc_is_marked(&w.table->cell)) continue;
+        WeakTable *t = (WeakTable *)w.table;
+        if (js_is_empty(w.key)) {
+            marked |= mark_values(trc, t);
+        } else {
+            WeakEntry *e = find(t, w.key);
+            if (e) marked |= mark_value(trc, e);
         }
     }
     return marked;
 }
 
-/* After marking: forget dead containers, drop dead keys, clear dead WeakRef targets, and
- * queue the registrations whose target died. */
-void js_weak_sweep(JSRuntime *rt) {
+/* After marking: forget dead containers, drop dead keys (a young collection: of the entries set
+ * since the last collection), clear dead WeakRef targets, and queue the registrations whose
+ * target died. Then the list of entries set starts anew. */
+void js_weak_sweep(JSRuntime *rt, bool full) {
+    struct JSWeakWrites *writes = &rt->weak_writes;
+    if (!full) {
+        for (size_t i = 0; i < writes->count; i++) {
+            struct JSWeakWrite w = writes->items[i];
+            if (!js_gc_is_marked(&w.table->cell)) continue;  /* dead: its entries go with it */
+            WeakTable *t = (WeakTable *)w.table;
+            if (js_is_empty(w.key)) {
+                sweep_entries(t);
+            } else {
+                WeakEntry *e = find(t, w.key);
+                if (e) sweep_entry(t, e);
+            }
+        }
+    }
+    for (size_t i = 0; i < writes->count; i++) {  /* dead tables too: they're finalized later */
+        WeakTable *t = (WeakTable *)writes->items[i].table;
+        t->writes = 0;
+        t->all_written = false;
+    }
+    writes->count = 0;
+
     struct JSWeakList *l = &rt->weak;
     size_t n = 0;
     for (size_t i = 0; i < l->count; i++) {
@@ -421,15 +499,7 @@ void js_weak_sweep(JSRuntime *rt) {
         l->items[n++] = o;
         const JSClass *cls = o->shape->cls;
         if (cls == &weak_map_class || cls == &weak_set_class) {
-            WeakTable *t = (WeakTable *)o;
-            for (uint32_t k = 0; k < t->cap; k++) {
-                WeakEntry *e = &t->entries[k];
-                if (js_is_cell(e->key) && !js_gc_is_marked(js_as_cell(e->key))) {
-                    e->key = TOMBSTONE;
-                    e->value = JS_UNDEFINED;
-                    t->count--;
-                }
-            }
+            if (full) sweep_entries((WeakTable *)o);
         } else if (cls == &weak_ref_class) {
             WeakRef *w = (WeakRef *)o;
             if (!is_live(w->target)) w->target = JS_UNDEFINED;
@@ -454,6 +524,7 @@ void js_weak_trace_roots(JSRuntime *rt, JSTracer *trc) {
 
 void js_weak_free(JSRuntime *rt) {
     free(rt->weak.items);
+    free(rt->weak_writes.items);
     free(rt->kept_alive.items);
 }
 

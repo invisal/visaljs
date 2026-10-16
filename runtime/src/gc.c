@@ -1910,12 +1910,12 @@ static JS_NOINLINE void collect(JSContext *ctx, const void *stack_low, bool full
     mark_roots(rt, trc);
     mark_stack(trc);
     drain(trc);
-    while (js_weak_ephemerons(rt, trc)) drain(trc);  /* a WeakMap value lives if its key does */
+    while (js_weak_ephemerons(rt, trc, full)) drain(trc);  /* a WeakMap value lives if its key does */
     h->mark_stack = trc->stack;  /* kept for the next collection */
     h->mark_stack_cap = trc->cap;
     double marked = js_os_now_ms_precise();
 
-    js_weak_sweep(rt);
+    js_weak_sweep(rt, full);
     js_atoms_sweep(rt, full);  /* weak references, before anything is freed */
     js_shapes_sweep(rt);
     js_prop_caches_sweep(rt);
