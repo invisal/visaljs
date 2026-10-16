@@ -480,6 +480,7 @@ test-http-server-request-timeout-interrupted-headers.js
 test-http-server-request-timeout-keepalive.js
 test-http-server-request-timeout-pipelining.js
 test-http-server-request-timeout-upgrade.js
+test-http-server-response-standalone.js
 test-http-server-timeouts-validation.js
 test-http-server-unconsume-consume.js
 test-http-server-write-after-end.js

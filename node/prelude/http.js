@@ -319,8 +319,9 @@ export class ServerResponse extends OutgoingMessage {
     this.statusMessage = undefined;
     this.sendDate = true;
     this._conn = conn;
-    this._keepAlive = keepAlive;
-    this._keepAliveTimeout = server ? server.keepAliveTimeout : 5000;
+    /* one made by hand (new ServerResponse(req)) is kept alive, without a Keep-Alive timeout, as Node's */
+    this._keepAlive = keepAlive ?? true;
+    this._keepAliveTimeout = server ? server.keepAliveTimeout : 0;
     this._head = req.method === "HEAD";
   }
 
@@ -535,7 +536,8 @@ export class ServerResponse extends OutgoingMessage {
     this.writable = false;
     if (!this._keepAlive && this.socket) {  /* the response goes out, then the socket ends */
       httpFlush(this._conn);
-      this.socket.destroySoon();
+      if (typeof this.socket.destroySoon === "function") this.socket.destroySoon();  /* as Node's resOnFinish */
+      else this.socket.end();
     }
     queueMicrotask(() => {
       this.writableFinished = true;
