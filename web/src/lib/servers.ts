@@ -1,7 +1,6 @@
-// servers.json (written by `npm run bench:servers -- --json=…`): the HTTP apps as visaljs's binary,
-// Node's single executable application and Bun's compiled binary, read at build time for the front
-// page's cards: binary size and memory. The last night's, from gh-pages (nightly.yml's publish job);
-// bench/servers.json when that can't be fetched (offline).
+// bench/servers.json (written by `npm run bench:servers -- --json=…`, nightly): the HTTP apps as
+// visaljs's binary, Node's single executable application and Bun's compiled binary, read at build
+// time for the front page's cards: binary size and memory.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -44,26 +43,13 @@ export interface Card {
   rows: Row[];
 }
 
-const NIGHTLY = "https://invisal.github.io/visaljs/servers.json";
-
-async function report(): Promise<Report> {
-  try {
-    const res = await fetch(NIGHTLY, { signal: AbortSignal.timeout(10_000) });
-    if (res.ok) return (await res.json()) as Report;
-    console.warn(`${NIGHTLY}: ${res.status}, using bench/servers.json`);
-  } catch (e) {
-    console.warn(`${NIGHTLY}: ${(e as Error).message}, using bench/servers.json`);
-  }
+/** The cards of the frameworks named, in that order. */
+export function serverCards(frameworks: string[]) {
   /* from web/, where astro runs */
   const root = resolve(process.cwd(), "..");
-  return JSON.parse(readFileSync(resolve(root, "bench/servers.json"), "utf8")) as Report;
-}
-
-/** The cards of the frameworks named, in that order. */
-export async function serverCards(frameworks: string[]) {
-  const data = await report();
+  const report = JSON.parse(readFileSync(resolve(root, "bench/servers.json"), "utf8")) as Report;
   const cards: Card[] = frameworks.flatMap((framework) => {
-    const a = data.apps.find((x) => x.framework === framework);
+    const a = report.apps.find((x) => x.framework === framework);
     if (!a) return [];
     const rows = TARGETS.map(({ name, label }) => {
       const r = a.results.find((x) => x.name === name);
