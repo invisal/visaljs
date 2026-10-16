@@ -9,7 +9,7 @@ answer fails the run.
 | [Servers](#servers) | Real HTTP apps under load: throughput, latency, startup, memory, binary size | `npm run bench:servers` |
 | [React SSR](#react-ssr) | `renderToString` of a store page with React | `npm run bench:react-ssr` |
 | [Kernels](#kernels) | Small CPU-heavy programs: the speed of the generated code | `npm run bench:kernels` |
-| [GC](#gc) | Allocation-heavy programs and a server under load: the garbage collector | `npm run bench:gc`, `npm run bench:gc-server` |
+| [GC](#gc) | Allocation-heavy programs, pauses as the heap grows, and a server under load: the garbage collector | `npm run bench:gc`, `npm run bench:gc-scaling`, `npm run bench:gc-server` |
 | [Size](#size) | Binary size of every app in [`tests/apps`](../tests/apps) | `npm run bench:size` |
 
 The nightly workflow ([`nightly.yml`](../.github/workflows/nightly.yml)) runs the servers, kernels
@@ -123,9 +123,14 @@ npm run bench:kernels -- fib awfy/richards --runs=5 --json=kernels.json
 ## GC
 
 [`gc.ts`](gc.ts) runs the allocation-heavy programs in [`gc/`](gc) the same way, and adds what
-the collector reports about itself (`JS_GC_STATS=1`): the number of collections, the total and
-longest pause, and the share of the run spent collecting. Node's peak memory comes from a preload,
-[`lib/node-rss.cjs`](lib/node-rss.cjs).
+the collector reports about itself (`JS_GC_STATS=1`, `JS_GC_TRACE=1`): the number of collections,
+the total, p99 and longest pause, and the share of the run spent collecting. Node's peak memory
+comes from a preload, [`lib/node-rss.cjs`](lib/node-rss.cjs).
+
+The time against Node measures the generated code as much as the collector. To see the
+collector's share alone, look at the "Collecting" column, or run a binary with a nursery too large
+to fill (`JS_GC_NURSERY_MB=16384`): it then never collects, and the difference is what collecting
+costs, less what reusing memory saves.
 
 | Program | Exercises |
 |---|---|
@@ -140,10 +145,29 @@ longest pause, and the share of the run spent collecting. Node's peak memory com
 cache of 20,000 entries, through three phases: steady load, a spike of large responses, then
 idle. It reports latency, peak memory, and whether memory goes back down when the server is idle.
 
+[`gc-scaling.ts`](gc-scaling.ts) runs the programs in [`gc-scaling/`](gc-scaling) at several
+sizes (`SIZE` in the environment), to show how pauses grow with what is live. A young
+collection's pauses should stay flat as the size grows; a full collection's grow with the live
+heap, and incremental marking splits them into slices.
+
+| Program | Sizes | Grows |
+|---|---|---|
+| [`live-heap`](gc-scaling/live-heap.js) | 10, 100, 500 MB | The live heap, replaced in full while short-lived objects churn |
+| [`atoms`](gc-scaling/atoms.js) | 10k, 100k, 1M | Property names: an object used as a string-keyed table |
+| [`shapes`](gc-scaling/shapes.js) | 10k, 100k, 1M | Object layouts: shapes and their transitions |
+| [`weakmap`](gc-scaling/weakmap.js) | 10k, 100k, 1M | Live WeakMap entries: ephemerons |
+
+`live-heap` also runs with the collector's optional features off (`JS_GC_INCREMENTAL=0`,
+`JS_GC_THREADS=0`, and both): the second table says what incremental and parallel marking buy in
+pause time and cost in wall time.
+
 ```sh
 npm run bench:gc -- --runs=3 --json=gc.json
+npm run bench:gc-scaling -- atoms --runs=3
 npm run bench:gc-server -- --duration=10
 ```
+
+The nightly keeps all three as the `gc-json` artifact.
 
 ## Size
 
@@ -160,8 +184,8 @@ npm run bench:size -- hono express     # only these; the other entries stay
 
 ```
 bench/
-  servers.ts  react-ssr.ts  kernels.ts  gc.ts  gc-server.ts  size.ts   the suites
-  kernels/  gc/  gc-server/                                          their programs
+  servers.ts  react-ssr.ts  kernels.ts  gc.ts  gc-scaling.ts  gc-server.ts  size.ts   the suites
+  kernels/  gc/  gc-scaling/  gc-server/                                          their programs
   kernels/awfy/  kernels/benchmarks-game/                            the established suites
   lib/standalone.ts     builds a program as visaljs's, Node's and Bun's standalone binary
   lib/node-rss.cjs      reports Node's peak memory at exit

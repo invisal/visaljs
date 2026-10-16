@@ -29,6 +29,11 @@ export default tseslint.config(
     languageOptions: { globals: { Buffer: "readonly", process: "readonly" } },
   },
   {
+    /* the GC scaling benchmarks: their size in process.env.SIZE */
+    files: ["bench/gc-scaling/**/*.js"],
+    languageOptions: { globals: { console: "readonly", process: "readonly" } },
+  },
+  {
     /* CommonJS: the Express apps, and the test of require() from CommonJS */
     files: ["tests/apps/express/**/*.js", "tests/apps/express-postgres/**/*.js", "bench/kernels/awfy/*.js", "tests/nodejs/test/common/*.js", "**/*.cjs"],
     languageOptions: { sourceType: "commonjs", globals: { require: "readonly", module: "writable", __dirname: "readonly", Buffer: "readonly", console: "readonly", process: "readonly" } },
