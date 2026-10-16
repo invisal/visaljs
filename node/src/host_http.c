@@ -510,12 +510,20 @@ static void flush_pending(void) {
     }
 }
 
-/* httpWrite(conn, data): corked until the current callback (and its microtasks) returns */
+/* httpWrite(conn, data, latin1): corked until the current callback (and its microtasks) returns; a
+ * string as UTF-8, or with latin1 a byte a character (its low byte), as Node writes a head */
 JSValue js_host_http_write(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
     (void)callee, (void)this_val, (void)new_target;
     Conn *c = argc > 0 && js_is_int32(argv[0]) ? conn_of(js_as_int32(argv[0])) : NULL;
     if (!c || argc < 2 || (c->id >= 0 && !js_net_stream(c->id))) return JS_FALSE;
-    if (js_is_string(argv[1])) {
+    if (js_is_string(argv[1]) && argc > 2 && js_truthy(argv[2])) {
+        JSStrView v = js_string_view(ctx, argv[1]);
+        if (v.length == 0) return JS_TRUE;
+        buf_reserve(&c->out, v.length);
+        if (v.latin1) memcpy(c->out.v + c->out.n, v.chars, v.length);
+        else for (uint32_t i = 0; i < v.length; i++) c->out.v[c->out.n + i] = (char)(js_view_at(v, i) & 0xff);
+        c->out.n += v.length;
+    } else if (js_is_string(argv[1])) {
         JSStrView v = js_string_view(ctx, argv[1]);
         size_t n = js_view_to_utf8(v, NULL, 0);
         if (n == 0) return JS_TRUE;

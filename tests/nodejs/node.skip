@@ -41,3 +41,11 @@ test-http-client-spurious-aborted.js     patches res.socket._handle.close
 
 # the internet: a remote host's name looked up
 test-http-client-req-error-dont-double-fire.js  ../common/internet (a remote host)
+
+# Node's HTTPParser on the socket (socket.parser): ours parses in C, without one
+test-http-server-keepalive-end.js        req.socket.parser.incoming
+test-http-server-connection-list-when-close.js  req.socket.parser.free
+
+# another Node process: a compiled program has no Node to fork (child_process.fork, cluster)
+test-http-server-stale-close.js          child_process.fork
+test-http-server-drop-connections-in-cluster.js  cluster.fork
