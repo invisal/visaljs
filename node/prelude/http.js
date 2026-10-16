@@ -8,7 +8,7 @@
 // connections close after keepAliveTimeout; server.timeout and setTimeout are the sockets'.
 // Not yet: the client, headersTimeout and requestTimeout, trailers.
 import {
-  httpAttach, httpBusy, httpDate, httpDetach, httpExpired, httpFedClose, httpFedOpen, httpFeed, httpFlush, httpParsers, httpWrite, timerUnref,
+  httpAttach, httpBusy, httpDate, httpPending, httpWatchDrain, httpDetach, httpExpired, httpFedClose, httpFedOpen, httpFeed, httpFlush, httpParsers, httpWrite, timerUnref,
 } from "visaljs:host";
 import { bindContext, currentContext, runInContext } from "./internal/async_context.js";
 import { codeError, invalidArgType, outOfRange, validateInteger, validateString } from "./internal/errors.js";
@@ -498,7 +498,40 @@ export class ServerResponse extends OutgoingMessage {
       }
     }
     if (typeof callback === "function") queueMicrotask(callback);
-    return true;
+    return this._underHighWaterMark();
+  }
+
+  get writableLength() {
+    return this._pendingBytes();
+  }
+
+  /* bytes written that haven't gone out: corked in C and in libuv's queue, or a TLS socket's */
+  _pendingBytes() {
+    if (this._conn === undefined || this._queued) return 0;
+    return isFed(this.socket) ? httpPending(this._conn) + (this.socket?.writableLength ?? 0) : httpPending(this._conn);
+  }
+
+  /* write()'s answer, as Node's: false over the high-water mark, with 'drain' once it all went out */
+  _underHighWaterMark() {
+    if (this._pendingBytes() < this.writableHighWaterMark) return true;
+    /* over it while corked: sent now, libuv writing what the kernel takes at once, as Node's socket
+     * does; only what's left counts */
+    if (!isFed(this.socket)) {
+      httpFlush(this._conn);
+      if (this._pendingBytes() < this.writableHighWaterMark) return true;
+    }
+    if (!this.writableNeedDrain) {
+      this.writableNeedDrain = true;
+      if (isFed(this.socket)) this.socket.once("drain", () => this._emitDrain());
+      else if (httpWatchDrain(this._conn)) process.nextTick(() => this._emitDrain());
+    }
+    return false;
+  }
+
+  _emitDrain() {
+    if (!this.writableNeedDrain) return;
+    this.writableNeedDrain = false;
+    this.emit("drain");
   }
 
   end(chunk, encoding, callback) {
@@ -747,6 +780,8 @@ class ServerClass extends NetServer {
           const e = parseError(code, reason, bytesParsed, rawPacket);
           socketOnError.call(state.socket, e);
         },
+        /* the connection's output went out: the response waiting for it gets 'drain' */
+        (conn) => this._states.get(conn)?.res?._emitDrain(),
       ].map(bindContext));
     }
     const conn = connOf(socket);

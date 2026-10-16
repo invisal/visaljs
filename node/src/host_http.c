@@ -50,11 +50,12 @@
 static void flush_pending(void);
 typedef struct Conn Conn;
 static void flush_conn(Conn *c);
+static size_t pending_bytes(Conn *c);
 
 /* ---- Parsers and connections ------------------------------------------------------------- */
 
 typedef struct Parsers {
-    JSValue on_request, on_body, on_complete, on_upgrade, on_error;  /* roots */
+    JSValue on_request, on_body, on_complete, on_upgrade, on_error, on_drain;  /* roots */
 } Parsers;
 
 typedef struct Buf {
@@ -76,6 +77,7 @@ struct Conn {
     bool     head_done;  /* its head is complete: what follows are its body and trailers */
     bool     in_message; /* a message has begun and isn't complete: the connection isn't idle */
     llhttp_errno_t failed;  /* the parse error it stopped at: more bytes report it again, as Node's */
+    bool     need_drain; /* JS waits for its output to drain (a write over the high-water mark) */
     bool     overflow;   /* its head is over max_header bytes */
     uint64_t begin_ms;   /* when the message began (the loop's time) */
     size_t   header_bytes, max_header;
@@ -359,7 +361,7 @@ static void hook_close(void *data) { release_conn(data); }
 
 static const JSNetHook http_hook = { hook_read, hook_close };
 
-/* httpParsers(onHead, onBody, onComplete, onUpgrade, onError) → id */
+/* httpParsers(onHead, onBody, onComplete, onUpgrade, onError, onDrain) → id */
 JSValue js_host_http_parsers(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
     (void)callee, (void)this_val, (void)new_target;
     if (argc < 5) return js_throw_type_error(ctx, "httpParsers: 5 arguments expected");
@@ -379,8 +381,9 @@ JSValue js_host_http_parsers(JSContext *ctx, JSValue callee, JSValue this_val, u
     Parsers *p = malloc(sizeof *p);
     if (!p) js_fatal("out of memory in http");
     p->on_request = argv[0], p->on_body = argv[1], p->on_complete = argv[2], p->on_upgrade = argv[3], p->on_error = argv[4];
+    p->on_drain = argc > 5 ? argv[5] : JS_UNDEFINED;
     js_add_root(ctx->rt, &p->on_request), js_add_root(ctx->rt, &p->on_body), js_add_root(ctx->rt, &p->on_complete);
-    js_add_root(ctx->rt, &p->on_upgrade), js_add_root(ctx->rt, &p->on_error);
+    js_add_root(ctx->rt, &p->on_upgrade), js_add_root(ctx->rt, &p->on_error), js_add_root(ctx->rt, &p->on_drain);
     Parsers **v = realloc(parsers, (nparsers + 1) * sizeof *v);
     if (!v) js_fatal("out of memory in http");
     parsers = v;
@@ -449,6 +452,23 @@ JSValue js_host_http_busy(JSContext *ctx, JSValue callee, JSValue this_val, uint
     return js_bool(c && c->in_message && !c->detached);
 }
 
+/* httpPending(conn) → the bytes written to it that haven't gone out yet (a response's backpressure) */
+JSValue js_host_http_pending(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    (void)ctx, (void)callee, (void)this_val, (void)new_target;
+    Conn *c = argc > 0 && js_is_int32(argv[0]) ? conn_of(js_as_int32(argv[0])) : NULL;
+    return js_number(c ? (double)pending_bytes(c) : 0);
+}
+
+/* httpWatchDrain(conn) → true when nothing is pending (drained already), else the parsers' onDrain
+ * is called once it all has gone out */
+JSValue js_host_http_watch_drain(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    (void)ctx, (void)callee, (void)this_val, (void)new_target;
+    Conn *c = argc > 0 && js_is_int32(argv[0]) ? conn_of(js_as_int32(argv[0])) : NULL;
+    if (!c || pending_bytes(c) == 0) return JS_TRUE;
+    c->need_drain = true;
+    return JS_FALSE;
+}
+
 /* httpExpired(parsers, headersTimeout, requestTimeout) → the connections over time, as Node's
  * ConnectionsList::Expired: a head not complete within headersTimeout, or a request not
  * complete within requestTimeout, from its start (or the connection's); 0 turns one off */
@@ -478,13 +498,30 @@ JSValue js_host_http_expired(JSContext *ctx, JSValue callee, JSValue this_val, u
 typedef struct WriteReq {
     uv_write_t req;
     char      *data;
+    int        id;  /* the connection's: whether its output has drained, once written */
 } WriteReq;
+
+/* bytes written to the connection but not yet sent: corked, or in libuv's write queue */
+static size_t pending_bytes(Conn *c) {
+    uv_stream_t *s = c->id >= 0 ? js_net_stream(c->id) : NULL;
+    return c->out.n + (s ? uv_stream_get_write_queue_size(s) : 0);
+}
 
 static void on_written(uv_write_t *req, int status) {
     (void)status;  /* a failed write shows as the socket's read error, or its close */
     WriteReq *w = (WriteReq *)req;
+    int id = w->id;
     free(w->data);
     free(w);
+    /* JS waited for the output to drain (Node's 'drain' on the response) */
+    Conn *c = conn_of(id);
+    if (c && c->need_drain && pending_bytes(c) == 0) {
+        c->need_drain = false;
+        if (js_is_callable(c->parsers->on_drain)) {
+            JSValue arg = js_int32(id);
+            (void)js_uv_call(c->parsers->on_drain, 1, &arg, NULL);
+        }
+    }
 }
 
 /* Sends a connection's corked output as one write. */
@@ -507,6 +544,7 @@ static void flush_conn(Conn *c) {
     WriteReq *w = malloc(sizeof *w);
     if (!w) js_fatal("out of memory in http");
     w->data = c->out.v;  /* the buffer goes with the write; the connection starts a new one */
+    w->id = c->id;
     uv_buf_t b = uv_buf_init(c->out.v, (unsigned)c->out.n);
     c->out = (Buf){ 0 };
     if (uv_write(&w->req, s, &b, 1, on_written) < 0) {

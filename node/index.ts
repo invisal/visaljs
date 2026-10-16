@@ -380,10 +380,12 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   tlsSetNoRenegotiation: { c: "js_tls_set_no_renegotiation", length: 1 },
   tlsFinished: { c: "js_tls_finished", length: 2 },           // (connection, peer) → Buffer | undefined
   /* node:http: llhttp on node:net's sockets (src/host_http.c); a connection is its socket's handle id */
-  httpParsers: { c: "js_host_http_parsers", length: 5 },      // (onHead, onBody, onComplete, onUpgrade, onError) → parsers
+  httpParsers: { c: "js_host_http_parsers", length: 6 },      // (onHead, onBody, onComplete, onUpgrade, onError, onDrain) → parsers
   httpAttach: { c: "js_host_http_attach", length: 4 },        // (conn, parsers, response, maxHeaderSize) → 0 | -errno: bytes go to llhttp
   httpDetach: { c: "js_host_http_detach", length: 2 },        // (conn, afterRead): bytes go to JS again (afterRead: once the read is parsed)
-  httpBusy: { c: "js_host_http_busy", length: 1 },            // (conn) → a message under way on it
+  httpBusy: { c: "js_host_http_busy", length: 1 },
+  httpPending: { c: "js_host_http_pending", length: 1 },      // (conn) → bytes written, not yet sent
+  httpWatchDrain: { c: "js_host_http_watch_drain", length: 1 },  // (conn) → drained already | onDrain later            // (conn) → a message under way on it
   httpExpired: { c: "js_host_http_expired", length: 3 },      // (parsers, headersTimeout, requestTimeout) → [conn, …] over time
   httpWrite: { c: "js_host_http_write", length: 3 },          // (conn, string | Uint8Array, latin1) → written (corked)
   httpFlush: { c: "js_host_http_flush", length: 1 },          // (conn): the corked output, now
