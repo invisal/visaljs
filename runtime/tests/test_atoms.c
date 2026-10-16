@@ -132,6 +132,65 @@ TEST(atom_weak) {
     teardown();
 }
 
+/* Atoms "young 0", "young 1", ...: every other one kept in `arr`. */
+static NOINLINE void make_young_atoms(JSValueArray *arr, int n) {
+    char buf[64];
+    for (int i = 0; i < n; i++) {  /* the dead spread through the table */
+        snprintf(buf, sizeof buf, "young %d", i);
+        JSValue a = atom(buf);
+        if (i % 2 == 0) js_store(ctx, &arr->cell, &arr->values[i], a);
+    }
+}
+
+/* Between `want` and a few more: the conservative scan may keep an atom a stale stack word holds. */
+#define CHECK_ATOMS(want) CHECK(js_atom_count(rt) >= (want) && js_atom_count(rt) <= (want) + 4)
+
+/* A young collection drops the young atoms nothing references, in place: every survivor is still
+ * found after the removals moved entries of its probe run. An old atom that died waits for a full
+ * collection. */
+TEST(atom_young_collection) {
+    setup();
+    rt->heap.stress_interval = (size_t)1 << 40;  /* stress builds: only the collections below */
+    size_t base = js_atom_count(rt);
+    JSValue *old = malloc(sizeof *old);
+    *old = JS_UNDEFINED;
+    js_add_root(rt, old);
+    keep_atom(old, "an old atom that dies");
+    js_gc(ctx);  /* old now */
+    CHECK_EQ_INT(js_atom_count(rt), base + 1);
+    *old = JS_UNDEFINED;
+
+    int n = SCALED(20000);
+    JSValue *kept = malloc(sizeof *kept);
+    *kept = js_cell(&js_alloc_value_array(ctx, (uint32_t)n)->cell);
+    js_add_root(rt, kept);
+    JSValueArray *arr = (JSValueArray *)js_as_cell(*kept);
+    make_young_atoms(arr, n);
+    size_t live = base + (size_t)(n + 1) / 2;
+    scrub();
+    js_gc_young(ctx);
+    CHECK_ATOMS(live + 1);  /* the old one stays until a full collection */
+    size_t after = js_atom_count(rt);
+    int ok = 1;
+    char buf[64];
+    for (int i = 0; ok && i < n; i += 2) {
+        snprintf(buf, sizeof buf, "young %d", i);
+        ok = js_same_bits(atom(buf), arr->values[i]);
+    }
+    CHECK(ok);
+    CHECK_EQ_INT(js_atom_count(rt), after);  /* found, not made again */
+
+    scrub();
+    js_gc(ctx);
+    CHECK_ATOMS(live);  /* the old one, gone */
+    CHECK(js_atom_count(rt) < after);
+    js_remove_root(rt, kept);
+    js_remove_root(rt, old);
+    free(kept);
+    free(old);
+    teardown();
+}
+
 TEST(atom_many) {
     setup();
     size_t base = js_atom_count(rt);

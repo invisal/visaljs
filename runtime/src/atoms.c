@@ -63,6 +63,24 @@ static void insert(JSAtomTable *t, JSString *s, uint32_t hash) {
     t->count++;
 }
 
+/* Removes `s`, which is in the table. Linear probing: later entries of its probe run move back
+ * into the hole, so that every lookup still finds them. */
+static void remove_atom(JSAtomTable *t, const JSString *s) {
+    size_t mask = t->cap - 1, i = s->hash & mask;
+    while (t->entries[i].str != s) i = (i + 1) & mask;
+    t->entries[i].str = NULL;
+    t->count--;
+    for (size_t j = (i + 1) & mask; t->entries[j].str; j = (j + 1) & mask) {
+        size_t home = t->entries[j].hash & mask;
+        bool stays = i <= j ? (i < home && home <= j) : (i < home || home <= j);
+        if (!stays) {
+            t->entries[i] = t->entries[j];  /* barrier: none, the table is malloc'd and weak */
+            t->entries[j].str = NULL;
+            i = j;
+        }
+    }
+}
+
 /* ---- Lifecycle --------------------------------------------------------- */
 
 void js_register_static_atoms(JSRuntime *rt, const JSString *const *cells, size_t n) {
@@ -96,10 +114,18 @@ void js_atoms_init(JSRuntime *rt) {
 
 static bool survives(const JSString *s) { return js_gc_is_marked(&s->cell); }
 
-/* Drops unmarked atoms and resizes for the survivors: load <= 1/2, shrinking
- * after mass death (dynamic keys), never below 512 entries. */
-void js_atoms_sweep(JSRuntime *rt) {
+/* Drops unmarked atoms. A young collection checks only the atoms added since the last one, and
+ * removes the dead ones in place. A full collection checks every atom, and resizes for the
+ * survivors: load <= 1/2, shrinking after mass death (dynamic keys), never below 512 entries. */
+void js_atoms_sweep(JSRuntime *rt, bool full) {
     JSAtomTable *t = &rt->atoms;
+    if (!full) {
+        for (size_t i = 0; i < t->young_count; i++)
+            if (!survives(t->young[i])) remove_atom(t, t->young[i]);
+        t->young_count = 0;
+        return;
+    }
+    t->young_count = 0;
     size_t live = 0;
     for (size_t i = 0; i < t->cap; i++) live += t->entries[i].str && survives(t->entries[i].str);
     size_t cap = 512;
@@ -110,6 +136,8 @@ void js_atoms_sweep(JSRuntime *rt) {
 void js_atoms_free(JSRuntime *rt) {
     free(rt->atoms.entries);
     rt->atoms.entries = NULL;
+    free(rt->atoms.young);
+    rt->atoms.young = NULL;
 }
 
 size_t js_atom_count(const JSRuntime *rt) {
@@ -137,6 +165,12 @@ JSValue js_atomize(JSContext *ctx, JSValue s) {
     flat->cell.flags |= JS_STR_ATOM;  /* immutable content: becoming the atom changes nothing else */
     flat->hash = hash;
     insert(t, flat, hash);
+    if (t->young_count == t->young_cap) {
+        t->young_cap = t->young_cap ? t->young_cap * 2 : 256;
+        t->young = realloc(t->young, t->young_cap * sizeof *t->young);
+        if (!t->young) js_fatal("out of memory growing the atom table");
+    }
+    t->young[t->young_count++] = flat;
     return js_cell(&flat->cell);
 }
 

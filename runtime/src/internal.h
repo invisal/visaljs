@@ -64,7 +64,7 @@ int js_run_finalization_cleanups(JSContext *ctx);
 
 /* Atom table lifecycle (atoms.c). */
 void js_atoms_init(JSRuntime *rt);
-void js_atoms_sweep(JSRuntime *rt);  /* weak processing: drop unmarked atoms */
+void js_atoms_sweep(JSRuntime *rt, bool full);  /* weak processing: drop unmarked atoms */
 void js_atoms_free(JSRuntime *rt);
 
 /* Cell classes defined outside gc.c: each kind's name and finalizer. The marker visits these kinds

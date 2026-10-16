@@ -22,6 +22,10 @@ typedef struct JSRuntime JSRuntime;
 typedef struct JSAtomTable {
     struct JSAtomEntry { JSString *str; uint32_t hash; } *entries;  /* open addressing; str NULL = empty */
     size_t cap, count;
+    /* The atoms added since the last collection: the only ones a young collection can find dead,
+     * since an old cell stays marked until a full collection. malloc'd. */
+    JSString **young;
+    size_t young_count, young_cap;
 } JSAtomTable;
 
 /* ---- The runtime's predefined atoms ------------------------------------ */

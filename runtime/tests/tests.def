@@ -82,6 +82,7 @@ X(atom_identity)
 X(atom_predefined)
 X(atom_from_rope_and_static)
 X(atom_weak)
+X(atom_young_collection)
 X(atom_many)
 X(atom_duplicate_static_is_fatal)
 
