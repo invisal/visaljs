@@ -17,6 +17,9 @@ import { createConnection, Server as NetServer } from "./net.js";
 import { addAbortSignal, Readable, Stream } from "./stream.js";
 import { callableClass } from "./internal/features.js";
 
+/* the server's connections-checking timer (Node's, in node:_http_server) */
+export const kConnectionsCheckingInterval = Symbol("http.server.connectionsCheckingInterval");
+
 export const METHODS = ["ACL", "BIND", "CHECKOUT", "CONNECT", "COPY", "DELETE", "GET", "HEAD", "LINK", "LOCK", "M-SEARCH", "MERGE",
   "MKACTIVITY", "MKCALENDAR", "MKCOL", "MOVE", "NOTIFY", "OPTIONS", "PATCH", "POST", "PROPFIND", "PROPPATCH", "PURGE", "PUT", "QUERY",
   "REBIND", "REPORT", "SEARCH", "SOURCE", "SUBSCRIBE", "TRACE", "UNBIND", "UNLINK", "UNLOCK", "UNSUBSCRIBE"];
@@ -106,7 +109,19 @@ export class IncomingMessage extends Readable {
 
   _finish() {
     this.complete = true;
-    this.push(null);
+    if (!this._readableState.ended) this.push(null);
+  }
+
+  /* Node's: a request without a body (the server's optimizeEmptyRequests) ended and closed at once,
+   * without its 'data', 'end' and 'close' */
+  _dumpAndCloseReadable() {
+    this._dumped = true;
+    const state = this._readableState;
+    state.ended = true;
+    state.endEmitted = true;
+    state.destroyed = true;
+    state.closed = true;
+    state.closeEmitted = true;
   }
 
   /* the connection closed before the response was finished (Node's abortIncoming): destroyed, and
@@ -145,10 +160,16 @@ const SINGLE = new Set(["age", "authorization", "content-length", "content-type"
 function addHeader(headers, name, value, join) {
   const key = name.toLowerCase();
   const existing = headers[key];
-  if (existing === undefined) headers[key] = key === "set-cookie" ? [value] : value;
-  else if (key === "set-cookie") existing.push(value);
-  else if (SINGLE.has(key) && !join) return;
-  else headers[key] = existing + (key === "cookie" ? "; " : ", ") + value;
+  if (key === "set-cookie") {
+    if (existing !== undefined) existing.push(value);
+    else headers[key] = [value];
+  } else if (SINGLE.has(key) && !join) {
+    if (existing === undefined) headers[key] = value;  /* duplicates dropped */
+  } else if (typeof existing === "string") {  /* as Node's: not a value inherited from Object.prototype */
+    headers[key] = existing + (key === "cookie" ? "; " : ", ") + value;
+  } else {
+    headers[key] = value;
+  }
 }
 
 /* ---- OutgoingMessage: a response's (and a request's) headers ------------------------------------ */
@@ -305,6 +326,30 @@ export class ServerResponse extends OutgoingMessage {
     this._head = req.method === "HEAD";
   }
 
+  /* the response's bytes: to the connection's parser, which corks them; or, for a response made by
+   * hand (new ServerResponse(req), Node's assignSocket), to its socket, kept until it has one */
+  _send(data, latin1 = false) {
+    if (this._conn !== undefined) httpWrite(this._conn, data, latin1);
+    else if (this.socket) this.socket.write(data, latin1 ? "latin1" : undefined);
+    else (this._unsent ??= []).push([data, latin1]);
+  }
+
+  /** A socket for a response made by hand, as Node's: its writes go there. */
+  assignSocket(socket) {
+    if (socket._httpMessage) throw codeError(Error, "ERR_HTTP_SOCKET_ASSIGNED", "Socket already assigned");
+    socket._httpMessage = this;
+    this.socket = socket;
+    this.emit("socket", socket);
+    const unsent = this._unsent;
+    this._unsent = undefined;
+    if (unsent) for (const [data, latin1] of unsent) socket.write(data, latin1 ? "latin1" : undefined);
+  }
+
+  detachSocket(socket) {
+    socket._httpMessage = null;
+    this.socket = null;
+  }
+
   setTimeout(msecs, callback) {
     if (typeof callback === "function") this.on("timeout", callback);
     if (this.socket) this.socket.setTimeout(msecs);
@@ -327,7 +372,7 @@ export class ServerResponse extends OutgoingMessage {
   flushHeaders() {
     if (!this.headersSent && Object.hasOwn(this, "writeHead")) this._implicitHeader(undefined);  /* a wrapper sees it */
     const head = this._takeHead(undefined);
-    if (head) httpWrite(this._conn, head);
+    if (head) this._send(head, true);
   }
 
   destroy(error) {
@@ -412,6 +457,10 @@ export class ServerResponse extends OutgoingMessage {
         this.chunkedEncoding = true;
       }
     }
+    /* as Node's _storeHeader: only a chunked body can have trailers (the head isn't sent) */
+    if (this.chunkedEncoding !== true && this._headers.has("trailer")) {
+      throw codeError(Error, "ERR_HTTP_TRAILER_INVALID", "Trailers are invalid with this transfer encoding");
+    }
     this.headersSent = true;
     return head + "\r\n";
   }
@@ -419,25 +468,33 @@ export class ServerResponse extends OutgoingMessage {
   write(chunk, encoding, callback) {
     if (typeof encoding === "function") callback = encoding;
     if (this.writableEnded || this.destroyed) {
-      const e = new Error(this.destroyed ? "Cannot call write after a stream was destroyed" : "write after end");
-      e.code = this.destroyed ? "ERR_STREAM_DESTROYED" : "ERR_STREAM_WRITE_AFTER_END";
-      /* Node's emitErrorNt: none on a destroyed response (its client went away) */
-      if (!this.destroyed) queueMicrotask(() => this.emit("error", e));
-      if (typeof callback === "function") queueMicrotask(() => callback(e));
+      /* Node's write_: after end before destroyed; the callback, then 'error' (Node's emitErrorNt),
+       * none on a destroyed response (it closed, or its client went away) */
+      const ended = this.writableEnded;
+      const e = new Error(ended ? "write after end" : "Cannot call write after a stream was destroyed");
+      e.code = ended ? "ERR_STREAM_WRITE_AFTER_END" : "ERR_STREAM_DESTROYED";
+      if (!this.destroyed) {
+        process.nextTick(() => {
+          if (typeof callback === "function") callback(e);
+          if (!this.destroyed) this.emit("error", e);
+        });
+      } else if (typeof callback === "function") {
+        process.nextTick(callback, e);
+      }
       return false;
     }
     if (typeof chunk === "string" && typeof encoding === "string" && encoding !== "utf8" && encoding !== "utf-8") chunk = Buffer.from(chunk, encoding);
     /* a writeHead of the response's own (a wrapper) sees the implicit head, as in Node */
     if (!this.headersSent && Object.hasOwn(this, "writeHead")) this._implicitHeader(undefined);
     const head = this._takeHead(undefined);
-    if (head) httpWrite(this._conn, head);
+    if (head) this._send(head, true);
     if (chunk !== undefined && chunk !== null && chunkLength(chunk) > 0 && !this._head) {
       if (this.chunkedEncoding) {
-        httpWrite(this._conn, chunkLength(chunk).toString(16) + "\r\n");
-        httpWrite(this._conn, chunk);
-        httpWrite(this._conn, "\r\n");
+        this._send(chunkLength(chunk).toString(16) + "\r\n");
+        this._send(chunk);
+        this._send("\r\n");
       } else {
-        httpWrite(this._conn, chunk);
+        this._send(chunk);
       }
     }
     if (typeof callback === "function") queueMicrotask(callback);
@@ -457,16 +514,19 @@ export class ServerResponse extends OutgoingMessage {
     if (!this.headersSent) {
       const hasChunk = chunk !== undefined && chunk !== null;
       const length = hasChunk ? chunkLength(chunk) : 0;
-      if (hasChunk && typeof chunk === "string" && !this._head) httpWrite(this._conn, this._renderHead(length) + chunk);
-      else {
-        httpWrite(this._conn, this._renderHead(length));
-        if (hasChunk && length && !this._head) httpWrite(this._conn, chunk);
+      if (hasChunk && typeof chunk === "string" && !this._head) {
+        /* the head's bytes are latin1, the body's UTF-8: corked into one write */
+        this._send(this._renderHead(length), true);
+        this._send(chunk);
+      } else {
+        this._send(this._renderHead(length), true);
+        if (hasChunk && length && !this._head) this._send(chunk);
       }
     } else {
       if (chunk !== undefined && chunk !== null) this.write(chunk);
       const head = this._takeHead(undefined);
-      if (head) httpWrite(this._conn, head);
-      if (this.chunkedEncoding && !this._head) httpWrite(this._conn, "0\r\n" + this._trailer + "\r\n");
+      if (head) this._send(head, true);
+      if (this.chunkedEncoding && !this._head) this._send("0\r\n" + this._trailer + "\r\n", true);
     }
     this.writableEnded = this.finished = true;
     this.writable = false;
@@ -479,6 +539,7 @@ export class ServerResponse extends OutgoingMessage {
       this.emit("finish");
       if (!this._closeEmitted) {
         this._closeEmitted = true;
+        this.destroyed = true;  /* as Node's emitCloseNT */
         this.emit("close");
       }
       if (typeof callback === "function") callback();
@@ -499,7 +560,7 @@ function noop() {}
 function serverArguments(options, requestListener) {
   if (typeof options === "function") return [{}, options];
   if (options === undefined || options === null) return [{}, requestListener];
-  if (typeof options !== "object") throw invalidArgType("options", "of type object", options);
+  if (typeof options !== "object" || Array.isArray(options)) throw invalidArgType("options", "of type object", options);  /* validateObject */
   return [options, requestListener];
 }
 
@@ -535,6 +596,10 @@ class ServerClass extends NetServer {
     this.insecureHTTPParser = boolean("insecureHTTPParser", undefined);
     this.requireHostHeader = boolean("requireHostHeader", true);
     this.joinDuplicateHeaders = boolean("joinDuplicateHeaders", undefined);
+    /* the classes requests and responses are made of (subclasses of node:http's), as Node's */
+    this._IncomingMessage = options.IncomingMessage || IncomingMessage;
+    this._ServerResponse = options.ServerResponse || ServerResponse;
+    this._optimizeEmptyRequests = boolean("optimizeEmptyRequests", false);
     this.requestTimeout = integer("requestTimeout", 300_000);
     this.headersTimeout = integer("headersTimeout", Math.min(60_000, this.requestTimeout));
     if (this.requestTimeout > 0 && this.headersTimeout > 0 && this.headersTimeout > this.requestTimeout) {
@@ -542,27 +607,63 @@ class ServerClass extends NetServer {
     }
     this.keepAliveTimeout = integer("keepAliveTimeout", 5000);
     this.connectionsCheckingInterval = integer("connectionsCheckingInterval", 30_000);
-    this._checking = null;  /* the connections-checking timer, unref'd, while listening */
     this._parsers = -1;
     this._states = new Map();  /* connection → { socket, req, res, keepAliveTimeoutSet } */
     this.on(connectionEvent, (socket) => this._onSocket(socket));
-    this.on("listening", () => this._checkConnectionsLater());
+    this.on("listening", () => this._startConnectionsChecking());
+  }
+
+  /* captureRejections: a 'request' listener's rejection answers 500, its headers dropped (or the
+   * response destroyed, once sent), as Node's; another event's goes to net.Server's */
+  [Symbol.for("nodejs.rejection")](err, event, ...args) {
+    if (event === "request") {
+      const res = args[1];
+      if (!res.headersSent && !res.writableEnded) {
+        for (const name of res.getHeaderNames()) res.removeHeader(name);
+        res.statusCode = 500;
+        res.end(STATUS_CODES[500]);
+      } else {
+        res.destroy();
+      }
+      return;
+    }
+    const base = NetServer.prototype[Symbol.for("nodejs.rejection")];
+    if (typeof base === "function") base.call(this, err, event, ...args);
+    else this.emit("error", err);
+  }
+
+  /* Node's setupConnectionsTracking: the connections checked every connectionsCheckingInterval ms
+   * (unref'd), a new timer for each 'listening'. server[kConnectionsCheckingInterval] stands for
+   * Node's interval: its _destroyed says whether it was stopped. */
+  _startConnectionsChecking() {
+    this._stopConnectionsChecking();
+    const interval = { _destroyed: false, _timer: null };
+    this[kConnectionsCheckingInterval] = interval;
+    const tick = () => {
+      if (interval._destroyed) return;
+      this._checkConnections();
+      interval._timer = timerUnref(tick, this.connectionsCheckingInterval);
+    };
+    if (this.connectionsCheckingInterval > 0) interval._timer = timerUnref(tick, this.connectionsCheckingInterval);
+  }
+
+  _stopConnectionsChecking() {
+    const interval = this[kConnectionsCheckingInterval];
+    if (!interval || interval._destroyed) return;
+    interval._destroyed = true;
+    if (interval._timer !== null) clearTimeout(interval._timer);
+    interval._timer = null;
   }
 
   /* Node's checkConnections: a request (or its head) over requestTimeout (headersTimeout) gets a 408 */
-  _checkConnectionsLater() {
-    if (this.connectionsCheckingInterval <= 0 || this._checking !== null) return;
-    this._checking = timerUnref(() => {
-      this._checking = null;
-      if (this._handle === null) return;
-      if (this._parsers !== -1 && (this.headersTimeout > 0 || this.requestTimeout > 0)) {
-        for (const conn of httpExpired(this._parsers, this.headersTimeout, this.requestTimeout)) {
-          const state = this._states.get(conn);
-          if (state) socketOnError.call(state.socket, codeError(Error, "ERR_HTTP_REQUEST_TIMEOUT", "Request timeout"));
-        }
+  _checkConnections() {
+    if (this._handle === null) return;
+    if (this._parsers !== -1 && (this.headersTimeout > 0 || this.requestTimeout > 0)) {
+      for (const conn of httpExpired(this._parsers, this.headersTimeout, this.requestTimeout)) {
+        const state = this._states.get(conn);
+        if (state) socketOnError.call(state.socket, codeError(Error, "ERR_HTTP_REQUEST_TIMEOUT", "Request timeout"));
       }
-      this._checkConnectionsLater();
-    }, this.connectionsCheckingInterval);
+    }
   }
 
   setTimeout(msecs, callback) {
@@ -582,8 +683,7 @@ class ServerClass extends NetServer {
 
   close(callback) {
     this.closeIdleConnections();
-    if (this._checking !== null) clearTimeout(this._checking);
-    this._checking = null;
+    this._stopConnectionsChecking();
     return super.close(callback);
   }
 
@@ -593,7 +693,12 @@ class ServerClass extends NetServer {
       /* in the async context of the connection's, as the server's sockets' callbacks */
       this._parsers = httpParsers(...[
         (conn, method, url, raw, major, minor, keepAlive, upgrade) => this._onRequest(conn, method, url, raw, major, minor, keepAlive, upgrade),
-        (conn, chunk) => this._states.get(conn)?.req?._push(chunk),
+        (conn, chunk) => {
+          /* the bytes llhttp reads in C are the socket's activity, as Node's onParserExecute counts them */
+          const state = this._states.get(conn);
+          state?.socket._unrefTimer?.();
+          state?.req?._push(chunk);
+        },
         (conn, trailers) => {
           const state = this._states.get(conn);
           const req = state?.req;
@@ -657,11 +762,12 @@ class ServerClass extends NetServer {
     const state = this._states.get(conn);
     if (!state) return 0;
     const socket = state.socket;
+    socket._unrefTimer?.();  /* the head's bytes are the socket's activity */
     if (state.keepAliveTimeoutSet) {
       socket.setTimeout(0);
       state.keepAliveTimeoutSet = false;
     }
-    const req = new IncomingMessage(socket);
+    const req = new this._IncomingMessage(socket);
     req.method = method;
     req.url = url;
     req.httpVersionMajor = major;
@@ -675,7 +781,8 @@ class ServerClass extends NetServer {
       return 2;
     }
     state.req = req;
-    const res = new ServerResponse(req, conn, keepAlive, this);
+    if (this._optimizeEmptyRequests && !("content-length" in req.headers) && !("transfer-encoding" in req.headers)) req._dumpAndCloseReadable();
+    const res = new this._ServerResponse(req, conn, keepAlive, this);
     state.res = res;
     if (this.requireHostHeader && major === 1 && minor === 1 && !req.headers.host) {  /* Node: a 400, and the connection ends */
       res.writeHead(400, ["Connection", "close"]);
@@ -817,7 +924,10 @@ function clientParsersId() {
       res.upgrade = upgrade;
       return parserOnIncomingClient(req, socket, res, keepAlive);
     },
-    (conn, chunk) => reqOf(conn)?.res?._push(chunk),
+    (conn, chunk) => {
+      clientSockets.get(conn)?._unrefTimer?.();  /* the socket's activity, as Node's onParserExecute */
+      reqOf(conn)?.res?._push(chunk);
+    },
     (conn, trailers) => {
       const socket = clientSockets.get(conn);
       const req = socket?._httpMessage;

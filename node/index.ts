@@ -57,6 +57,7 @@ export const modules: Readonly<Record<string, string>> = {
   repl: join(preludeDir, "repl.js"),
   sea: join(preludeDir, "sea.js"),
   stream: join(preludeDir, "stream.js"),
+  _http_server: join(preludeDir, "_http_server.js"),
   _stream_duplex: join(preludeDir, "_stream_duplex.js"),
   _stream_passthrough: join(preludeDir, "_stream_passthrough.js"),
   _stream_readable: join(preludeDir, "_stream_readable.js"),
@@ -383,7 +384,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   httpAttach: { c: "js_host_http_attach", length: 4 },        // (conn, parsers, response, maxHeaderSize) → 0 | -errno: bytes go to llhttp
   httpDetach: { c: "js_host_http_detach", length: 2 },        // (conn, afterRead): bytes go to JS again (afterRead: once the read is parsed)
   httpExpired: { c: "js_host_http_expired", length: 3 },      // (parsers, headersTimeout, requestTimeout) → [conn, …] over time
-  httpWrite: { c: "js_host_http_write", length: 2 },          // (conn, string | Uint8Array) → written (corked)
+  httpWrite: { c: "js_host_http_write", length: 3 },          // (conn, string | Uint8Array, latin1) → written (corked)
   httpFlush: { c: "js_host_http_flush", length: 1 },          // (conn): the corked output, now
   httpFedOpen: { c: "js_host_http_fed_open", length: 1 },     // (writer) → conn: a socket whose bytes JS feeds (TLS, a Duplex)
   httpFeed: { c: "js_host_http_feed", length: 2 },            // (conn, bytes | null) → taken by the parser
