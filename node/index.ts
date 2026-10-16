@@ -131,6 +131,12 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
     reached: (_code, program) => /\b(?:getEventListeners|[gs]etMaxListeners|addAbortListener|EventEmitterAsyncResource)\b/.test(program) },
   /* module.SourceMap */
   { file: join(preludeDir, "internal", "source_map.js"), reached: (_code, program) => /\bSourceMap\b/.test(program) },
+  /* net.Socket's onread option */
+  { file: join(preludeDir, "internal", "net_onread.js"), reached: (_code, program) => /\bonread\b/.test(program) },
+  /* net.Socket's type of service */
+  { file: join(preludeDir, "internal", "net_tos.js"), reached: (_code, program) => /TypeOfService|typeOfService/.test(program) },
+  /* net.BoundSocket */
+  { file: join(preludeDir, "internal", "net_bound.js"), reached: (_code, program) => /\bBoundSocket\b/.test(program) },
   /* perf_hooks' observers and histograms */
   { file: join(preludeDir, "internal", "perf_observe.js"), reached: (_code, program) => /\bPerformance(?:Observer|ObserverEntryList|ResourceTiming)\b/.test(program) },
   { file: join(preludeDir, "internal", "perf_histogram.js"), reached: (_code, program) => /\b(?:createHistogram|monitorEventLoopDelay)\b/.test(program) },
@@ -412,8 +418,10 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   netReset: { c: "js_host_net_reset", length: 1 },            // close with an RST → 0 | -errno
   netRef: { c: "js_host_net_ref", length: 2 },                // (id, ref)
   netAddress: { c: "js_host_net_address", length: 2 },        // (id, peer) → [address, family, port] | path | -errno
+  netFd: { c: "js_host_net_fd", length: 1 },                  // (id) → its descriptor | -errno (-1 on Windows)
   netNoDelay: { c: "js_host_net_no_delay", length: 2 },
   netKeepAlive: { c: "js_host_net_keep_alive", length: 3 },   // (id, on, seconds)
+  netTypeOfService: { c: "js_host_net_type_of_service", length: 2 }, // (id, tos | -1) → 0 | the socket's tos | -errno
   ttyOpen: { c: "js_host_tty_open", length: 2 },              // (fd, cb) → id | -errno: a terminal's, read as a net handle
   ttySetRawMode: { c: "js_host_tty_set_raw_mode", length: 2 }, // (id, raw) → 0 | -errno
   dnsLookup: { c: "js_host_dns_lookup", length: 3 },          // (host, family, cb) → 0 | -errno; cb(errno, code, [[address, family], …])

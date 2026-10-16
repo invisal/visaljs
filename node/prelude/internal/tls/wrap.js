@@ -12,6 +12,7 @@ import {
   tlsRootCertificates, tlsRun, tlsSession, tlsSetNoRenegotiation, tlsShutdown, tlsVerifyError,
 } from "visaljs:host";
 import { codeError, invalidArgType, outOfRange, validateFunction, validateString } from "../errors.js";
+import { features } from "../features.js";
 import { isIP } from "../net.js";
 import { Server as NetServer, Socket } from "../../net.js";
 import { createSecureContext, SecureContext, sslError, tlsFailure, VERSION_NAMES, verifyError } from "./common.js";
@@ -343,7 +344,7 @@ export class TLSSocket extends Socket {
   _pushPlain(bytes) {
     this._unrefTimer();
     let more;
-    if (this._onread) more = this._deliver(bytes);
+    if (this._onread) more = features.onread.deliverAll(this, bytes);
     else more = this.push(bytes);
     if (!more && this._secureEstablished) this._stopReading();
   }

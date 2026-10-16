@@ -3,16 +3,16 @@
   "node": "v24.21.0",
   "summary": {
     "modules": {
-      "complete": 29,
-      "partial": 26,
+      "complete": 30,
+      "partial": 25,
       "stub": 1,
       "missing": 2,
       "total": 58
     },
     "exports": {
-      "implemented": 1144,
+      "implemented": 1145,
       "stubbed": 39,
-      "missing": 101,
+      "missing": 100,
       "total": 1284
     }
   },
@@ -968,9 +968,10 @@
       "notes": "createRequire's require gives the packages the bundler found the program may require at run time (bundled), else throws MODULE_NOT_FOUND: a compiled program loads no code at run time. A JSON file (a path ending in .json) is data: it is read and parsed when required, and cached. register is a stub."
     },
     "net": {
-      "status": "partial",
+      "status": "complete",
       "implemented": [
         "BlockList",
+        "BoundSocket",
         "Server",
         "Socket",
         "SocketAddress",
@@ -987,9 +988,7 @@
         "setDefaultAutoSelectFamilyAttemptTimeout"
       ],
       "stubbed": [],
-      "missing": [
-        "BoundSocket"
-      ],
+      "missing": [],
       "notes": "TCP and Unix domain socket servers and sockets (Socket is a Duplex with backpressure, half-close and timeouts); host names through dns.lookup, with happy eyeballs. Not yet: passing handles to child processes (no child_process or cluster)."
     },
     "os": {

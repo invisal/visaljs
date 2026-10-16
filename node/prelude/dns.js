@@ -3,7 +3,7 @@
 // (c-ares) and Resolver.
 import { dnsLookup, errnoName } from "visaljs:host";
 import { bindContext } from "./internal/async_context.js";
-import { codeError, invalidArgType } from "./internal/errors.js";
+import { codeError, invalidArgType, invalidArgValue } from "./internal/errors.js";
 import { isIP } from "./internal/net.js";
 
 /* getaddrinfo hints, and the error codes of the resolver */
@@ -66,6 +66,12 @@ export function lookup(hostname, options, callback) {
   } else if (options !== undefined && options !== null) {
     family = familyOf(options.family);
     all = options.all === true;
+    /* hints are checked, as Node's; getaddrinfo isn't given them */
+    if (options.hints != null) {
+      if (typeof options.hints !== "number") throw invalidArgType("options.hints", "of type number", options.hints);
+      const hints = options.hints >>> 0;
+      if ((hints & ~(ADDRCONFIG | ALL | V4MAPPED)) !== 0) throw invalidArgValue("hints", "is invalid", hints);
+    }
   }
   if (typeof callback !== "function") throw invalidArgType("callback", "of type function", callback);
   if (!hostname) {

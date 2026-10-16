@@ -15,6 +15,10 @@ const now = () => hrMs() - origin;
 
 const kConstruct = Symbol("construct");
 
+/* for internal/perf_observe.js's users: the clock, and an entry of another module's (net's 'connect') */
+features.perfNow = now;
+features.perfEntry = (name, entryType, startTime, duration, detail) => new PerformanceEntry(kConstruct, name, entryType, startTime, duration, detail);
+
 export class PerformanceEntry {
   constructor(key, name, entryType, startTime, duration, detail) {
     if (key !== kConstruct) throw codeError(TypeError, "ERR_ILLEGAL_CONSTRUCTOR", "Illegal constructor");

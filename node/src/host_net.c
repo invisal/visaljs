@@ -12,7 +12,7 @@
  *   NET_CLOSE       the handle is closed (netClose or netReset) and its id free
  *
  *   netOpen(pipe, cb) → id                     a TCP handle, or with `pipe` a pipe's
- *   netOpenFd(id, fd) → 0 | -errno              netGuessHandle(fd) → "TCP" | "PIPE" | "TTY" | …
+ *   netOpenFd(id, fd) → 0 | -errno, netFd(id) → fd | -errno              netGuessHandle(fd) → "TCP" | "PIPE" | "TTY" | …
  *   netBind(id, ip | path, port, flags), netListen(id, backlog) → 0 | -errno   flags: 1 ipv6Only, 2 reusePort
  *   netChmod(id, mode) → 0 | -errno            a listening pipe's: 1 readable, 2 writable by all
  *   netConnect(id, ip | path, port) → 0 | -errno (a NET_CONNECT follows)
@@ -22,11 +22,13 @@
  *   netShutdown(id), netClose(id), netReset(id) → 0 | -errno, netRef(id, ref)
  *   netAddress(id, peer) → [address, family, port] | path | -errno
  *   netNoDelay(id, on), netKeepAlive(id, on, seconds) → 0 | -errno
+ *   netTypeOfService(id, tos) → 0 | -errno, and with tos -1 the socket's → tos | -errno
  *   ttyOpen(fd, cb) → id | -errno               a terminal's handle (node:tty's ReadStream), read as
  *                                                a stream; it answers the pipe-only calls as a pipe
  *   ttySetRawMode(id, raw) → 0 | -errno
  *   dnsLookup(host, family, cb) → cb(errno, code, [[address, family], …]) */
 #define _POSIX_C_SOURCE 200809L  /* libuv's headers: pthread_rwlock_t, struct addrinfo */
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -136,9 +138,10 @@ static NetHandle *handle_arg(uint32_t argc, const JSValue *argv) {
 }
 
 /* A string argument as UTF-8 in buf. */
-static void string_arg(JSContext *ctx, JSValue v, char *buf, size_t size) {
-    buf[0] = '\0';
-    if (js_is_string(v)) buf[js_view_to_utf8(js_string_view(ctx, v), buf, size - 1)] = '\0';
+static size_t string_arg(JSContext *ctx, JSValue v, char *buf, size_t size) {
+    size_t n = js_is_string(v) ? js_view_to_utf8(js_string_view(ctx, v), buf, size - 1) : 0;
+    buf[n] = '\0';
+    return n;
 }
 
 /* An IP address and port; -errno for an address that isn't one. */
@@ -189,6 +192,20 @@ HOST_FN(js_host_net_open_fd) {
     return js_int32(h->is_pipe ? uv_pipe_open(&h->u.pipe, fd) : uv_tcp_open(&h->u.tcp, (uv_os_sock_t)fd));
 }
 
+/* netFd(id) → the handle's descriptor | -errno (-1 for a Windows socket's, as Node's) */
+HOST_FN(js_host_net_fd) {
+    UNUSED;
+    NetHandle *h = handle_arg(argc, argv);
+    if (!h) return js_int32(UV_EBADF);
+#ifdef _WIN32
+    return js_int32(-1);
+#else
+    uv_os_fd_t fd;
+    int r = uv_fileno((uv_handle_t *)&h->u.stream, &fd);
+    return js_int32(r < 0 ? r : fd);
+#endif
+}
+
 /* netBind(id, ip, port, flags 1 ipv6Only | 2 reusePort), or a pipe's netBind(id, path) */
 HOST_FN(js_host_net_bind) {
     UNUSED;
@@ -196,8 +213,8 @@ HOST_FN(js_host_net_bind) {
     if (!h || argc < 2) return js_int32(UV_EBADF);
     if (h->is_pipe) {
         char path[PATH_MAX_LEN];
-        string_arg(ctx, argv[1], path, sizeof path);
-        return js_int32(uv_pipe_bind2(&h->u.pipe, path, strlen(path), 0));
+        size_t n = string_arg(ctx, argv[1], path, sizeof path);  /* a Linux abstract path starts with a NUL */
+        return js_int32(uv_pipe_bind2(&h->u.pipe, path, n, UV_PIPE_NO_TRUNCATE));
     }
     struct sockaddr_storage addr;
     int r = sockaddr_arg(ctx, argv[1], argc > 2 ? argv[2] : JS_UNDEFINED, &addr);
@@ -255,8 +272,8 @@ HOST_FN(js_host_net_connect) {
     int r;
     if (h->is_pipe) {
         char path[PATH_MAX_LEN];
-        string_arg(ctx, argv[1], path, sizeof path);
-        r = uv_pipe_connect2(req, &h->u.pipe, path, strlen(path), 0, on_connect);
+        size_t n = string_arg(ctx, argv[1], path, sizeof path);
+        r = uv_pipe_connect2(req, &h->u.pipe, path, n, UV_PIPE_NO_TRUNCATE, on_connect);
     } else {
         struct sockaddr_storage addr;
         r = sockaddr_arg(ctx, argv[1], argc > 2 ? argv[2] : JS_UNDEFINED, &addr);
@@ -454,6 +471,50 @@ HOST_FN(js_host_net_keep_alive) {
     if (h->is_pipe) return js_int32(0);
     unsigned delay = argc > 2 && js_is_int32(argv[2]) && js_as_int32(argv[2]) > 0 ? (unsigned)js_as_int32(argv[2]) : 0;
     return js_int32(uv_tcp_keepalive(&h->u.tcp, argc > 1 && js_truthy(argv[1]), delay));
+}
+
+/* netTypeOfService(id, tos): IP_TOS, or IPV6_TCLASS on an IPv6 socket, as Node's TCPWrap sets
+ * and reads it; with tos -1, the socket's */
+HOST_FN(js_host_net_type_of_service) {
+    UNUSED;
+    NetHandle *h = handle_arg(argc, argv);
+    if (!h || h->is_pipe) return js_int32(h ? UV_EINVAL : UV_EBADF);
+    int tos = argc > 1 && js_is_int32(argv[1]) ? js_as_int32(argv[1]) : -1;
+    uv_os_fd_t fd;
+    int err = uv_fileno((uv_handle_t *)&h->u.tcp, &fd);
+    if (err) return js_int32(err);
+    struct sockaddr_storage storage;
+    int len = sizeof storage;
+    err = uv_tcp_getsockname(&h->u.tcp, (struct sockaddr *)&storage, &len);
+    if (err) return js_int32(err);
+    int level, option;
+    if (storage.ss_family == AF_INET) {
+        level = IPPROTO_IP;
+        option = IP_TOS;
+    } else if (storage.ss_family == AF_INET6) {
+#ifdef IPV6_TCLASS
+        level = IPPROTO_IPV6;
+        option = IPV6_TCLASS;
+#else
+        return js_int32(UV_ENOTSUP);
+#endif
+    } else {
+        return js_int32(UV_EINVAL);
+    }
+#ifdef _WIN32
+    if (tos >= 0) {
+        return js_int32(setsockopt((SOCKET)fd, level, option, (const char *)&tos, sizeof tos) == 0
+                            ? 0 : uv_translate_sys_error(WSAGetLastError()));
+    }
+    int got = 0, got_len = sizeof got;
+    if (getsockopt((SOCKET)fd, level, option, (char *)&got, &got_len) != 0) return js_int32(uv_translate_sys_error(WSAGetLastError()));
+#else
+    if (tos >= 0) return js_int32(setsockopt(fd, level, option, &tos, sizeof tos) == 0 ? 0 : uv_translate_sys_error(errno));
+    int got = 0;
+    socklen_t got_len = sizeof got;
+    if (getsockopt(fd, level, option, &got, &got_len) != 0) return js_int32(uv_translate_sys_error(errno));
+#endif
+    return js_int32(got);
 }
 
 /* ---- Terminals ----------------------------------------------------------------------------- */
