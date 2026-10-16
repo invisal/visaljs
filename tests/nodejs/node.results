@@ -451,6 +451,7 @@ test-http-server-client-error.js
 test-http-server-close-all.js
 test-http-server-close-destroy-timeout.js
 test-http-server-close-idle-wait-response.js
+test-http-server-close-idle.js
 test-http-server-consumed-timeout.js
 test-http-server-de-chunked-trailer.js
 test-http-server-delete-parser.js
@@ -467,6 +468,7 @@ test-http-server-keep-alive-timeout.js
 test-http-server-method.query.js
 test-http-server-multiheaders.js
 test-http-server-multiheaders2.js
+test-http-server-multiple-client-error.js
 test-http-server-non-utf8-header.js
 test-http-server-optimize-empty-requests.js
 test-http-server-options-incoming-message.js
@@ -485,6 +487,7 @@ test-http-server-timeouts-validation.js
 test-http-server-unconsume-consume.js
 test-http-server-write-after-end.js
 test-http-server-write-end-after-end.js
+test-http-server.js
 test-path-basename.js
 test-path-dirname.js
 test-path-extname.js

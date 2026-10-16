@@ -383,6 +383,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   httpParsers: { c: "js_host_http_parsers", length: 5 },      // (onHead, onBody, onComplete, onUpgrade, onError) → parsers
   httpAttach: { c: "js_host_http_attach", length: 4 },        // (conn, parsers, response, maxHeaderSize) → 0 | -errno: bytes go to llhttp
   httpDetach: { c: "js_host_http_detach", length: 2 },        // (conn, afterRead): bytes go to JS again (afterRead: once the read is parsed)
+  httpBusy: { c: "js_host_http_busy", length: 1 },            // (conn) → a message under way on it
   httpExpired: { c: "js_host_http_expired", length: 3 },      // (parsers, headersTimeout, requestTimeout) → [conn, …] over time
   httpWrite: { c: "js_host_http_write", length: 3 },          // (conn, string | Uint8Array, latin1) → written (corked)
   httpFlush: { c: "js_host_http_flush", length: 1 },          // (conn): the corked output, now

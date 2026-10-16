@@ -8,7 +8,7 @@
 // connections close after keepAliveTimeout; server.timeout and setTimeout are the sockets'.
 // Not yet: the client, headersTimeout and requestTimeout, trailers.
 import {
-  httpAttach, httpDate, httpDetach, httpExpired, httpFedClose, httpFedOpen, httpFeed, httpFlush, httpParsers, httpWrite, timerUnref,
+  httpAttach, httpBusy, httpDate, httpDetach, httpExpired, httpFedClose, httpFedOpen, httpFeed, httpFlush, httpParsers, httpWrite, timerUnref,
 } from "visaljs:host";
 import { bindContext, currentContext, runInContext } from "./internal/async_context.js";
 import { codeError, invalidArgType, outOfRange, validateInteger, validateString } from "./internal/errors.js";
@@ -328,7 +328,8 @@ export class ServerResponse extends OutgoingMessage {
   /* the response's bytes: to the connection's parser, which corks them; or, for a response made by
    * hand (new ServerResponse(req), Node's assignSocket), to its socket, kept until it has one */
   _send(data, latin1 = false) {
-    if (this._conn !== undefined) httpWrite(this._conn, data, latin1);
+    if (this._queued) (this._unsent ??= []).push([data, latin1]);  /* behind the connection's earlier responses */
+    else if (this._conn !== undefined) httpWrite(this._conn, data, latin1);
     else if (this.socket) this.socket.write(data, latin1 ? "latin1" : undefined);
     else (this._unsent ??= []).push([data, latin1]);
   }
@@ -534,7 +535,27 @@ export class ServerResponse extends OutgoingMessage {
     }
     this.writableEnded = this.finished = true;
     this.writable = false;
-    if (!this._keepAlive && this.socket) {  /* the response goes out, then the socket ends */
+    if (this._queued) {  /* finished once it has gone out, after the responses before it */
+      this._endCallback = callback;
+      return this;
+    }
+    this._afterEnd(callback);
+    return this;
+  }
+
+  /* a response that waited behind the connection's earlier ones: its turn (Node's assignSocket) */
+  _activate() {
+    this._queued = false;
+    const unsent = this._unsent;
+    this._unsent = undefined;
+    if (unsent) for (const [data, latin1] of unsent) httpWrite(this._conn, data, latin1);
+    if (this.writableEnded) this._afterEnd(this._endCallback);
+  }
+
+  /* the response is all written: the socket ends after the last one (not kept alive, or the client
+   * ended its side), then 'finish' and 'close' */
+  _afterEnd(callback) {
+    if ((!this._keepAlive || this._last) && this.socket) {  /* the response goes out, then the socket ends */
       httpFlush(this._conn);
       if (typeof this.socket.destroySoon === "function") this.socket.destroySoon();  /* as Node's resOnFinish */
       else this.socket.end();
@@ -683,7 +704,10 @@ class ServerClass extends NetServer {
   }
 
   closeIdleConnections() {
-    for (const state of [...this._states.values()]) if (!state.req && !state.res) state.socket.destroy();
+    /* as Node's: idle is no request under way (none begun on it, nor a response unfinished) */
+    for (const state of [...this._states.values()]) {
+      if (state.incoming.length === 0 && !state.res && !httpBusy(state.conn)) state.socket.destroy();
+    }
   }
 
   close(callback) {
@@ -708,7 +732,7 @@ class ServerClass extends NetServer {
           const state = this._states.get(conn);
           const req = state?.req;
           if (req) {
-            if (state.res === null || state.res.writableEnded) state.req = null;
+            state.req = null;  /* parsed; it stays in state.incoming until its response finishes */
             if (trailers) {
               req.rawTrailers = trailers;
               for (let i = 0; i < trailers.length; i += 2) addHeader(req.trailers, trailers[i], trailers[i + 1]);
@@ -727,30 +751,52 @@ class ServerClass extends NetServer {
     }
     const conn = connOf(socket);
     if (conn === null) return;
-    const state = { socket, conn, req: null, res: null, keepAliveTimeoutSet: false, listeners: null };
+    socket.server = this;  /* as Node's: the http server, even for a socket another server accepted */
+    /* as Node's connection state: the request being parsed (req); those whose responses aren't
+     * finished (incoming); the response writing to the connection (res), and those waiting behind it
+     * (outgoing: pipelined requests are answered in order) */
+    const state = { socket, conn, req: null, incoming: [], res: null, outgoing: [], keepAliveTimeoutSet: false, listeners: null };
     this._states.set(conn, state);
     if (this.timeout && typeof socket.setTimeout === "function") socket.setTimeout(this.timeout);
     const onTimeout = () => this._onTimeout(state);
+    /* Node's socketOnEnd: the client ended its side; with httpAllowHalfOpen, the socket ends after
+     * the last response, else now */
     const onEnd = () => {
-      this._abortIncoming(state);
-      if (socket.writable) socket.end();
+      if (!this.httpAllowHalfOpen) {
+        if (socket.writable) socket.end();
+      } else if (state.outgoing.length) {
+        state.outgoing[state.outgoing.length - 1]._last = true;
+      } else if (state.res) {
+        state.res._last = true;
+      } else if (socket.writable) {
+        socket.end();
+      }
     };
+    /* Node's socketOnClose: the requests and responses not finished are aborted */
     const onClose = () => {
       this._states.delete(conn);
       this._abortIncoming(state);
-      const res = state.res;
+      const responses = state.res ? [state.res, ...state.outgoing] : state.outgoing;
       state.res = null;
-      if (res) res._connectionClosed();
+      state.outgoing = [];
+      for (const res of responses) res._connectionClosed();
     };
     state.listeners = { timeout: onTimeout, end: onEnd, close: onClose, error: socketOnError };
     for (const [event, fn] of Object.entries(state.listeners)) socket.on(event, fn);
     httpAttach(conn, this._parsers, false, this.maxHeaderSize ?? maxHeaderSize);
+    /* bytes the socket read before it was the server's (a program that peeked, then emitted
+     * 'connection' itself): parsed first, a chunk at a time, as Node's 'data' brings them */
+    const readable = socket._readableState;
+    while (readable && !isFed(socket) && socket.readableLength > 0 && this._states.has(conn)) {
+      const chunk = socket.read(readable.buffer[readable.bufferIndex]?.length ?? socket.readableLength);
+      if (chunk === null) break;
+      httpFeed(conn, typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    }
   }
 
   _abortIncoming(state) {
-    const req = state.req;
     state.req = null;
-    if (req) req._abort();
+    for (const req of state.incoming.splice(0)) req._abort();
   }
 
   /* Node's socketOnTimeout: the request's, the response's or the server's 'timeout', or the end */
@@ -786,24 +832,41 @@ class ServerClass extends NetServer {
       return 2;
     }
     state.req = req;
+    state.incoming.push(req);
     if (this._optimizeEmptyRequests && !("content-length" in req.headers) && !("transfer-encoding" in req.headers)) req._dumpAndCloseReadable();
     const res = new this._ServerResponse(req, conn, keepAlive, this);
-    state.res = res;
+    if (state.res) {  /* a pipelined request: its response waits for the one before */
+      res._queued = true;
+      state.outgoing.push(res);
+    } else {
+      state.res = res;
+    }
+    res.once("finish", () => this._resOnFinish(state, req, res));
     if (this.requireHostHeader && major === 1 && minor === 1 && !req.headers.host) {  /* Node: a 400, and the connection ends */
       res.writeHead(400, ["Connection", "close"]);
       res.end();
       return 0;
     }
-    res.once("finish", () => {
-      if (state.res === res) state.res = null;
-      if (state.req === req && req.complete) state.req = null;
-      if (res._keepAlive && !state.res && this.keepAliveTimeout && socket.writable) {
-        socket.setTimeout(this.keepAliveTimeout);
-        state.keepAliveTimeoutSet = true;
-      }
-    });
     this.emit("request", req, res);
     return 0;
+  }
+
+  /* Node's resOnFinish: the request is done with; the next response's turn, or the idle keep-alive
+   * timeout */
+  _resOnFinish(state, req, res) {
+    const i = state.incoming.indexOf(req);
+    if (i !== -1) state.incoming.splice(i, 1);
+    if (state.req === req && req.complete) state.req = null;
+    if (state.res === res) state.res = null;
+    if (res._last || !res._keepAlive) return;  /* the socket is ending */
+    const next = state.outgoing.shift();
+    if (next) {
+      state.res = next;
+      next._activate();
+    } else if (this.keepAliveTimeout && state.socket.writable) {
+      state.socket.setTimeout(this.keepAliveTimeout);
+      state.keepAliveTimeoutSet = true;
+    }
   }
 
   /* the parser let go of the socket after an upgrade's head: it's the 'upgrade' listener's */

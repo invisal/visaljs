@@ -74,6 +74,8 @@ struct Conn {
     bool     upgrading;  /* JS took the upgrade the head asked for */
     bool     active;     /* a message is under way (or the connection is new): timeouts count */
     bool     head_done;  /* its head is complete: what follows are its body and trailers */
+    bool     in_message; /* a message has begun and isn't complete: the connection isn't idle */
+    llhttp_errno_t failed;  /* the parse error it stopped at: more bytes report it again, as Node's */
     bool     overflow;   /* its head is over max_header bytes */
     uint64_t begin_ms;   /* when the message began (the loop's time) */
     size_t   header_bytes, max_header;
@@ -151,6 +153,7 @@ static int on_message_begin(llhttp_t *p) {
     c->headers = js_new_array(ctx_(), 0);
     c->active = true;
     c->head_done = false;
+    c->in_message = true;
     c->header_bytes = 0;
     c->begin_ms = uv_now(js_uv_loop(ctx_()));
     return 0;
@@ -221,6 +224,7 @@ static int on_message_complete(llhttp_t *p) {
     if (c->detached) return -1;  /* let go of by an earlier callback */
     if (c->in_value || c->field.n) push_header(c);  /* the last trailer */
     c->active = false;
+    c->in_message = false;
     JSValue args[2] = { js_int32(c->id), c->headers };
     c->headers = JS_UNDEFINED;
     return js_uv_call(c->parsers->on_complete, 2, args, NULL) ? 0 : -1;
@@ -244,6 +248,7 @@ static Conn *conn_of(int id) {
  * the read (none for a message cut short at the end of the stream) */
 static void parse_error(Conn *c, llhttp_errno_t e, const char *bytes, size_t n) {
     c->detached = true;
+    c->failed = e;
     c->active = false;
     JSContext *ctx = ctx_();
     const char *code = c->overflow ? "HPE_HEADER_OVERFLOW" : llhttp_errno_name(e);
@@ -297,6 +302,13 @@ static void read_done(Conn *c) {
 /* A connection's bytes: parsed while attached; EOF and errors go on to JS (the socket's 'end'
  * and 'error'). False when the parser doesn't take them. */
 static bool parse_input(Conn *c, ssize_t n, const char *bytes) {
+    if (c->detached && c->failed != HPE_OK && n > 0 && !c->executing) {
+        /* a parser that failed fails again on what follows, with those bytes (Node's execute) */
+        c->executing = true;
+        parse_error(c, c->failed, bytes, (size_t)n);
+        read_done(c);
+        return true;
+    }
     if (c->detached) return false;
     c->executing = true;
     if (n < 0) {
@@ -427,6 +439,14 @@ JSValue js_host_http_detach(JSContext *ctx, JSValue callee, JSValue this_val, ui
     if (argc > 1 && js_truthy(argv[1]) && c->executing) c->detach_after = true;
     else detach_conn(c);
     return JS_UNDEFINED;
+}
+
+/* httpBusy(conn): whether a message is under way on the connection (begun, not complete), as Node's
+ * ConnectionsList tells an idle connection from an active one */
+JSValue js_host_http_busy(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    (void)ctx, (void)callee, (void)this_val, (void)new_target;
+    Conn *c = argc > 0 && js_is_int32(argv[0]) ? conn_of(js_as_int32(argv[0])) : NULL;
+    return js_bool(c && c->in_message && !c->detached);
 }
 
 /* httpExpired(parsers, headersTimeout, requestTimeout) → the connections over time, as Node's
@@ -585,7 +605,8 @@ JSValue js_host_http_fed_open(JSContext *ctx, JSValue callee, JSValue this_val, 
 /* httpFeed(conn, bytes | null) → whether the parser took them; null: the input ended */
 JSValue js_host_http_feed(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
     (void)callee, (void)this_val, (void)new_target;
-    Conn *c = argc > 0 && js_is_int32(argv[0]) && js_as_int32(argv[0]) < 0 ? conn_of(js_as_int32(argv[0])) : NULL;
+    /* a fed connection's bytes; or a socket's that JS read before the parser took the socket */
+    Conn *c = argc > 0 && js_is_int32(argv[0]) ? conn_of(js_as_int32(argv[0])) : NULL;
     if (!c) return JS_FALSE;
     /* called from JS: the parser's callbacks run in it, so no microtask or nextTick runs between
      * two of them (a body and its end come in the same turn, as in Node) */
