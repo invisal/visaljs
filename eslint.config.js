@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   /* bench/kernels/awfy/src/ and bench/kernels/benchmarks-game/: other projects' benchmarks, unchanged; tests/nodejs/test/parallel/ and fixtures/: Node's tests, unchanged */
-  { ignores: ["**/dist/", "**/.next/", "**/.astro/", "build/", "tests/test262/", "node_modules/", "compiler/test/golden/", "tests/programs/*.js", "tests/programs/bundle/", "tests/differential/*.js", "tests/differential/app/", "tests/apps/typescript/sample/", "bench/kernels/awfy/src/", "bench/kernels/benchmarks-game/", "tests/nodejs/test/parallel/", "tests/nodejs/test/fixtures/"] },
+  { ignores: ["**/dist/", "**/.next/", "**/.astro/", "build/", "tests/test262/", "node_modules/", "compiler/test/golden/", "tests/programs/*.js", "tests/programs/win32/", "tests/programs/bundle/", "tests/differential/*.js", "tests/differential/app/", "tests/apps/typescript/sample/", "bench/kernels/awfy/src/", "bench/kernels/benchmarks-game/", "tests/nodejs/test/parallel/", "tests/nodejs/test/fixtures/"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
