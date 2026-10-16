@@ -284,6 +284,71 @@ TEST(obj_gc) {
     teardown();
 }
 
+/* shape.h */
+uint32_t js_shape_transition_count(const JSShape *s);
+
+/* Objects of prototype `proto`, each given a one-off key: transitions from its root shape. */
+static NOINLINE void one_off_keys(JSValue proto, int n) {
+    char name[16];
+    for (int i = 0; i < n; i++) {
+        JSValue o = js_new_object_proto(ctx, proto, 2);
+        snprintf(name, sizeof name, "u%d", i);
+        int r = js_set_value(ctx, o, js_atom_from_cstr(ctx, name), js_int32(i), true);
+        (void)r;
+    }
+}
+
+static NOINLINE JSValue with_key(JSValue proto, const char *k, int v) {
+    JSValue o = js_new_object_proto(ctx, proto, 2);
+    int r = js_set_value(ctx, o, js_atom_from_cstr(ctx, k), js_int32(v), true);
+    (void)r;
+    return o;
+}
+
+static NOINLINE JSShape *root_of(JSValue proto) { return js_as_object(js_new_object_proto(ctx, proto, 2))->shape; }
+
+/* A young collection drops the shapes made since the last collection that died: roots, and
+ * transitions from an old shape; the ones still used stay, and are found again. */
+TEST(obj_young_shapes) {
+    setup();
+    rt->heap.stress_interval = (size_t)1 << 40;  /* stress builds: only the collections below */
+    JSValue *roots = malloc(3 * sizeof *roots);
+    for (int i = 0; i < 3; i++) roots[i] = JS_UNDEFINED;
+    js_register_roots(rt, roots, 3);
+    roots[0] = js_new_object(ctx);  /* a prototype: its root shape gets old */
+    keep_object(&roots[1]);
+    (void)root_of(roots[0]);
+    js_gc(ctx);
+    JSShape *old_root = root_of(roots[0]);
+    size_t roots_before = rt->shapes.root_count;
+    uint32_t transitions_before = js_shape_transition_count(old_root);
+
+    one_off_objects(500);           /* young roots, and their transitions */
+    one_off_keys(roots[0], 50);     /* young children of an old root */
+    roots[2] = with_key(roots[0], "kept", 42);  /* a young child that lives */
+    CHECK(js_shape_transition_count(old_root) == transitions_before + 51u);
+    scrub();
+    js_gc_young(ctx);
+    CHECK(rt->shapes.root_count <= roots_before + 4);  /* the conservative scan may keep a few */
+    CHECK(js_shape_transition_count(old_root) >= transitions_before + 1u);
+    CHECK(js_shape_transition_count(old_root) <= transitions_before + 5u);
+    CHECK(kept_intact(&roots[1]));
+    CHECK_EQ_INT(get_int(roots[2], "kept"), 42);
+    CHECK(js_as_object(with_key(roots[0], "kept", 1))->shape == js_as_object(roots[2])->shape);  /* found again */
+    CHECK(root_of(roots[0]) == old_root);
+
+    one_off_objects(500);  /* again: the young sweep after a young one */
+    scrub();
+    js_gc_young(ctx);
+    CHECK(rt->shapes.root_count <= roots_before + 4);
+    scrub();
+    js_gc(ctx);
+    CHECK(kept_intact(&roots[1]));
+    CHECK(js_as_object(with_key(roots[0], "kept", 1))->shape == js_as_object(roots[2])->shape);
+    teardown();
+    free(roots);  /* a registered table lives as long as the runtime */
+}
+
 /* ---- Arrays and elements -------------------------------------------------- */
 
 static JSValue at(JSValue a, uint32_t i) {

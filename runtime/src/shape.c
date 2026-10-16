@@ -119,6 +119,35 @@ static void roots_put(JSShape **table, size_t cap, JSShape *s) {
     table[i] = s;
 }
 
+/* Removes root `s`, which is in the table. Linear probing: later entries of its probe run move back
+ * into the hole, so that every lookup still finds them. */
+static void roots_remove(JSShapeRegistry *r, const JSShape *s) {
+    size_t mask = r->root_cap - 1, i = root_hash(s->cls, s->proto, s->inline_cap) & mask;
+    while (r->roots[i] != s) i = (i + 1) & mask;
+    r->roots[i] = NULL;
+    r->root_count--;
+    for (size_t j = (i + 1) & mask; r->roots[j]; j = (j + 1) & mask) {
+        JSShape *x = r->roots[j];
+        size_t home = root_hash(x->cls, x->proto, x->inline_cap) & mask;
+        bool stays = i <= j ? (i < home && home <= j) : (i < home || home <= j);
+        if (!stays) {
+            r->roots[i] = x;
+            r->roots[j] = NULL;
+            i = j;
+        }
+    }
+}
+
+/* A shape made since the last collection: a young collection checks it. */
+static void note_young(JSShapeRegistry *r, JSShape *s) {
+    if (r->young_count == r->young_cap) {
+        r->young_cap = r->young_cap ? r->young_cap * 2 : 256;
+        r->young = realloc(r->young, r->young_cap * sizeof *r->young);
+        if (!r->young) js_fatal("out of memory (shape registry)");
+    }
+    r->young[r->young_count++] = s;
+}
+
 static void roots_rebuild(JSShapeRegistry *r, size_t cap, bool (*keep)(JSShape *)) {
     JSShape **table = calloc(cap, sizeof *table);
     if (!table) js_fatal("out of memory (shape roots)");
@@ -152,6 +181,7 @@ JSShape *js_shape_root(JSContext *ctx, const JSClass *cls, JSValue proto, uint16
     if (2 * (r->root_count + 1) > r->root_cap) roots_rebuild(r, r->root_cap ? r->root_cap * 2 : 64, NULL);
     roots_put(r->roots, r->root_cap, s);
     r->root_count++;
+    note_young(r, s);
     return s;
 }
 
@@ -196,6 +226,7 @@ JSShape *js_shape_add(JSContext *ctx, JSShape *shape, JSValue key, uint8_t attrs
         if (!t->items) js_fatal("out of memory (transitions)");
     }
     t->items[t->count++] = (JSTransition){ key, attrs, child };
+    note_young(&ctx->rt->shapes, child);
     return child;
 }
 
@@ -239,8 +270,42 @@ JSPropTable *js_shape_entries(JSShape *s) {
 
 static bool shape_alive(JSShape *s) { return js_gc_is_marked(&s->cell); }
 
-void js_shapes_sweep(JSRuntime *rt) {
+/* A young collection: an old shape stays marked until a full collection, so only the shapes made
+ * since the last collection can be dead. A dead root leaves the roots table; a dead child leaves
+ * its parent's transitions (an emptied table stays, for the next full collection to free); a dead
+ * parent, made since the last collection too, leaves the tail of `parents`. */
+static void sweep_young(JSShapeRegistry *r) {
+    for (size_t i = 0; i < r->young_count; i++) {
+        JSShape *s = r->young[i];
+        if (shape_alive(s)) continue;
+        if (!s->parent) {
+            roots_remove(r, s);
+            continue;
+        }
+        JSShape *p = s->parent;
+        if (!shape_alive(p)) continue;  /* its transitions are freed with it */
+        JSTransitions *t = p->transitions;
+        for (uint32_t k = 0; k < t->count; k++)
+            if (t->items[k].child == s) {
+                t->items[k] = t->items[--t->count];
+                break;
+            }
+    }
+    size_t kept = r->old_parents;
+    for (size_t i = r->old_parents; i < r->parent_count; i++)
+        if (shape_alive(r->parents[i])) r->parents[kept++] = r->parents[i];
+    r->parent_count = kept;
+}
+
+void js_shapes_sweep(JSRuntime *rt, bool full) {
     JSShapeRegistry *r = &rt->shapes;
+    if (!full) {
+        sweep_young(r);
+        r->young_count = 0;
+        r->old_parents = r->parent_count;
+        return;
+    }
+    r->young_count = 0;
     /* a dead parent's children are dead too: they point to it */
     size_t kept = 0;
     for (size_t i = 0; i < r->parent_count; i++) {
@@ -259,6 +324,7 @@ void js_shapes_sweep(JSRuntime *rt) {
         }
     }
     r->parent_count = kept;
+    r->old_parents = kept;
     if (r->root_cap) {
         size_t live = 0;
         for (size_t i = 0; i < r->root_cap; i++) live += r->roots[i] && shape_alive(r->roots[i]);
@@ -271,6 +337,7 @@ void js_shapes_sweep(JSRuntime *rt) {
 void js_shapes_free(JSRuntime *rt) {
     free(rt->shapes.roots);
     free(rt->shapes.parents);
+    free(rt->shapes.young);
     memset(&rt->shapes, 0, sizeof rt->shapes);
 }
 

@@ -142,6 +142,11 @@ typedef struct JSShapeRegistry {
     size_t root_cap, root_count;
     struct JSShape **parents;     /* shapes with transitions */
     size_t parent_count, parent_cap;
+    /* Since the last collection: the root shapes and transitions' children made (the only shapes
+     * a young collection can find dead), and the shapes given transitions, parents[old_parents..]. */
+    struct JSShape **young;
+    size_t young_count, young_cap;
+    size_t old_parents;
 } JSShapeRegistry;
 
 /* Registered inline-cache arrays: reset weakly after marking. */
