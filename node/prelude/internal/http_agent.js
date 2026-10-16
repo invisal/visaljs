@@ -40,12 +40,20 @@ function maybeEnableKeylog(eventName) {
 }
 
 function installFreeSocketDataGuard(socket) {
+  /* a TLS socket's reads are records (session tickets, alerts) before they're data: its own */
+  if (socket.encrypted) return;
   if (socket.readableLength > 0) {
     socket.destroy();
     return;
   }
   if (socket.connecting) {
-    socket.once("connect", () => installFreeSocketDataGuard(socket));
+    if (!socket._freeGuardConnect) {  /* once: a socket may come back to the pool before it connects */
+      socket._freeGuardConnect = () => {
+        socket._freeGuardConnect = undefined;
+        installFreeSocketDataGuard(socket);
+      };
+      socket.once("connect", socket._freeGuardConnect);
+    }
     return;
   }
   const id = socket._handle;
@@ -60,6 +68,10 @@ function installFreeSocketDataGuard(socket) {
 }
 
 function removeFreeSocketDataGuard(socket) {
+  if (socket._freeGuardConnect) {
+    socket.removeListener("connect", socket._freeGuardConnect);
+    socket._freeGuardConnect = undefined;
+  }
   if (socket._freeGuardClose) {
     socket.removeListener("close", socket._freeGuardClose);
     socket._freeGuardClose = undefined;
