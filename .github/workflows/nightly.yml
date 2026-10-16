@@ -90,10 +90,12 @@ jobs:
 
   gc-bench:
     # The GC benchmarks (bench/gc.ts): each built by visaljs and run against
-    # Node, with what the collector reports (JS_GC_STATS); then the server benchmark
-    # (bench/gc-server.ts): latency and memory under load and idle. Fails when a build fails,
-    # an output differs from Node's or a request fails; the numbers are for reading (job summary).
-    # Locally: npm run bench:gc, npm run bench:gc-server (needs wrk)
+    # Node, with what the collector reports (JS_GC_STATS); the scaling benchmarks
+    # (bench/gc-scaling.ts): pauses as the live heap and the runtime's tables grow; then the server
+    # benchmark (bench/gc-server.ts): latency and memory under load and idle. Fails when a build
+    # fails, an output differs from Node's or a request fails; the numbers are for reading (job
+    # summary), and kept as the gc-json artifact, to compare nights.
+    # Locally: npm run bench:gc, npm run bench:gc-scaling, npm run bench:gc-server (needs wrk)
     name: GC benchmarks
     needs: changes
     if: needs.changes.outputs.run == 'true'
@@ -106,12 +108,23 @@ jobs:
       - name: Benchmark
         run: |
           set -o pipefail
-          npm run --silent bench:gc | tee gc.md
+          npm run --silent bench:gc -- --json=gc.json | tee gc.md
           echo >> gc.md
-          npm run --silent bench:gc-server | tee -a gc.md
+          npm run --silent bench:gc-scaling -- --json=gc-scaling.json | tee -a gc.md
+          echo >> gc.md
+          npm run --silent bench:gc-server -- --json=gc-server.json | tee -a gc.md
       - name: Summary
         if: always()
         run: if [ -f gc.md ]; then cat gc.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: gc-json
+          path: |
+            gc.json
+            gc-scaling.json
+            gc-server.json
+          if-no-files-found: ignore
 
   gc-checks:
     # The program tests against a checking runtime (programs.yml's gc-stress), in shards. The

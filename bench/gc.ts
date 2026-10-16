@@ -5,7 +5,7 @@
 //   node bench/gc.ts [name...] [--runs=3] [--json=file]
 //
 // Prints a markdown table per program: wall time (best of the runs) and peak resident memory,
-// visaljs's and Node's; the collections, their total and longest pause, and the share of the run
+// visaljs's and Node's; the collections, their total, p99 and longest pause, and the share of the run
 // spent collecting (pauses and lazy sweeping). visaljs's output must equal Node's (the run exits
 // 1 otherwise, or when a build fails). One thing runs at a time. --json also writes the numbers.
 import { execFileSync, spawnSync } from "node:child_process";
@@ -43,7 +43,8 @@ interface GCStats {
   peak_rss_bytes: number;
 }
 
-interface Run { ms: number; stdout: string; rss: number; gc: GCStats | null }
+/** `pauses`: each collection's (JS_GC_TRACE), young ones and full ones' final pauses. */
+interface Run { ms: number; stdout: string; rss: number; gc: GCStats | null; pauses: number[] }
 
 /** The run with the best wall time of RUNS. */
 function best(command: string, args: string[], env: NodeJS.ProcessEnv): Run {
@@ -56,13 +57,21 @@ function best(command: string, args: string[], env: NodeJS.ProcessEnv): Run {
     const stats = /^\[gc-stats\] (.*)$/m.exec(r.stderr);
     const rss = /^\[rss\] (\d+)$/m.exec(r.stderr);
     const gc = stats ? (JSON.parse(stats[1]!) as GCStats) : null;
-    const run = { ms, stdout: r.stdout, rss: gc ? gc.peak_rss_bytes : Number(rss?.[1] ?? 0), gc };
+    const pauses = [...r.stderr.matchAll(/^\[gc\] #\d+ \w+: pause ([\d.]+) ms/gm)].map((m) => Number(m[1]));
+    const run = { ms, stdout: r.stdout, rss: gc ? gc.peak_rss_bytes : Number(rss?.[1] ?? 0), gc, pauses };
     if (!result || run.ms < result.ms) result = run;
   }
   return result!;
 }
 
-interface Row { program: string; node: { ms: number; rss: number }; visaljs: Omit<Run, "stdout"> | null }
+/** The nearest-rank percentile; 0 for none. */
+function percentile(xs: number[], p: number): number {
+  if (!xs.length) return 0;
+  const sorted = [...xs].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)]!;
+}
+
+interface Row { program: string; node: { ms: number; rss: number }; visaljs: (Omit<Run, "stdout" | "pauses"> & { p99: number }) | null }
 const rows: Row[] = [];
 let failed = false;
 const nodeVersion = execFileSync(process.execPath, ["--version"], { encoding: "utf8" }).trim();
@@ -73,9 +82,9 @@ for (const name of names) {
   const node = best(process.execPath, ["-r", NODE_RSS, source], {});
   try {
     buildVisaljs(source, binary);
-    const v = best(binary, [], { JS_GC_STATS: "1" });
+    const v = best(binary, [], { JS_GC_STATS: "1", JS_GC_TRACE: "1" });
     if (v.stdout !== node.stdout) throw new Error(`output ${JSON.stringify(v.stdout)}, Node's ${JSON.stringify(node.stdout)}`);
-    rows.push({ program: name, node: { ms: node.ms, rss: node.rss }, visaljs: { ms: v.ms, rss: v.rss, gc: v.gc } });
+    rows.push({ program: name, node: { ms: node.ms, rss: node.rss }, visaljs: { ms: v.ms, rss: v.rss, gc: v.gc, p99: percentile(v.pauses, 99) } });
   } catch (e) {
     process.stderr.write(`${name}: ${(e as Error).message}\n`);
     rows.push({ program: name, node: { ms: node.ms, rss: node.rss }, visaljs: null });
@@ -85,7 +94,7 @@ for (const name of names) {
 
 const ms = (n: number) => (n >= 100 ? `${Math.round(n)} ms` : `${n.toFixed(1)} ms`);
 const mb = (bytes: number) => `${Math.round(bytes / (1 << 20))} MB`;
-console.log(`| Program | visaljs | Node ${nodeVersion} | visaljs / Node | Memory: visaljs, Node | Collections | Pauses: total, longest | Collecting |`);
+console.log(`| Program | visaljs | Node ${nodeVersion} | visaljs / Node | Memory: visaljs, Node | Collections | Pauses: total, p99, longest | Collecting |`);
 console.log("|---|---:|---:|---:|---:|---:|---:|---:|");
 for (const r of rows) {
   const v = r.visaljs;
@@ -95,7 +104,7 @@ for (const r of rows) {
   }
   const gc = v.gc!;
   const share = (gc.pause_ms + gc.sweep_ms) / v.ms;
-  console.log(`| ${r.program} | ${ms(v.ms)} | ${ms(r.node.ms)} | ${(v.ms / r.node.ms).toFixed(1)}× | ${mb(v.rss)}, ${mb(r.node.rss)} | ${gc.collections} | ${ms(gc.pause_ms)}, ${ms(gc.max_pause_ms)} | ${Math.round(share * 100)}% |`);
+  console.log(`| ${r.program} | ${ms(v.ms)} | ${ms(r.node.ms)} | ${(v.ms / r.node.ms).toFixed(1)}× | ${mb(v.rss)}, ${mb(r.node.rss)} | ${gc.collections} | ${ms(gc.pause_ms)}, ${ms(v.p99)}, ${ms(gc.max_pause_ms)} | ${Math.round(share * 100)}% |`);
 }
 if (options.json) writeFileSync(options.json, `${JSON.stringify(rows, null, 2)}\n`);
 process.exit(failed ? 1 : 0);

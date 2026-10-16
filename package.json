@@ -32,6 +32,7 @@
     "bench:react-ssr": "node bench/react-ssr.ts",
     "bench:kernels": "node bench/kernels.ts",
     "bench:gc": "node bench/gc.ts",
+    "bench:gc-scaling": "node bench/gc-scaling.ts",
     "bench:gc-server": "node bench/gc-server.ts",
     "bench:size": "node bench/size.ts",
     "prebuilt": "node cli/scripts/prebuilt.ts"
