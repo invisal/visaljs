@@ -3,6 +3,7 @@
 // response is done goes to freeSockets (unref'd, so it doesn't keep the program running) for
 // the next request to the same origin, until the agent's timeout or the server's Keep-Alive hint.
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
+import { httpGuard } from "visaljs:host";
 import { EventEmitter } from "../events.js";
 import { createConnection } from "../net.js";
 import { invalidArgType, invalidArgValue, outOfRange } from "./errors.js";
@@ -11,6 +12,73 @@ import { isIP } from "./net.js";
 function freeSocketErrorListener() {
   this.destroy();
   this.emit("agentRemove");
+}
+
+/* Node's free socket data guard: bytes a socket reads while it waits in the pool (no request on it)
+ * would be taken for the next request's response; the socket is destroyed instead. The bytes are
+ * caught in C (httpGuard), before they reach the socket's stream; attaching the next request's
+ * parser takes the guard off. */
+const guardedSockets = new Map();  /* the guarded sockets, by their handle's id */
+
+function onGuardedData(id) {
+  const socket = guardedSockets.get(id);
+  guardedSockets.delete(id);
+  socket?.destroy();
+}
+
+/* Node's maybeEnableKeylog: the sockets' keylog events become the agent's */
+function maybeEnableKeylog(eventName) {
+  if (eventName !== "keylog") return;
+  this.removeListener("newListener", maybeEnableKeylog);
+  const emit = this.emit.bind(this);
+  this._onKeylog = function onkeylog(keylog) {
+    emit("keylog", keylog, this);  /* this: the socket */
+  };
+  for (const set of [this.freeSockets, this.sockets]) {
+    for (const sockets of Object.values(set)) for (const socket of sockets) socket.on("keylog", this._onKeylog);
+  }
+}
+
+function installFreeSocketDataGuard(socket) {
+  /* a TLS socket's reads are records (session tickets, alerts) before they're data: its own */
+  if (socket.encrypted) return;
+  if (socket.readableLength > 0) {
+    socket.destroy();
+    return;
+  }
+  if (socket.connecting) {
+    if (!socket._freeGuardConnect) {  /* once: a socket may come back to the pool before it connects */
+      socket._freeGuardConnect = () => {
+        socket._freeGuardConnect = undefined;
+        installFreeSocketDataGuard(socket);
+      };
+      socket.once("connect", socket._freeGuardConnect);
+    }
+    return;
+  }
+  const id = socket._handle;
+  if (typeof id === "number" && httpGuard(id, onGuardedData)) {
+    guardedSockets.set(id, socket);
+    socket._freeGuardId = id;
+    /* one listener while it's guarded, taken off when it's reused (a kept-alive socket comes back
+     * to the pool after each request) */
+    socket._freeGuardClose = () => removeFreeSocketDataGuard(socket);
+    socket.once("close", socket._freeGuardClose);
+  }
+}
+
+function removeFreeSocketDataGuard(socket) {
+  if (socket._freeGuardConnect) {
+    socket.removeListener("connect", socket._freeGuardConnect);
+    socket._freeGuardConnect = undefined;
+  }
+  if (socket._freeGuardClose) {
+    socket.removeListener("close", socket._freeGuardClose);
+    socket._freeGuardClose = undefined;
+  }
+  const id = socket._freeGuardId;
+  if (id !== undefined && guardedSockets.get(id) === socket) guardedSockets.delete(id);
+  socket._freeGuardId = undefined;
 }
 
 export function Agent(options) {
@@ -29,6 +97,9 @@ export function Agent(options) {
   this.maxSockets = this.options.maxSockets || Agent.defaultMaxSockets;
   this.maxFreeSockets = this.options.maxFreeSockets || 256;
   this.scheduling = this.options.scheduling || "lifo";
+  /* what the server's Keep-Alive timeout is cut by, so the socket isn't reused as the server closes it */
+  const buffer = this.options.agentKeepAliveTimeoutBuffer;
+  this.agentKeepAliveTimeoutBuffer = typeof buffer === "number" && buffer >= 0 && Number.isFinite(buffer) ? buffer : 1000;
   this.maxTotalSockets = this.options.maxTotalSockets;
   this.totalSocketCount = 0;
   if (this.scheduling !== "fifo" && this.scheduling !== "lifo") throw invalidArgValue("scheduling", "must be one of: 'fifo', 'lifo'", this.scheduling);
@@ -38,6 +109,9 @@ export function Agent(options) {
   } else {
     this.maxTotalSockets = Infinity;
   }
+
+  /* keylog events only once someone listens: then every socket's, the existing ones' too */
+  this.on("newListener", maybeEnableKeylog);
 
   /* a socket whose request is done: the next queued request's, kept alive, or destroyed */
   this.on("free", (socket, options) => {
@@ -70,6 +144,7 @@ export function Agent(options) {
     socket._httpMessage = null;
     this.removeSocket(socket, options);
     socket.once("error", freeSocketErrorListener);
+    installFreeSocketDataGuard(socket);
     freeSockets.push(socket);
   });
 }
@@ -131,7 +206,12 @@ Agent.prototype.addRequest = function addRequest(req, options, port, localAddres
   }
   const freeLen = freeSockets ? freeSockets.length : 0;
   const sockLen = freeLen + this.sockets[name].length;
+  /* a reused socket takes the request's highWaterMark, as Node's */
+  if (socket && options.highWaterMark != null && socket.writableHighWaterMark !== options.highWaterMark) {
+    socket._writableState.highWaterMark = options.highWaterMark;
+  }
   if (socket) {
+    removeFreeSocketDataGuard(socket);
     this.reuseSocket(socket, req);
     setRequestSocket(this, req, socket);
     this.sockets[name].push(socket);
@@ -163,6 +243,7 @@ Agent.prototype.createSocket = function createSocket(req, options, cb) {
     this.sockets[name].push(s);
     this.totalSocketCount++;
     installListeners(this, s, options);
+    if (this._onKeylog) s.on("keylog", this._onKeylog);
     cb(null, s);
   };
   if (this.keepAlive) {
@@ -244,7 +325,7 @@ Agent.prototype.keepSocketAlive = function keepSocketAlive(socket) {
   const hint = socket._httpMessage?.res?.headers["keep-alive"];
   const seconds = hint ? /^timeout=(\d+)/.exec(hint)?.[1] : undefined;
   if (seconds) {
-    let serverHintTimeout = parseInt(seconds, 10) * 1000 - 1000;
+    let serverHintTimeout = parseInt(seconds, 10) * 1000 - this.agentKeepAliveTimeoutBuffer;
     serverHintTimeout = serverHintTimeout > 0 ? serverHintTimeout : 0;
     if (serverHintTimeout === 0) canKeepSocketAlive = false;
     else if (serverHintTimeout < agentTimeout) agentTimeout = serverHintTimeout;

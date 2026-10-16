@@ -8,10 +8,10 @@
 // connections close after keepAliveTimeout; server.timeout and setTimeout are the sockets'.
 // Not yet: the client, headersTimeout and requestTimeout, trailers.
 import {
-  httpAttach, httpBusy, httpDate, httpDetach, httpExpired, httpFedClose, httpFedOpen, httpFeed, httpFlush, httpParsers, httpWrite, timerUnref,
+  httpAttach, httpBusy, httpDate, httpPending, httpWatchDrain, httpDetach, httpExpired, httpFedClose, httpFedOpen, httpFeed, httpFlush, httpParsers, httpWrite, timerUnref,
 } from "visaljs:host";
 import { bindContext, currentContext, runInContext } from "./internal/async_context.js";
-import { codeError, invalidArgType, outOfRange, validateInteger, validateString } from "./internal/errors.js";
+import { codeError, invalidArgType, invalidArgValue, outOfRange, validateInteger, validateString } from "./internal/errors.js";
 import { Agent, globalAgent, setGlobalAgent } from "./internal/http_agent.js";
 import { kConnectionsCheckingInterval } from "./internal/http_symbols.js";
 import { createConnection, Server as NetServer } from "./net.js";
@@ -122,9 +122,19 @@ export class IncomingMessage extends Readable {
     state.closeEmitted = true;
   }
 
+  /* Node's: an AbortSignal that aborts when the connection closes before the response finished */
+  get signal() {
+    if (!this._abortController) {
+      this._abortController = new AbortController();
+      if (this.destroyed && (!this.readableEnded || !this.complete)) this._abortController.abort();
+    }
+    return this._abortController.signal;
+  }
+
   /* the connection closed before the response was finished (Node's abortIncoming): destroyed, and
    * 'aborted' if its body wasn't all read (_destroy) */
   _abort() {
+    this._abortController?.abort();
     if (this.destroyed) return;
     const e = new Error("aborted");
     e.code = "ECONNRESET";
@@ -189,6 +199,14 @@ export function validateHeaderValue(name, value) {
 
 const headersSent = (what) => codeError(Error, "ERR_HTTP_HEADERS_SENT", "Cannot " + what + " headers after they are sent to the client");
 
+/* Node's write_: a chunk is a string or bytes */
+function validateChunk(chunk) {
+  if (chunk === null) throw codeError(TypeError, "ERR_STREAM_NULL_VALUES", "May not write null values to stream");
+  if (typeof chunk !== "string" && !(chunk instanceof Uint8Array)) {
+    throw invalidArgType("chunk", "of type string or an instance of Buffer or Uint8Array", chunk);
+  }
+}
+
 /* llhttp's error, as Node's: its code and reason, how far it parsed the read, and the read */
 function parseError(code, reason, bytesParsed, rawPacket) {
   const e = new Error("Parse Error: " + reason);
@@ -208,7 +226,7 @@ export class OutgoingMessage extends Stream {
     this.destroyed = false;
     this.writableCorked = 0;
     this.writableNeedDrain = false;
-    this.writableHighWaterMark = 16384;
+    this._highWaterMark = 65536;  /* Node's default, until there's a socket */
     this.headersSent = false;
     this.finished = false;
     this.writableEnded = false;
@@ -222,10 +240,18 @@ export class OutgoingMessage extends Stream {
     this._trailer = "";
     this._headers = new Map();  /* lowercase name → [name as set, value] */
     this.socket = null;
+    /* Node's: the head once stored, and the bytes kept until there's a socket */
+    this.outputData = [];
+    this.outputSize = 0;
+    this._header = null;
+    this._headerSent = false;
+    this._last = false;
+    this.shouldKeepAlive = true;
+    this._closed = false;
   }
 
   setHeader(name, value) {
-    if (this.headersSent) throw headersSent("set");
+    if (this._header || this.headersSent) throw headersSent("set");
     validateHeaderName(name);
     validateHeaderValue(name, value);
     this._headers.set(String(name).toLowerCase(), [String(name), value]);
@@ -233,7 +259,7 @@ export class OutgoingMessage extends Stream {
   }
 
   appendHeader(name, value) {
-    if (this.headersSent) throw headersSent("append");
+    if (this._header || this.headersSent) throw headersSent("append");
     validateHeaderName(name);
     validateHeaderValue(name, value);
     const key = String(name).toLowerCase();
@@ -243,20 +269,94 @@ export class OutgoingMessage extends Stream {
     return this;
   }
 
+  /* the socket's, as Node's, else the default */
+  get writableHighWaterMark() {
+    return this.socket ? this.socket.writableHighWaterMark : this._highWaterMark;
+  }
+
+  set writableHighWaterMark(value) {
+    this._highWaterMark = value;
+  }
+
+  /* headers from a Headers or a Map, as Node's: set-cookie's values together */
+  setHeaders(headers) {
+    if (this._header || this.headersSent) throw headersSent("set");
+    if (!headers || Array.isArray(headers) || typeof headers.keys !== "function" || typeof headers.get !== "function") {
+      throw invalidArgType("headers", "an instance of Headers or Map", headers);
+    }
+    let cookies = null;
+    for (const [key, value] of headers) {
+      if (key === "set-cookie") {
+        cookies ??= [];
+        if (Array.isArray(value)) cookies.push(...value);
+        else cookies.push(value);
+        continue;
+      }
+      this.setHeader(key, value);
+    }
+    if (cookies !== null) this.setHeader("set-cookie", cookies);
+    return this;
+  }
+
   get connection() {
     return this.socket;
   }
 
+  set connection(value) {
+    this.socket = value;
+  }
+
+  /* as Node's: what's kept until there's a socket, and the socket's own */
   get writableLength() {
-    return 0;
+    return this.outputSize + (this.socket ? this.socket.writableLength : 0);
+  }
+
+  get writableObjectMode() {
+    return false;
+  }
+
+  get errored() {
+    return this._errored ?? null;
+  }
+
+  get closed() {
+    return this._closed;
   }
 
   cork() {
     this.writableCorked++;
+    if (this.socket) this.socket.cork();
   }
 
   uncork() {
     if (this.writableCorked) this.writableCorked--;
+    if (this.socket) this.socket.uncork();
+  }
+
+  /* the socket's timeout, once there is a socket, as Node's */
+  setTimeout(msecs, callback) {
+    if (callback) this.on("timeout", callback);
+    if (!this.socket) this.once("socket", (socket) => socket.setTimeout(msecs));
+    else this.socket.setTimeout(msecs);
+    return this;
+  }
+
+  /* as Node's: the socket destroyed with it, or 'close' on the next tick without one */
+  destroy(error) {
+    if (this.destroyed) return this;
+    this.destroyed = true;
+    this._errored = error;
+    if (this.socket) {
+      this.socket.destroy(error);
+    } else {
+      process.nextTick(() => {
+        if (!this._closed) {
+          this._closed = true;
+          this.emit("close");
+        }
+      });
+    }
+    return this;
   }
 
   getHeader(name) {
@@ -271,7 +371,7 @@ export class OutgoingMessage extends Stream {
 
   removeHeader(name) {
     validateString(name, "name");
-    if (this.headersSent) throw headersSent("remove");
+    if (this._header || this.headersSent) throw headersSent("remove");
     if (name.toLowerCase() === "content-length") this._removedContLen = true;
     this._headers.delete(String(name).toLowerCase());
   }
@@ -288,6 +388,192 @@ export class OutgoingMessage extends Stream {
 
   getRawHeaderNames() {
     return [...this._headers.values()].map(([name]) => name);
+  }
+
+  /* Node's OutgoingMessage, as a ClientRequest (and an OutgoingMessage made by hand) writes: the
+   * head stored, then the bytes through the socket (ServerResponse has its own, on llhttp's
+   * connection). _storeHeader: the first line, the headers as set (or as given in an array), then
+   * Connection and the body's framing */
+  _storeHeader(firstLine, headersArray) {
+    let head = firstLine;
+    let hasConnection = false, hasLength = false, hasTE = false, hasTrailer = false;
+    const add = (name, value) => {
+      const key = String(name).toLowerCase();
+      if (key === "connection") {
+        hasConnection = true;
+        if (/close/i.test(String(value))) this._last = true;
+        else this.shouldKeepAlive = true;
+      } else if (key === "content-length") hasLength = true;
+      else if (key === "transfer-encoding") {
+        hasTE = true;
+        if (/chunked/i.test(String(value))) this.chunkedEncoding = true;
+      } else if (key === "trailer") hasTrailer = true;
+      if (Array.isArray(value)) for (const v of value) head += name + ": " + v + "\r\n";
+      else head += name + ": " + value + "\r\n";
+    };
+    if (headersArray) {
+      if (Array.isArray(headersArray[0])) for (const [name, value] of headersArray) add(name, value);
+      else for (let i = 0; i < headersArray.length; i += 2) add(headersArray[i], headersArray[i + 1]);
+    } else {
+      for (const [, [name, value]] of this._headers) add(name, value);
+    }
+    if (!hasConnection) {
+      const shouldSendKeepAlive = this.shouldKeepAlive && (hasLength || this.useChunkedEncodingByDefault || this.agent);
+      if (shouldSendKeepAlive) head += "Connection: keep-alive\r\n";
+      else {
+        this._last = true;
+        head += "Connection: close\r\n";
+      }
+    }
+    if (!hasLength && !hasTE) {
+      if (!this._hasBody) this.chunkedEncoding = false;
+      else if (!this.useChunkedEncodingByDefault) this._last = true;
+      else if (!hasTrailer && !this._removedContLen && typeof this._contentLength === "number") head += "Content-Length: " + this._contentLength + "\r\n";
+      else {
+        head += "Transfer-Encoding: chunked\r\n";
+        this.chunkedEncoding = true;
+      }
+    }
+    this._header = head + "\r\n";
+    this._headerSent = false;
+    this.headersSent = true;
+  }
+
+  /* bytes for the socket: written now, or kept until it's assigned */
+  _writeRaw(data, encoding, callback) {
+    const conn = this.socket;
+    if (conn?.destroyed) return false;
+    if (conn && conn._httpMessage === this && conn.writable) {
+      if (this.outputData.length) this._flushOutput(conn);
+      return conn.write(data, encoding, callback);
+    }
+    this.outputData.push({ data, encoding, callback });
+    this.outputSize += data.length;
+    return this.outputSize < this.writableHighWaterMark;
+  }
+
+  /* the head goes with the first bytes: in the same string when it can be */
+  _send(data, encoding, callback) {
+    if (!this._headerSent && this._header !== null) {
+      this._headerSent = true;
+      if (typeof data === "string" && (encoding === "utf8" || encoding === "latin1" || !encoding)) data = this._header + data;
+      else this._writeRaw(this._header, "latin1", null);
+    }
+    return this._writeRaw(data, encoding, callback);
+  }
+
+  _flushOutput(socket) {
+    const output = this.outputData;
+    if (output.length === 0) return undefined;
+    this.outputData = [];
+    this.outputSize = 0;
+    let ret;
+    for (const { data, encoding, callback } of output) ret = socket.write(data, encoding, callback);
+    return ret;
+  }
+
+  _flush() {
+    const socket = this.socket;
+    if (socket?.writable) {
+      const ret = this._flushOutput(socket);
+      if (!this.finished && ret && this._needDrain) {
+        this._needDrain = false;
+        this.emit("drain");
+      }
+    }
+  }
+
+  write(chunk, encoding, callback) {
+    if (typeof encoding === "function") {
+      callback = encoding;
+      encoding = null;
+    }
+    validateChunk(chunk);  /* first, as Node's write_ (called on another object too) */
+    const ret = this._write_(chunk, encoding, callback, false);
+    if (!ret) this._needDrain = true;
+    return ret;
+  }
+
+  _write_(chunk, encoding, callback, fromEnd) {
+    if (typeof callback !== "function") callback = () => {};
+    if (chunk === null) throw codeError(TypeError, "ERR_STREAM_NULL_VALUES", "May not write null values to stream");
+    if (typeof chunk !== "string" && !(chunk instanceof Uint8Array)) {
+      throw invalidArgType("chunk", "of type string or an instance of Buffer or Uint8Array", chunk);
+    }
+    let err;
+    if (this.finished) err = codeError(Error, "ERR_STREAM_WRITE_AFTER_END", "write after end");
+    else if (this.destroyed) err = codeError(Error, "ERR_STREAM_DESTROYED", "Cannot call write after a stream was destroyed");
+    if (err) {
+      if (!this.destroyed) process.nextTick(() => this.emit("error", err));
+      process.nextTick(callback, err);
+      return false;
+    }
+    const len = typeof chunk === "string" ? Buffer.byteLength(chunk, encoding || "utf8") : chunk.byteLength;
+    if (!this._header) {
+      if (fromEnd) this._contentLength = len;
+      this._implicitHeader();
+    }
+    if (!this._hasBody) {
+      process.nextTick(callback);
+      return true;
+    }
+    if (this.chunkedEncoding && len !== 0) {
+      this._send(len.toString(16), "latin1", null);
+      this._send("\r\n", "latin1", null);
+      this._send(chunk, encoding, null);
+      return this._send("\r\n", "latin1", callback);
+    }
+    return this._send(chunk, encoding, callback);
+  }
+
+  end(chunk, encoding, callback) {
+    if (typeof chunk === "function") {
+      callback = chunk;
+      chunk = null;
+      encoding = null;
+    } else if (typeof encoding === "function") {
+      callback = encoding;
+      encoding = null;
+    }
+    if (chunk) {
+      if (this.finished) {
+        this._write_(chunk, encoding, null, true);
+        return this;
+      }
+      this._write_(chunk, encoding, null, true);
+    } else if (this.finished) {
+      if (typeof callback === "function") {
+        if (!this.writableFinished) this.on("finish", callback);
+        else callback(codeError(Error, "ERR_STREAM_ALREADY_FINISHED", "Cannot call end after a stream was finished"));
+      }
+      return this;
+    } else if (!this._header) {
+      this._contentLength = 0;
+      this._implicitHeader();
+    }
+    if (typeof callback === "function") this.once("finish", callback);
+    const finish = () => {
+      if (this.socket && this.socket._hadError) return;
+      this.writableFinished = true;
+      this.emit("finish");
+    };
+    if (this._hasBody && this.chunkedEncoding) this._send("0\r\n" + this._trailer + "\r\n", "latin1", finish);
+    else if (!this._headerSent || chunk) this._send("", "latin1", finish);
+    else process.nextTick(finish);
+    this.finished = true;
+    this.writableEnded = true;
+    this.writable = false;
+    return this;
+  }
+
+  flushHeaders() {
+    if (!this._header) this._implicitHeader();
+    this._send("");
+  }
+
+  /* as Node's: a subclass renders its first line (ClientRequest, ServerResponse) */
+  _implicitHeader() {
+    throw codeError(Error, "ERR_METHOD_NOT_IMPLEMENTED", "The _implicitHeader() method is not implemented");
   }
 
   /* trailers, sent after a chunked body: { name: value } or [[name, value], …] */
@@ -378,6 +664,7 @@ export class ServerResponse extends OutgoingMessage {
   destroy(error) {
     if (this.destroyed) return this;
     this.destroyed = true;
+    this._errored = error;
     this.writable = false;
     this._closeEmitted = true;
     if (this.socket) this.socket.destroy();
@@ -398,6 +685,13 @@ export class ServerResponse extends OutgoingMessage {
   }
 
   writeHead(statusCode, statusMessage, headers) {
+    /* as Node's: an integer status from 100 to 999 */
+    const originalStatusCode = statusCode;
+    statusCode |= 0;
+    if (statusCode < 100 || statusCode > 999) {
+      const shown = typeof originalStatusCode === "object" && originalStatusCode !== null ? JSON.stringify(originalStatusCode) : String(originalStatusCode);
+      throw codeError(RangeError, "ERR_HTTP_INVALID_STATUS_CODE", `Invalid status code: ${shown}`);
+    }
     if (typeof statusMessage !== "string") {
       headers = statusMessage;
       statusMessage = undefined;
@@ -405,7 +699,10 @@ export class ServerResponse extends OutgoingMessage {
     this.statusCode = statusCode;
     if (statusMessage !== undefined) this.statusMessage = statusMessage;
     if (Array.isArray(headers)) {
-      for (let i = 0; i < headers.length; i += 2) this.appendHeader(headers[i], headers[i + 1]);
+      /* as Node's: they replace the headers set before, and may repeat a name among themselves */
+      if (headers.length % 2 !== 0) throw invalidArgValue("headers", "is invalid", headers);
+      for (let i = 0; i < headers.length; i += 2) if (this.hasHeader(headers[i])) this.removeHeader(headers[i]);
+      for (let i = 0; i < headers.length; i += 2) if (headers[i]) this.appendHeader(headers[i], headers[i + 1]);
     } else if (headers) {
       for (const name of Object.keys(headers)) this.setHeader(name, headers[name]);
     }
@@ -467,6 +764,7 @@ export class ServerResponse extends OutgoingMessage {
 
   write(chunk, encoding, callback) {
     if (typeof encoding === "function") callback = encoding;
+    validateChunk(chunk);
     if (this.writableEnded || this.destroyed) {
       /* Node's write_: after end before destroyed; the callback, then 'error' (Node's emitErrorNt),
        * none on a destroyed response (it closed, or its client went away) */
@@ -498,7 +796,40 @@ export class ServerResponse extends OutgoingMessage {
       }
     }
     if (typeof callback === "function") queueMicrotask(callback);
-    return true;
+    return this._underHighWaterMark();
+  }
+
+  get writableLength() {
+    return this._pendingBytes();
+  }
+
+  /* bytes written that haven't gone out: corked in C and in libuv's queue, or a TLS socket's */
+  _pendingBytes() {
+    if (this._conn === undefined || this._queued) return 0;
+    return isFed(this.socket) ? httpPending(this._conn) + (this.socket?.writableLength ?? 0) : httpPending(this._conn);
+  }
+
+  /* write()'s answer, as Node's: false over the high-water mark, with 'drain' once it all went out */
+  _underHighWaterMark() {
+    if (this._pendingBytes() < this.writableHighWaterMark) return true;
+    /* over it while corked: sent now, libuv writing what the kernel takes at once, as Node's socket
+     * does; only what's left counts */
+    if (!isFed(this.socket)) {
+      httpFlush(this._conn);
+      if (this._pendingBytes() < this.writableHighWaterMark) return true;
+    }
+    if (!this.writableNeedDrain) {
+      this.writableNeedDrain = true;
+      if (isFed(this.socket)) this.socket.once("drain", () => this._emitDrain());
+      else if (httpWatchDrain(this._conn)) process.nextTick(() => this._emitDrain());
+    }
+    return false;
+  }
+
+  _emitDrain() {
+    if (!this.writableNeedDrain) return;
+    this.writableNeedDrain = false;
+    this.emit("drain");
   }
 
   end(chunk, encoding, callback) {
@@ -508,6 +839,7 @@ export class ServerResponse extends OutgoingMessage {
     } else if (typeof encoding === "function") {
       callback = encoding;
     }
+    if (chunk !== undefined && chunk !== null) validateChunk(chunk);
     if (this.writableEnded) return this;
     if (typeof chunk === "string" && typeof encoding === "string" && encoding !== "utf8" && encoding !== "utf-8") chunk = Buffer.from(chunk, encoding);
     if (!this.headersSent && Object.hasOwn(this, "writeHead")) this._implicitHeader(chunk !== undefined && chunk !== null ? chunkLength(chunk) : 0);
@@ -555,8 +887,9 @@ export class ServerResponse extends OutgoingMessage {
   /* the response is all written: the socket ends after the last one (not kept alive, or the client
    * ended its side), then 'finish' and 'close' */
   _afterEnd(callback) {
+    /* the response is all written: sent now, so that by 'finish' it has gone to the socket, as Node's */
+    if (this._conn !== undefined) httpFlush(this._conn);
     if ((!this._keepAlive || this._last) && this.socket) {  /* the response goes out, then the socket ends */
-      httpFlush(this._conn);
       if (typeof this.socket.destroySoon === "function") this.socket.destroySoon();  /* as Node's resOnFinish */
       else this.socket.end();
     }
@@ -747,6 +1080,8 @@ class ServerClass extends NetServer {
           const e = parseError(code, reason, bytesParsed, rawPacket);
           socketOnError.call(state.socket, e);
         },
+        /* the connection's output went out: the response waiting for it gets 'drain' */
+        (conn) => this._states.get(conn)?.res?._emitDrain(),
       ].map(bindContext));
     }
     const conn = connOf(socket);
@@ -1055,6 +1390,7 @@ function freeParser(socket) {
   const conn = socket._clientConn;
   if (conn === undefined) return;
   socket._clientConn = undefined;
+  socket.parser = null;  /* as Node's: no parser on a socket between requests */
   clientSockets.delete(conn);
   httpDetach(conn);
 }
@@ -1066,6 +1402,7 @@ function freeParserAfterRead(socket) {
   const conn = socket._clientConn;
   if (conn === undefined) return;
   socket._clientConn = undefined;
+  socket.parser = null;  /* as Node's: no parser on a socket between requests */
   httpDetach(conn, true);
   queueMicrotask(() => {
     if (clientSockets.get(conn) === socket && socket._clientConn !== conn) clientSockets.delete(conn);
@@ -1390,187 +1727,9 @@ export class ClientRequest extends OutgoingMessage {
     }
   }
 
-  /* Node's _storeHeader: the request line, the headers as set (or as given in an array), then
-   * Connection and the body's framing */
-  _storeHeader(firstLine, headersArray) {
-    let head = firstLine;
-    let hasConnection = false, hasLength = false, hasTE = false, hasTrailer = false;
-    const add = (name, value) => {
-      const key = String(name).toLowerCase();
-      if (key === "connection") {
-        hasConnection = true;
-        if (/close/i.test(String(value))) this._last = true;
-        else this.shouldKeepAlive = true;
-      } else if (key === "content-length") hasLength = true;
-      else if (key === "transfer-encoding") {
-        hasTE = true;
-        if (/chunked/i.test(String(value))) this.chunkedEncoding = true;
-      } else if (key === "trailer") hasTrailer = true;
-      if (Array.isArray(value)) for (const v of value) head += name + ": " + v + "\r\n";
-      else head += name + ": " + value + "\r\n";
-    };
-    if (headersArray) {
-      if (Array.isArray(headersArray[0])) for (const [name, value] of headersArray) add(name, value);
-      else for (let i = 0; i < headersArray.length; i += 2) add(headersArray[i], headersArray[i + 1]);
-    } else {
-      for (const [, [name, value]] of this._headers) add(name, value);
-    }
-    if (!hasConnection) {
-      const shouldSendKeepAlive = this.shouldKeepAlive && (hasLength || this.useChunkedEncodingByDefault || this.agent);
-      if (shouldSendKeepAlive) head += "Connection: keep-alive\r\n";
-      else {
-        this._last = true;
-        head += "Connection: close\r\n";
-      }
-    }
-    if (!hasLength && !hasTE) {
-      if (!this._hasBody) this.chunkedEncoding = false;
-      else if (!this.useChunkedEncodingByDefault) this._last = true;
-      else if (!hasTrailer && !this._removedContLen && typeof this._contentLength === "number") head += "Content-Length: " + this._contentLength + "\r\n";
-      else {
-        head += "Transfer-Encoding: chunked\r\n";
-        this.chunkedEncoding = true;
-      }
-    }
-    this._header = head + "\r\n";
-    this._headerSent = false;
-    this.headersSent = true;
-  }
-
   _implicitHeader() {
     if (this._header) throw codeError(Error, "ERR_HTTP_HEADERS_SENT", "Cannot render headers after they are sent to the client");
     this._storeHeader(this.method + " " + this.path + " HTTP/1.1\r\n", null);
-  }
-
-  /* bytes for the socket: written now, or kept until it's assigned */
-  _writeRaw(data, encoding, callback) {
-    const conn = this.socket;
-    if (conn?.destroyed) return false;
-    if (conn && conn._httpMessage === this && conn.writable) {
-      if (this.outputData.length) this._flushOutput(conn);
-      return conn.write(data, encoding, callback);
-    }
-    this.outputData.push({ data, encoding, callback });
-    this.outputSize += data.length;
-    return this.outputSize < this.writableHighWaterMark;
-  }
-
-  /* the head goes with the first bytes: in the same string when it can be */
-  _send(data, encoding, callback) {
-    if (!this._headerSent && this._header !== null) {
-      this._headerSent = true;
-      if (typeof data === "string" && (encoding === "utf8" || encoding === "latin1" || !encoding)) data = this._header + data;
-      else this._writeRaw(this._header, "latin1", null);
-    }
-    return this._writeRaw(data, encoding, callback);
-  }
-
-  _flushOutput(socket) {
-    const output = this.outputData;
-    if (output.length === 0) return undefined;
-    this.outputData = [];
-    this.outputSize = 0;
-    let ret;
-    for (const { data, encoding, callback } of output) ret = socket.write(data, encoding, callback);
-    return ret;
-  }
-
-  _flush() {
-    const socket = this.socket;
-    if (socket?.writable) {
-      const ret = this._flushOutput(socket);
-      if (!this.finished && ret && this._needDrain) {
-        this._needDrain = false;
-        this.emit("drain");
-      }
-    }
-  }
-
-  write(chunk, encoding, callback) {
-    if (typeof encoding === "function") {
-      callback = encoding;
-      encoding = null;
-    }
-    const ret = this._write_(chunk, encoding, callback, false);
-    if (!ret) this._needDrain = true;
-    return ret;
-  }
-
-  _write_(chunk, encoding, callback, fromEnd) {
-    if (typeof callback !== "function") callback = () => {};
-    if (chunk === null) throw codeError(TypeError, "ERR_STREAM_NULL_VALUES", "May not write null values to stream");
-    if (typeof chunk !== "string" && !(chunk instanceof Uint8Array)) {
-      throw invalidArgType("chunk", "of type string or an instance of Buffer or Uint8Array", chunk);
-    }
-    let err;
-    if (this.finished) err = codeError(Error, "ERR_STREAM_WRITE_AFTER_END", "write after end");
-    else if (this.destroyed) err = codeError(Error, "ERR_STREAM_DESTROYED", "Cannot call write after a stream was destroyed");
-    if (err) {
-      if (!this.destroyed) process.nextTick(() => this.emit("error", err));
-      process.nextTick(callback, err);
-      return false;
-    }
-    const len = typeof chunk === "string" ? Buffer.byteLength(chunk, encoding || "utf8") : chunk.byteLength;
-    if (!this._header) {
-      if (fromEnd) this._contentLength = len;
-      this._implicitHeader();
-    }
-    if (!this._hasBody) {
-      process.nextTick(callback);
-      return true;
-    }
-    if (this.chunkedEncoding && len !== 0) {
-      this._send(len.toString(16), "latin1", null);
-      this._send("\r\n", "latin1", null);
-      this._send(chunk, encoding, null);
-      return this._send("\r\n", "latin1", callback);
-    }
-    return this._send(chunk, encoding, callback);
-  }
-
-  end(chunk, encoding, callback) {
-    if (typeof chunk === "function") {
-      callback = chunk;
-      chunk = null;
-      encoding = null;
-    } else if (typeof encoding === "function") {
-      callback = encoding;
-      encoding = null;
-    }
-    if (chunk) {
-      if (this.finished) {
-        this._write_(chunk, encoding, null, true);
-        return this;
-      }
-      this._write_(chunk, encoding, null, true);
-    } else if (this.finished) {
-      if (typeof callback === "function") {
-        if (!this.writableFinished) this.on("finish", callback);
-        else callback(codeError(Error, "ERR_STREAM_ALREADY_FINISHED", "Cannot call end after a stream was finished"));
-      }
-      return this;
-    } else if (!this._header) {
-      this._contentLength = 0;
-      this._implicitHeader();
-    }
-    if (typeof callback === "function") this.once("finish", callback);
-    const finish = () => {
-      if (this.socket && this.socket._hadError) return;
-      this.writableFinished = true;
-      this.emit("finish");
-    };
-    if (this._hasBody && this.chunkedEncoding) this._send("0\r\n" + this._trailer + "\r\n", "latin1", finish);
-    else if (!this._headerSent || chunk) this._send("", "latin1", finish);
-    else process.nextTick(finish);
-    this.finished = true;
-    this.writableEnded = true;
-    this.writable = false;
-    return this;
-  }
-
-  flushHeaders() {
-    if (!this._header) this._implicitHeader();
-    this._send("");
   }
 
   /* the socket the agent (or createConnection) gave: its listeners, the parser, then the output */
@@ -1630,6 +1789,7 @@ export class ClientRequest extends OutgoingMessage {
     this.destroyed = true;
     if (this.res) this.res._dump();
     this._error = err;
+    this._errored = err;
     this.socket?.destroy(err);
     return this;
   }
