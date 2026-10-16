@@ -513,9 +513,14 @@ export class ServerResponse extends OutgoingMessage {
       const hasChunk = chunk !== undefined && chunk !== null;
       const length = hasChunk ? chunkLength(chunk) : 0;
       if (hasChunk && typeof chunk === "string" && !this._head) {
-        /* the head's bytes are latin1, the body's UTF-8: corked into one write */
-        this._send(this._renderHead(length), true);
-        this._send(chunk);
+        /* the head's bytes are latin1, the body's UTF-8: corked into one write by the parser's
+         * connection; a response made by hand writes them as one string, as Node's _send */
+        if (this._conn === undefined) {
+          this._send(this._renderHead(length) + chunk);
+        } else {
+          this._send(this._renderHead(length), true);
+          this._send(chunk);
+        }
       } else {
         this._send(this._renderHead(length), true);
         if (hasChunk && length && !this._head) this._send(chunk);
