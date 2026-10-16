@@ -55,8 +55,8 @@ void js_promise_then_internal(JSContext *ctx, JSValue promise, JSValue on_fulfil
  * marked anything), weak processing after marking, the kept-alive roots, teardown;
  * ClearKeptObjects; the FinalizationRegistry cleanup tasks (0, or -1 after an uncaught
  * error); the realm's WeakMap, WeakSet, WeakRef, FinalizationRegistry. */
-bool js_weak_ephemerons(JSRuntime *rt, JSTracer *trc);
-void js_weak_sweep(JSRuntime *rt);
+bool js_weak_ephemerons(JSRuntime *rt, JSTracer *trc, bool full);
+void js_weak_sweep(JSRuntime *rt, bool full);
 void js_weak_trace_roots(JSRuntime *rt, JSTracer *trc);
 void js_weak_free(JSRuntime *rt);
 void js_clear_kept_objects(JSRuntime *rt);

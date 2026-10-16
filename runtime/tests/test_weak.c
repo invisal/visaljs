@@ -94,6 +94,105 @@ TEST(weak_map_ephemerons) {
     teardown();
 }
 
+static NOINLINE void collect_young(void) {
+    js_clear_kept_objects(rt);
+    scrub();
+    js_gc_young(ctx);
+}
+
+/* An old map, an old key (ROOT_A), and entries set after the map got old: a young value only the
+ * map holds (REF_B), a chain through young keys (REF_C), a young key that dies (REF_K). */
+static NOINLINE void build_young_entries(void) {
+    roots[MAP] = construct("WeakMap", 0, NULL);
+    roots[ROOT_A] = js_new_object(ctx);
+    js_gc(ctx);  /* both old */
+    JSValue b = js_new_object(ctx), c = js_new_object(ctx), d = js_new_object(ctx), k = js_new_object(ctx);
+    JSValue ab[2] = { roots[ROOT_A], b }, bc[2] = { b, c }, cd[2] = { c, d };
+    (void)invoke(roots[MAP], "set", 2, ab);
+    (void)invoke(roots[MAP], "set", 2, bc);
+    (void)invoke(roots[MAP], "set", 2, cd);
+    JSValue back = js_new_object(ctx);
+    js_define_data(ctx, js_as_object(back), js_atom_from_cstr(ctx, "key"), k, JS_PROP_DEFAULT);
+    JSValue kv[2] = { k, back };
+    (void)invoke(roots[MAP], "set", 2, kv);
+    roots[REF_B] = construct("WeakRef", 1, &b);
+    roots[REF_C] = construct("WeakRef", 1, &d);
+    roots[REF_K] = construct("WeakRef", 1, &k);
+}
+
+/* A young collection looks only at the entries set since the last collection, and finds what
+ * they keep alive as a full one would. */
+TEST(weak_map_young_collection) {
+    setup();
+    rt->heap.stress_interval = (size_t)1 << 40;  /* stress builds: only the collections below */
+    build_young_entries();
+    uint64_t young = rt->heap.stats.young_collections;
+    collect_young();
+    CHECK_EQ_INT((int)(rt->heap.stats.young_collections - young), 1);
+    CHECK(!deref_dead(REF_B));  /* through an old key, set after the map got old */
+    CHECK(!deref_dead(REF_C));  /* the pass repeats through young keys */
+    CHECK(deref_dead(REF_K));   /* its value pointing back doesn't keep it */
+    CHECK(get_is_object(ROOT_A));
+    collect_young();  /* nothing set since: the entries stay */
+    CHECK(get_is_object(ROOT_A));
+    CHECK(!deref_dead(REF_C));
+    teardown();
+}
+
+/* n new keys, each with a value {i: i}: the odd ones kept in `keys`, the even ones left to die. */
+static NOINLINE void set_many(JSValueArray *keys, int n) {
+    for (int i = 0; i < n; i++) {
+        JSValue k = js_new_object(ctx), v = js_new_object(ctx);
+        js_define_data(ctx, js_as_object(v), js_atom_from_cstr(ctx, "i"), js_int32(i), JS_PROP_DEFAULT);
+        if (i % 2) js_store(ctx, &keys->cell, &keys->values[i], k);
+        JSValue kv[2] = { k, v };
+        (void)invoke(roots[MAP], "set", 2, kv);
+    }
+}
+
+/* Allocates over what the last collection freed: a value wrongly freed is overwritten, and a new
+ * object where a dead key was must not be found in the map. Returns whether none was. */
+static NOINLINE bool reuse_freed(void) {
+    bool none = true;
+    for (int i = 0; i < 20000; i++) {
+        JSValue o = js_new_object(ctx);
+        js_define_data(ctx, js_as_object(o), js_atom_from_cstr(ctx, "i"), js_int32(-1), JS_PROP_DEFAULT);
+        none &= js_same_bits(invoke(roots[MAP], "has", 1, &o), JS_FALSE);
+    }
+    return none;
+}
+
+static NOINLINE bool values_intact(JSValueArray *keys, int n) {
+    if (!reuse_freed()) return false;
+    for (int i = 1; i < n; i += 2) {
+        JSValue v = invoke(roots[MAP], "get", 1, &keys->values[i]);
+        if (!js_is_object(v)) return false;
+        JSValue got = js_get_value(ctx, v, js_atom_from_cstr(ctx, "i"));
+        if (!js_is_int32(got) || js_as_int32(got) != i) return false;
+    }
+    return true;
+}
+
+/* Too many entries set to list one by one: a young collection looks at the whole table. */
+TEST(weak_map_young_many_writes) {
+    setup();
+    rt->heap.stress_interval = (size_t)1 << 40;
+    roots[MAP] = construct("WeakMap", 0, NULL);
+    int n = 2000;
+    roots[ROOT_A] = js_cell(&js_alloc_value_array(ctx, (uint32_t)n)->cell);
+    js_gc(ctx);
+    JSValueArray *keys = (JSValueArray *)js_as_cell(roots[ROOT_A]);
+    set_many(keys, n);
+    collect_young();
+    CHECK(values_intact(keys, n));
+    set_many(keys, n);  /* again, over the old entries: the odd keys are new objects */
+    collect_young();
+    CHECK(values_intact(keys, n));
+    collect();
+    CHECK(values_intact(keys, n));
+    teardown();
+}
+
 static NOINLINE void make_ref(void) {
     JSValue o = js_new_object(ctx);
     roots[REF_K] = construct("WeakRef", 1, &o);
