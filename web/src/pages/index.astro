@@ -1,6 +1,7 @@
 ---
 // The front page: what visaljs is, then the popular frameworks' binary size and memory against Node
-// and Bun (bench/servers.json). Requests per second stay out: they depend on the machine.
+// and Bun (the last night's servers.json, lib/servers.ts). Requests per second stay out: they
+// depend on the machine.
 import { LinkButton } from "@cloudflare/kumo/components/button";
 import BenchCard, { type BenchMetric } from "../components/BenchCard.tsx";
 import UsageCard from "../components/UsageCard.tsx";
@@ -11,7 +12,7 @@ import { mb, serverCards, type Row } from "../lib/servers.ts";
 import { Badge } from "@cloudflare/kumo/components/badge";
 
 const REPO = "https://github.com/invisal/visaljs";
-const cards = serverCards(["hono", "express"]);
+const cards = await serverCards(["hono", "express"]);
 const NAMES: Record<string, string> = { express: "Express", hono: "Hono" };
 
 /** How to use: a title, the commands and what they do */
