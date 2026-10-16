@@ -1917,7 +1917,7 @@ static JS_NOINLINE void collect(JSContext *ctx, const void *stack_low, bool full
 
     js_weak_sweep(rt, full);
     js_atoms_sweep(rt, full);  /* weak references, before anything is freed */
-    js_shapes_sweep(rt);
+    js_shapes_sweep(rt, full);
     js_prop_caches_sweep(rt);
     double weak = js_os_now_ms_precise();
 

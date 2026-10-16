@@ -12,7 +12,7 @@
 bool js_gc_is_marked(const JSCell *c);
 
 /* Shapes (shape.c): weak processing after marking, and teardown. */
-void js_shapes_sweep(JSRuntime *rt);
+void js_shapes_sweep(JSRuntime *rt, bool full);
 void js_shapes_free(JSRuntime *rt);
 /* Inline caches (object.c): weak processing after marking, and teardown. */
 void js_prop_caches_sweep(JSRuntime *rt);
