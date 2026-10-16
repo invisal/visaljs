@@ -12,10 +12,8 @@ import SubHeading from "../../components/SubHeading.astro";
 import Prose from "../../components/Prose.astro";
 import Layout from "../../layouts/Layout.astro";
 import { chapters } from "../../lib/guide.ts";
-import { GUIDE_PUBLISHED } from "../../lib/guide-published.ts";
 
 export async function getStaticPaths() {
-  if (!GUIDE_PUBLISHED) return [];
   return (await chapters()).map((chapter, n, all) => ({ params: { chapter: chapter.id }, props: { chapter, prev: all[n - 1], next: all[n + 1] } }));
 }
 
