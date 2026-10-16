@@ -11,7 +11,7 @@ import {
   httpAttach, httpBusy, httpDate, httpPending, httpWatchDrain, httpDetach, httpExpired, httpFedClose, httpFedOpen, httpFeed, httpFlush, httpParsers, httpWrite, timerUnref,
 } from "visaljs:host";
 import { bindContext, currentContext, runInContext } from "./internal/async_context.js";
-import { codeError, invalidArgType, outOfRange, validateInteger, validateString } from "./internal/errors.js";
+import { codeError, invalidArgType, invalidArgValue, outOfRange, validateInteger, validateString } from "./internal/errors.js";
 import { Agent, globalAgent, setGlobalAgent } from "./internal/http_agent.js";
 import { kConnectionsCheckingInterval } from "./internal/http_symbols.js";
 import { createConnection, Server as NetServer } from "./net.js";
@@ -488,6 +488,7 @@ export class OutgoingMessage extends Stream {
       callback = encoding;
       encoding = null;
     }
+    validateChunk(chunk);  /* first, as Node's write_ (called on another object too) */
     const ret = this._write_(chunk, encoding, callback, false);
     if (!ret) this._needDrain = true;
     return ret;
@@ -698,7 +699,10 @@ export class ServerResponse extends OutgoingMessage {
     this.statusCode = statusCode;
     if (statusMessage !== undefined) this.statusMessage = statusMessage;
     if (Array.isArray(headers)) {
-      for (let i = 0; i < headers.length; i += 2) this.appendHeader(headers[i], headers[i + 1]);
+      /* as Node's: they replace the headers set before, and may repeat a name among themselves */
+      if (headers.length % 2 !== 0) throw invalidArgValue("headers", "is invalid", headers);
+      for (let i = 0; i < headers.length; i += 2) if (this.hasHeader(headers[i])) this.removeHeader(headers[i]);
+      for (let i = 0; i < headers.length; i += 2) if (headers[i]) this.appendHeader(headers[i], headers[i + 1]);
     } else if (headers) {
       for (const name of Object.keys(headers)) this.setHeader(name, headers[name]);
     }
@@ -883,8 +887,9 @@ export class ServerResponse extends OutgoingMessage {
   /* the response is all written: the socket ends after the last one (not kept alive, or the client
    * ended its side), then 'finish' and 'close' */
   _afterEnd(callback) {
+    /* the response is all written: sent now, so that by 'finish' it has gone to the socket, as Node's */
+    if (this._conn !== undefined) httpFlush(this._conn);
     if ((!this._keepAlive || this._last) && this.socket) {  /* the response goes out, then the socket ends */
-      httpFlush(this._conn);
       if (typeof this.socket.destroySoon === "function") this.socket.destroySoon();  /* as Node's resOnFinish */
       else this.socket.end();
     }
