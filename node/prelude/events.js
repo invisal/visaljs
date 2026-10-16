@@ -4,6 +4,7 @@
 // warning, and captureRejections. The functions on emitters and EventTargets: once and on (as
 // promises and an async iterator, with an AbortSignal), getEventListeners, the max-listener
 // counts, and addAbortListener.
+import { eventTargetListeners } from "visaljs:host";
 import { lazyClass, lazyFunction } from "./internal/features.js";
 
 const kCapture = Symbol("kCapture");
@@ -355,9 +356,12 @@ EventEmitter.on = on;
 export const getEventListeners = lazyFunction("getEventListeners", 2);
 export const getMaxListeners = lazyFunction("getMaxListeners", 1);
 export const setMaxListeners = lazyFunction("setMaxListeners");
-/** Deprecated: emitter.listenerCount(type). */
-export function listenerCount(emitter, type) {
-  return typeof emitter.listenerCount === "function" ? emitter.listenerCount(type) : 0;
+/** emitter.listenerCount(type), or an EventTarget's listeners for the type, as Node's. */
+export function listenerCount(emitterOrTarget, type) {
+  if (typeof emitterOrTarget?.listenerCount === "function") return emitterOrTarget.listenerCount(type);
+  const listeners = eventTargetListeners(emitterOrTarget, type);
+  if (listeners !== undefined) return listeners.length;
+  throw invalidArgType("emitter", "an instance of EventEmitter or EventTarget", emitterOrTarget);
 }
 export const addAbortListener = lazyFunction("addAbortListener", 2);
 export const usingDomains = false;

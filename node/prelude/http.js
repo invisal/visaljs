@@ -12,9 +12,10 @@ import {
 } from "visaljs:host";
 import { bindContext, currentContext, runInContext } from "./internal/async_context.js";
 import { codeError, invalidArgType, outOfRange, validateInteger, validateString } from "./internal/errors.js";
-import { Agent, globalAgent } from "./internal/http_agent.js";
+import { Agent, globalAgent, setGlobalAgent } from "./internal/http_agent.js";
 import { createConnection, Server as NetServer } from "./net.js";
-import { Readable, Stream } from "./stream.js";
+import { addAbortSignal, Readable, Stream } from "./stream.js";
+import { callableClass } from "./internal/features.js";
 
 export const METHODS = ["ACL", "BIND", "CHECKOUT", "CONNECT", "COPY", "DELETE", "GET", "HEAD", "LINK", "LOCK", "M-SEARCH", "MERGE",
   "MKACTIVITY", "MKCALENDAR", "MKCOL", "MOVE", "NOTIFY", "OPTIONS", "PATCH", "POST", "PROPFIND", "PROPPATCH", "PURGE", "PUT", "QUERY",
@@ -108,9 +109,10 @@ export class IncomingMessage extends Readable {
     this.push(null);
   }
 
-  /* the connection closed before the body was complete */
+  /* the connection closed before the response was finished (Node's abortIncoming): destroyed, and
+   * 'aborted' if its body wasn't all read (_destroy) */
   _abort() {
-    if (this.complete || this.destroyed) return;
+    if (this.destroyed) return;
     const e = new Error("aborted");
     e.code = "ECONNRESET";
     this.destroy(e);
@@ -167,6 +169,18 @@ export function validateHeaderValue(name, value) {
 }
 
 const headersSent = (what) => codeError(Error, "ERR_HTTP_HEADERS_SENT", "Cannot " + what + " headers after they are sent to the client");
+
+/* llhttp's error, as Node's: its code and reason, how far it parsed the read, and the read */
+function parseError(code, reason, bytesParsed, rawPacket) {
+  const e = new Error("Parse Error: " + reason);
+  e.code = code;
+  e.reason = reason;
+  e.bytesParsed = bytesParsed;
+  if (rawPacket !== undefined) {
+    e.rawPacket = Buffer.isBuffer(rawPacket) ? rawPacket : Buffer.from(rawPacket.buffer, rawPacket.byteOffset, rawPacket.byteLength);
+  }
+  return e;
+}
 
 export class OutgoingMessage extends Stream {
   constructor() {
@@ -489,7 +503,7 @@ function serverArguments(options, requestListener) {
   return [options, requestListener];
 }
 
-export class Server extends NetServer {
+class ServerClass extends NetServer {
   constructor(options, requestListener) {
     [options, requestListener] = serverArguments(options, requestListener);
     super({ allowHalfOpen: true, noDelay: options.noDelay ?? true, keepAlive: options.keepAlive, keepAliveInitialDelay: options.keepAliveInitialDelay });
@@ -593,12 +607,10 @@ export class Server extends NetServer {
           }
         },
         (conn, head) => this._onUpgrade(conn, head),
-        (conn, code, reason) => {
+        (conn, code, reason, bytesParsed, rawPacket) => {
           const state = this._states.get(conn);
           if (!state) return;
-          const e = new Error("Parse Error: " + reason);
-          e.code = code;
-          e.reason = reason;
+          const e = parseError(code, reason, bytesParsed, rawPacket);
           socketOnError.call(state.socket, e);
         },
       ].map(bindContext));
@@ -699,6 +711,7 @@ export class Server extends NetServer {
     else socket.destroy();
   }
 }
+export const Server = callableClass(ServerClass, "Server");  /* Server(…) without new, as Node's */
 
 /* ---- Connections: llhttp on a socket's handle, or fed --------------------------------------- */
 
@@ -818,21 +831,20 @@ function clientParsersId() {
         res.rawTrailers = trailers;
         for (let i = 0; i < trailers.length; i += 2) addHeader(res.trailers, trailers[i], trailers[i + 1]);
       }
-      if (!statusIsInformational(res.statusCode)) freeParser(socket);
+      if (!statusIsInformational(res.statusCode)) freeParserAfterRead(socket);
       res._finish();
     },
     (conn, head) => {
       const socket = clientSockets.get(conn);
       if (socket?._httpMessage) clientUpgrade(socket._httpMessage, socket, head);
     },
-    (conn, code, reason) => {
+    (conn, code, reason, bytesParsed, rawPacket) => {
       const socket = clientSockets.get(conn);
       const req = socket?._httpMessage;
-      const e = new Error("Parse Error: " + reason);
-      e.code = code;
-      e.reason = reason;
+      const e = parseError(code, reason, bytesParsed, rawPacket);
       if (socket) {
         freeParser(socket);
+        socket.removeListener("end", socketOnEnd);  /* as Node's socketOnData */
         socket.destroy();
       }
       if (req) {
@@ -867,6 +879,19 @@ function freeParser(socket) {
   socket._clientConn = undefined;
   clientSockets.delete(conn);
   httpDetach(conn);
+}
+
+/* a complete response's parser, let go of once the read is parsed, as Node's socketOnData frees it:
+ * what follows the response in the read is still parsed, and an error there is the request's (the
+ * socket's entry stays until then) */
+function freeParserAfterRead(socket) {
+  const conn = socket._clientConn;
+  if (conn === undefined) return;
+  socket._clientConn = undefined;
+  httpDetach(conn, true);
+  queueMicrotask(() => {
+    if (clientSockets.get(conn) === socket && socket._clientConn !== conn) clientSockets.delete(conn);
+  });
 }
 
 /* Node's parserOnIncomingClient: 0, or 1 for no body, or 2 to take the socket */
@@ -1026,6 +1051,7 @@ function socketOnEnd() {
 }
 
 const INVALID_PATH_REGEX = /[^!-ÿ]/;
+const kPath = Symbol("kPath");
 
 export class ClientRequest extends OutgoingMessage {
   constructor(input, options, cb) {
@@ -1042,7 +1068,7 @@ export class ClientRequest extends OutgoingMessage {
       cb = options;
       options = input || {};
     } else {
-      options = { ...input, ...options };
+      options = Object.assign({ __proto__: null }, input, options);  /* as Node's: no prototype's options */
     }
     let agent = options.agent;
     const defaultAgent = options._defaultAgent || globalAgent;
@@ -1070,7 +1096,7 @@ export class ClientRequest extends OutgoingMessage {
       return host;
     };
     const host = optsWithoutSignal.host = validHost(options.hostname, "hostname") || validHost(options.host, "host") || "localhost";
-    const setHost = options.setHost === undefined || Boolean(options.setHost);
+    const setHost = options.setHost !== undefined ? Boolean(options.setHost) : options.setDefaultHeaders !== false;
     this.socketPath = options.socketPath;
     if (options.timeout !== undefined) {
       if (typeof options.timeout !== "number") throw invalidArgType("timeout", "of type number", options.timeout);
@@ -1078,13 +1104,8 @@ export class ClientRequest extends OutgoingMessage {
     }
     const signal = options.signal;
     if (signal) {
+      addAbortSignal(signal, this);  /* as Node's: destroyed with an AbortError, now if already aborted */
       delete optsWithoutSignal.signal;
-      const onAbort = () => this.destroy(codeError(Error, "ABORT_ERR", "The operation was aborted"));
-      if (signal.aborted) process.nextTick(onAbort);
-      else {
-        signal.addEventListener("abort", onAbort, { once: true });
-        this.once("close", () => signal.removeEventListener("abort", onAbort));
-      }
     }
     let method = options.method;
     if (method !== null && method !== undefined && typeof method !== "string") throw invalidArgType("options.method", "of type string", method);
@@ -1096,8 +1117,28 @@ export class ClientRequest extends OutgoingMessage {
     }
     if (options.maxHeaderSize !== undefined) validateInteger(options.maxHeaderSize, "maxHeaderSize");
     this.maxHeaderSize = options.maxHeaderSize;
+    const insecureHTTPParser = options.insecureHTTPParser;
+    if (insecureHTTPParser !== undefined && typeof insecureHTTPParser !== "boolean") {
+      throw invalidArgType("options.insecureHTTPParser", "of type boolean", insecureHTTPParser);
+    }
+    this.insecureHTTPParser = insecureHTTPParser;
+    const httpValidation = options.httpValidation;
+    if (httpValidation !== undefined) {
+      if (httpValidation !== "strict" && httpValidation !== "relaxed" && httpValidation !== "insecure") {
+        throw codeError(TypeError, "ERR_INVALID_ARG_VALUE",
+          `The property 'options.httpValidation' must be one of: 'strict', 'relaxed', 'insecure'. Received ${JSON.stringify(httpValidation)}`);
+      }
+      if (insecureHTTPParser !== undefined) {
+        throw codeError(TypeError, "ERR_INVALID_ARG_VALUE",
+          `The property 'options.httpValidation' cannot be used together with options.insecureHTTPParser. Received ${JSON.stringify(httpValidation)}`);
+      }
+    }
+    this.httpValidation = httpValidation;
+    if (options.joinDuplicateHeaders !== undefined && typeof options.joinDuplicateHeaders !== "boolean") {
+      throw invalidArgType("options.joinDuplicateHeaders", "of type boolean", options.joinDuplicateHeaders);
+    }
     this.joinDuplicateHeaders = options.joinDuplicateHeaders;
-    this.path = options.path || "/";
+    this[kPath] = options.path || "/";
     if (cb) this.once("response", cb);
     this.useChunkedEncodingByDefault = !(method === "GET" || method === "HEAD" || method === "DELETE" || method === "OPTIONS" ||
       method === "TRACE" || method === "CONNECT");
@@ -1356,6 +1397,12 @@ export class ClientRequest extends OutgoingMessage {
 
   /* the socket the agent (or createConnection) gave: its listeners, the parser, then the output */
   onSocket(socket, err) {
+    /* as Node's: the socket's request and error listener set now, so an error before the next tick
+     * reaches the request, and a request destroyed meanwhile gives its socket back to the agent */
+    if (socket && !err) {
+      socket._httpMessage = this;
+      socket.on("error", socketErrorListener);
+    }
     process.nextTick(() => {
       if (this.destroyed || err) {
         this.destroyed = true;
@@ -1368,6 +1415,7 @@ export class ClientRequest extends OutgoingMessage {
         if (socket) {
           if (!err && this.agent && !socket.destroyed) {
             socket.emit("free");
+            socket.removeListener("error", socketErrorListener);
             done(this._error);
           } else {
             socket.once("close", () => done(err || this._error));
@@ -1379,8 +1427,6 @@ export class ClientRequest extends OutgoingMessage {
         return;
       }
       this.socket = socket;
-      socket._httpMessage = this;
-      socket.on("error", socketErrorListener);
       socket.on("end", socketOnEnd);
       socket.on("close", socketCloseListener);
       if (this.timeout !== undefined || this.agent?.options?.timeout) listenSocketTimeout(this);
@@ -1439,6 +1485,21 @@ export class ClientRequest extends OutgoingMessage {
   }
 }
 
+/* the request path, checked when set too: a path changed after the request was made can't smuggle
+ * a header in (Node's) */
+Object.defineProperty(ClientRequest.prototype, "path", {
+  get() {
+    return this[kPath];
+  },
+  set(value) {
+    const path = String(value);
+    if (INVALID_PATH_REGEX.test(path)) throw codeError(TypeError, "ERR_UNESCAPED_CHARACTERS", "Request path contains unescaped characters");
+    this[kPath] = path;
+  },
+  configurable: true,
+  enumerable: true,
+});
+
 export function request(url, options, cb) {
   return new ClientRequest(url, options, cb);
 }
@@ -1461,6 +1522,13 @@ export function setMaxIdleHTTPParsers(max) {
 export { Agent, globalAgent };
 
 export default {
-  METHODS, STATUS_CODES, Agent, ClientRequest, IncomingMessage, OutgoingMessage, ServerResponse, Server, createServer, get, globalAgent,
+  METHODS, STATUS_CODES, Agent, ClientRequest, IncomingMessage, OutgoingMessage, ServerResponse, Server, createServer, get,
   maxHeaderSize, request, setMaxIdleHTTPParsers, validateHeaderName, validateHeaderValue,
+  /* an accessor, as Node's: a program may replace the agent requests use by default */
+  get globalAgent() {
+    return globalAgent;
+  },
+  set globalAgent(value) {
+    setGlobalAgent(value);
+  },
 };

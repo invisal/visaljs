@@ -337,6 +337,25 @@ BUILTIN(remove_on_abort) {
     return JS_UNDEFINED;
 }
 
+JSValue js_event_target_listeners(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    (void)callee, (void)this_val, (void)new_target;
+    EventTargetObject *t = argc > 0 ? as_target(argv[0]) : NULL;
+    if (!t) return JS_UNDEFINED;
+    JSValue type = js_to_string(ctx, argc > 1 ? argv[1] : JS_UNDEFINED);
+    if (js_is_exception(type)) return type;
+    /* the callbacks first, then the array: its one allocation can't move what the loop reads */
+    JSValue *callbacks = malloc((t->n ? t->n : 1) * sizeof *callbacks);
+    if (!callbacks) js_fatal("out of memory in events");
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < t->n; i++) {
+        ListenerObject *l = listener_at(t, i);
+        if (js_string_equals(ctx, l->type, type)) callbacks[n++] = l->callback;
+    }
+    JSValue list = js_new_array_from(ctx, callbacks, n);
+    free(callbacks);
+    return list;
+}
+
 /* addEventListener(type, listener, options | capture) */
 BUILTIN(target_add_event_listener) {
     UNUSED_ARGS;

@@ -18,6 +18,7 @@ import { codeError, invalidArgType, invalidArgValue, notSupported, outOfRange, v
 import { isIP, isIPv4, isIPv6 } from "./internal/net.js";
 import { BlockList, SocketAddress } from "./internal/socketaddress.js";
 import { Duplex } from "./stream.js";
+import { callableClass } from "./internal/features.js";
 
 export { BlockList, isIP, isIPv4, isIPv6, SocketAddress };
 
@@ -148,7 +149,7 @@ function writeAfterFIN(chunk, encoding, cb) {
   return false;
 }
 
-export class Socket extends Duplex {
+class SocketClass extends Duplex {
   constructor(options) {
     if (typeof options === "number") options = { fd: options };
     else options = { ...options };
@@ -785,12 +786,13 @@ export class Socket extends Duplex {
     if (this.readable && !this.isPaused()) this.read(0);
   }
 }
+export const Socket = callableClass(SocketClass, "Socket");  /* Socket(…) without new, as Node's */
 
 export const Stream = Socket;
 
 /* ---- Server -------------------------------------------------------------------------------- */
 
-export class Server extends EventEmitter {
+class ServerClass extends EventEmitter {
   constructor(options, connectionListener) {
     super();
     if (typeof options === "function") {
@@ -1063,6 +1065,7 @@ export class Server extends EventEmitter {
     return new Promise((resolve, reject) => this.close((err) => (err ? reject(err) : resolve())));
   }
 }
+export const Server = callableClass(ServerClass, "Server");  /* Server(…) without new, as Node's */
 
 export function createServer(options, connectionListener) {
   return new Server(options, connectionListener);

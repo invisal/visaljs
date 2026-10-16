@@ -1,6 +1,7 @@
 // node:events' functions on emitters and EventTargets (getEventListeners, the max-listener
 // counts, addAbortListener) and EventEmitterAsyncResource. Linked into programs that name them
 // (internal/features.js).
+import { eventTargetListeners } from "visaljs:host";
 import { AsyncResource } from "../async_hooks.js";
 import { EventEmitter, EventEmitterAsyncResource as EventEmitterAsyncResourceWrapper } from "../events.js";
 import { invalidArgType } from "./errors.js";
@@ -18,11 +19,7 @@ function validateSignal(signal, name) {
 /** An emitter's listeners for the event, or an EventTarget's (as its listeners() would). */
 function getEventListeners(emitterOrTarget, type) {
   if (typeof emitterOrTarget?.listeners === "function") return emitterOrTarget.listeners(type);
-  if (isEventTarget(emitterOrTarget)) {
-    const e = new Error("getEventListeners of an EventTarget is not supported by visaljs yet");
-    e.code = "ERR_VISALJS_UNSUPPORTED";
-    throw e;
-  }
+  if (isEventTarget(emitterOrTarget)) return eventTargetListeners(emitterOrTarget, type) ?? [];
   throw invalidArgType("emitter", "an instance of EventEmitter or EventTarget", emitterOrTarget);
 }
 

@@ -7,10 +7,11 @@ import { Agent as HttpAgent, ClientRequest, Server as HttpServer } from "./http.
 import { invalidArgType } from "./internal/errors.js";
 import { Server as TlsServer, connect as tlsConnect } from "./tls.js";
 import { urlToHttpOptions } from "./url.js";
+import { callableClass } from "./internal/features.js";
 
 /* ---- Server ------------------------------------------------------------------------------------- */
 
-export class Server extends TlsServer {
+class ServerClass extends TlsServer {
   constructor(options, requestListener) {
     if (typeof options === "function") {
       requestListener = options;
@@ -28,6 +29,7 @@ export class Server extends TlsServer {
     });
   }
 }
+export const Server = callableClass(ServerClass, "Server");  /* Server(…) without new, as Node's */
 
 /* http.Server's methods: its requests, timeouts and connections */
 for (const key of Object.getOwnPropertyNames(HttpServer.prototype)) {
@@ -123,7 +125,7 @@ Agent.prototype._evictSession = function _evictSession(key) {
   delete this._sessionCache.map[key];
 };
 
-export const globalAgent = new Agent({ keepAlive: true, scheduling: "lifo", timeout: 5000 });
+export let globalAgent = new Agent({ keepAlive: true, scheduling: "lifo", timeout: 5000 });
 
 /* ---- request and get ---------------------------------------------------------------------------- */
 
@@ -145,4 +147,13 @@ export function get(input, options, cb) {
   return req;
 }
 
-export default { Agent, Server, createServer, get, globalAgent, request };
+export default {
+  Agent, Server, createServer, get, request,
+  /* an accessor, as Node's: a program may replace the agent requests use by default */
+  get globalAgent() {
+    return globalAgent;
+  },
+  set globalAgent(value) {
+    globalAgent = value;
+  },
+};

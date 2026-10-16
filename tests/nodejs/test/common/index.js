@@ -315,6 +315,13 @@ module.exports = {
   skip,
   get localhostIPv4() { return '127.0.0.1'; },
   get PORT() { return 12346; },
+  /* Node's: a Unix socket in the test's tmpdir (a named pipe on Windows), relative to the cwd */
+  get PIPE() {
+    const tmpdir = require('./tmpdir');
+    const localRelative = path.relative(process.cwd(), `${tmpdir.path}/`);
+    const pipePrefix = isWindows ? '\\\\.\\pipe\\' : localRelative;
+    return path.join(pipePrefix, `node-test.${process.pid}.sock`);
+  },
   get hasCrypto() { return true; },
   get hasIntl() { return true; },
   get fixturesDir() { return path.join(__dirname, '..', 'fixtures'); },
