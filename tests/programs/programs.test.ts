@@ -35,7 +35,7 @@ const NOT_ON: Partial<Record<NodeJS.Platform, Record<string, string>>> = {
     "host-modules.js": "node:path is POSIX-only (Node's is path.win32 there)",
     "process-signals.js": "SIGUSR1 and SIGUSR2: Windows has neither",
     "child-process.js": "it runs sh, cat, tr, sleep and head",
-    "worker-threads-constants.js": "POSIX paths for require() of JSON, and Linux's fs.constants",
+    "worker-threads-constants.js": "Linux's fs.constants",
     "fs-calls.js": "symlinks, POSIX modes and process.getuid",
     "import-meta.js": "the program looks for / in import.meta.dirname",
     "net-more.js": "Unix domain sockets: Windows has named pipes (\\\\.\\pipe\\…)",
@@ -73,6 +73,15 @@ async function check(file: string, name: string) {
 describe("programs (compiled vs Node)", () => {
   for (const file of readdirSync(DIR).filter((f) => f.endsWith(".js")).filter(inShard)) {
     it.skipIf(file in notHere)(file, () => check(file, file.replace(/\.js$/, "")), 180000);  /* the node:tls and node:crypto programs compile ~77k lines of C: ~50 s on CI's slower runners */
+  }
+});
+
+/* tests/<platform>/ (process.platform's name): programs only that OS runs, as Windows' paths, and
+ * their output Node's there */
+const PLATFORM = join(DIR, process.platform);
+describe.runIf(FIRST && existsSync(PLATFORM))(`programs on ${process.platform} (compiled vs Node)`, () => {
+  for (const file of existsSync(PLATFORM) ? readdirSync(PLATFORM).filter((f) => f.endsWith(".js")) : []) {
+    it(file, () => check(join(process.platform, file), `${process.platform}-${file.replace(/\.js$/, "")}`), 180000);
   }
 });
 

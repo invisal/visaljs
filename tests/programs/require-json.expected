@@ -1,0 +1,6 @@
+{ name: 'data', list: [ 1, 2 ] } true true
+{ other: true } true
+{ other: true } true true
+Error MODULE_NOT_FOUND Cannot find module './missing.json'
+SyntaxError undefined broken.json: Expected property name or '}' in JSON at position 2 (line 1 column 3)
+Error MODULE_NOT_FOUND Cannot find module 'data.json'

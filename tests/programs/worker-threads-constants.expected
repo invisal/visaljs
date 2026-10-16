@@ -8,8 +8,5 @@ true true true true true 19
 0 4 2 1 1 61440 16384
 null true
 true true true inspector debug uv ipv6 tls_alpn tls_sni tls_ocsp tls openssl_is_boringssl cached_builtins require_module quic typescript
-{ name: 'data', list: [ 1, 2 ] } true true
-Error MODULE_NOT_FOUND Cannot find module './missing.json'
-SyntaxError undefined broken.json: Expected property name or '}' in JSON at position 2 (line 1 column 3)
 "2345" true
 1 true

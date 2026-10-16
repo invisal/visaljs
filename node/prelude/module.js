@@ -53,6 +53,9 @@ for (const ext of [".js", ".json", ".node"]) {
   };
 }
 
+/* Module._cache: every require's cache, as Node's */
+const cache = { __proto__: null };
+
 export function createRequire(filename) {
   if (typeof filename !== "string" && !(typeof URL === "function" && filename instanceof URL)) {
     throw withCode(new TypeError("The argument 'filename' must be a file URL object, file URL string, or absolute path string. Received " +
@@ -62,38 +65,55 @@ export function createRequire(filename) {
   const require = (id) => {
     const load = globalThis[REQUIRE_TABLE]?.get(id);
     if (load !== undefined) return load();
-    if (typeof id === "string" && id.endsWith(".json") && /^(?:\.\.?\/|\/)/.test(id)) return requireJSON(require.cache, id, base);
+    if (typeof id === "string" && id.endsWith(".json") && (isRelative(id) || isAbsolute(id))) return requireJSON(require.cache, id, base);
     throw notFound(id);
   };
   require.resolve = (id) => {
     throw notFound(id);
   };
   require.resolve.paths = () => null;
-  require.cache = { __proto__: null };
+  require.cache = cache;
   require.main = undefined;
   require.extensions = extensions;
   return require;
 }
 
+/* paths as node:path's default (which this module can't import) has them: on Windows, a root of
+ * a drive (C:), a share (\\server\share) or none, and either separator */
+const onWindows = () => globalThis.process.platform === "win32";
+const isAbsolute = (path) => path.startsWith("/") || (onWindows() && /^(?:\\|[A-Za-z]:[\\/])/.test(path));
+const isRelative = (path) => /^\.\.?\//.test(path) || (onWindows() && /^\.\.?\\/.test(path));
+const endsWithSep = (path) => path.endsWith("/") || (onWindows() && path.endsWith("\\"));
+
 function pathOf(filename) {
   const s = typeof filename === "string" ? filename : filename.href;
-  return s.startsWith("file:") ? decodeURIComponent(new URL(s).pathname) : s;
+  if (!s.startsWith("file:")) return s;
+  const url = new URL(s);
+  const path = decodeURIComponent(url.pathname);
+  if (!onWindows()) return path;
+  const local = path.replace(/^\/([A-Za-z]:)/, "$1").replaceAll("/", "\\");
+  return url.hostname ? `\\\\${url.hostname}${local}` : local;
 }
 
-/* an absolute path without its . and .. segments (node:path's normalize, which this module can't import) */
+/* an absolute path without its . and .. segments (node:path's normalize); a root's parent is itself.
+ * On Windows, \path is on the working directory's drive. */
+const windowsRoot = (path) => /^(?:[A-Za-z]:|[\\/]{2}[^\\/]+[\\/][^\\/]+)/.exec(path)?.[0];
 function normalize(path) {
+  const windows = onWindows();
+  const given = windows ? windowsRoot(path) ?? "" : "";
+  const root = windows && !given ? windowsRoot(globalThis.process.cwd()) ?? "" : given;
   const out = [];
-  for (const part of path.split("/")) {
+  for (const part of path.slice(given.length).split(windows ? /[\\/]/ : "/")) {
     if (part === "..") out.pop();
     else if (part !== "." && part !== "") out.push(part);
   }
-  return "/" + out.join("/");
+  return windows ? `${root.replaceAll("/", "\\")}\\${out.join("\\")}` : "/" + out.join("/");
 }
 
 /** A JSON file, by a path absolute or relative to the requiring file's directory: parsed once,
  *  then from require.cache, as Node's loader does. */
 function requireJSON(cache, id, from) {
-  const path = normalize(id.startsWith("/") ? id : from.slice(0, from.lastIndexOf("/") + 1) + id);
+  const path = normalize(isAbsolute(id) ? id : `${from}/../${id}`);
   if (path in cache) return cache[path].exports;
   const text = fsReadFile(path, false);
   if (typeof text !== "string") throw notFound(id);
@@ -182,6 +202,9 @@ const isDir = (path) => {
 };
 const exists = (path) => typeof fsStat(path, true) !== "number";
 const dirOf = (path) => path.slice(0, Math.max(path.lastIndexOf("/"), 0)) || "/";
+const parentOf = (path) => normalize(`${path}/..`);
+/* on Windows, Node gives the closest package.json as a namespaced path: \\?\C:\… or \\?\UNC\server\… */
+const namespaced = (path) => !onWindows() ? path : path.startsWith("\\\\") ? `\\\\?\\UNC\\${path.slice(2)}` : `\\\\?\\${path}`;
 
 /** findPackageJSON(specifier[, base]): the package.json closest to what the specifier resolves to
  *  (a path or file: URL, relative to base; or a package, from base's node_modules), or undefined. */
@@ -192,26 +215,27 @@ export function findPackageJSON(specifier, base) {
     "Invalid relative URL or base scheme is not hierarchical."), "ERR_UNSUPPORTED_RESOLVE_REQUEST");
   const basePath = baseText === undefined ? undefined : baseText.startsWith("file:") ? pathOf(baseText) : baseText;
   let target;
-  if (spec.startsWith("file:")) target = pathOf(spec);
+  if (spec.startsWith("file:")) target = normalize(pathOf(spec));
+  /* a specifier is a URL: C:\… has the scheme c: */
+  else if (onWindows() && isAbsolute(spec)) throw withCode(new TypeError("The URL must be of scheme file"), "ERR_INVALID_URL_SCHEME");
   else if (spec.startsWith("/")) target = normalize(spec);
   else if (spec.startsWith("./") || spec.startsWith("../")) {
     if (basePath === undefined) throw unresolved();
-    const from = baseText.endsWith("/") ? basePath : dirOf(basePath);
-    target = normalize(`${from}/${spec}`);
+    target = normalize(endsWithSep(baseText) ? `${basePath}/${spec}` : `${basePath}/../${spec}`);
   } else {
     /* a package: its directory under the closest node_modules that has it */
     if (basePath === undefined) throw unresolved();
     const name = spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0];
-    for (let dir = baseText.endsWith("/") ? normalize(basePath) : dirOf(normalize(basePath)); ; dir = dirOf(dir)) {
-      const candidate = `${dir === "/" ? "" : dir}/node_modules/${name}/package.json`;
+    for (let dir = endsWithSep(baseText) ? normalize(basePath) : parentOf(basePath); ; dir = parentOf(dir)) {
+      const candidate = normalize(`${dir}/node_modules/${name}/package.json`);
       if (exists(candidate)) return candidate;
-      if (dir === "/") throw withCode(new Error(`Cannot find package '${name}' imported from ${basePath}`), "ERR_MODULE_NOT_FOUND");
+      if (parentOf(dir) === dir) throw withCode(new Error(`Cannot find package '${name}' imported from ${basePath}`), "ERR_MODULE_NOT_FOUND");
     }
   }
-  for (let dir = isDir(target) ? target : dirOf(target); ; dir = dirOf(dir)) {
-    const candidate = `${dir === "/" ? "" : dir}/package.json`;
-    if (exists(candidate)) return candidate;
-    if (dir === "/") return undefined;
+  for (let dir = isDir(target) ? target : parentOf(target); ; dir = parentOf(dir)) {
+    const candidate = normalize(`${dir}/package.json`);
+    if (exists(candidate)) return namespaced(candidate);
+    if (parentOf(dir) === dir) return undefined;
   }
 }
 
@@ -239,7 +263,7 @@ const ModuleWithHelpers = /* @__PURE__ */ Object.assign(Module, {
   enableCompileCache, getCompileCacheDir, flushCompileCache, getSourceMapsSupport, setSourceMapsSupport, findSourceMap, SourceMap,
   findPackageJSON, globalPaths, Module, wrapper,
   wrap: (script) => wrapper[0] + script + wrapper[1],
-  _cache: { __proto__: null },
+  _cache: cache,
   _extensions: extensions,
   /* a built-in resolves to itself; a compiled program has no files to resolve to */
   _resolveFilename(request) {
