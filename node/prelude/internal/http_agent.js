@@ -51,15 +51,22 @@ function installFreeSocketDataGuard(socket) {
   const id = socket._handle;
   if (typeof id === "number" && httpGuard(id, onGuardedData)) {
     guardedSockets.set(id, socket);
-    socket.once("close", () => {
-      if (guardedSockets.get(id) === socket) guardedSockets.delete(id);
-    });
+    socket._freeGuardId = id;
+    /* one listener while it's guarded, taken off when it's reused (a kept-alive socket comes back
+     * to the pool after each request) */
+    socket._freeGuardClose = () => removeFreeSocketDataGuard(socket);
+    socket.once("close", socket._freeGuardClose);
   }
 }
 
 function removeFreeSocketDataGuard(socket) {
-  const id = socket._handle;
-  if (guardedSockets.get(id) === socket) guardedSockets.delete(id);
+  if (socket._freeGuardClose) {
+    socket.removeListener("close", socket._freeGuardClose);
+    socket._freeGuardClose = undefined;
+  }
+  const id = socket._freeGuardId;
+  if (id !== undefined && guardedSockets.get(id) === socket) guardedSockets.delete(id);
+  socket._freeGuardId = undefined;
 }
 
 export function Agent(options) {
