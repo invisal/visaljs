@@ -13,12 +13,10 @@ import {
 import { bindContext, currentContext, runInContext } from "./internal/async_context.js";
 import { codeError, invalidArgType, outOfRange, validateInteger, validateString } from "./internal/errors.js";
 import { Agent, globalAgent, setGlobalAgent } from "./internal/http_agent.js";
+import { kConnectionsCheckingInterval } from "./internal/http_symbols.js";
 import { createConnection, Server as NetServer } from "./net.js";
 import { addAbortSignal, Readable, Stream } from "./stream.js";
 import { callableClass } from "./internal/features.js";
-
-/* the server's connections-checking timer (Node's, in node:_http_server) */
-export const kConnectionsCheckingInterval = Symbol("http.server.connectionsCheckingInterval");
 
 export const METHODS = ["ACL", "BIND", "CHECKOUT", "CONNECT", "COPY", "DELETE", "GET", "HEAD", "LINK", "LOCK", "M-SEARCH", "MERGE",
   "MKACTIVITY", "MKCALENDAR", "MKCOL", "MOVE", "NOTIFY", "OPTIONS", "PATCH", "POST", "PROPFIND", "PROPPATCH", "PURGE", "PUT", "QUERY",
