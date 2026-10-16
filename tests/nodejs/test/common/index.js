@@ -175,6 +175,11 @@ function platformTimeout(ms) {
   return ms;
 }
 
+// Node's: when using high concurrency or in the CI we need much more time for each connection attempt
+const net = require('net');
+net.setDefaultAutoSelectFamilyAttemptTimeout(platformTimeout(net.getDefaultAutoSelectFamilyAttemptTimeout() * 10));
+const defaultAutoSelectFamilyAttemptTimeout = net.getDefaultAutoSelectFamilyAttemptTimeout();
+
 function canCreateSymLink() {
   /* Node's: creating a symlink needs privileges on Windows only */
   if (isWindows) {
@@ -291,6 +296,7 @@ function escapePOSIXShell(cmdParts, ...args) {
 
 module.exports = {
   canCreateSymLink,
+  defaultAutoSelectFamilyAttemptTimeout,
   escapePOSIXShell,
   expectWarning,
   mustNotMutateObjectDeep,
