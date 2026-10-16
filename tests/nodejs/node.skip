@@ -49,3 +49,6 @@ test-http-server-connection-list-when-close.js  req.socket.parser.free
 # another Node process: a compiled program has no Node to fork (child_process.fork, cluster)
 test-http-server-stale-close.js          child_process.fork
 test-http-server-drop-connections-in-cluster.js  cluster.fork
+
+# process.report (Node's diagnostic report)
+test-http-agent-reuse-drained-socket-only.js  process.report.getReport()

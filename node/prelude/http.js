@@ -1390,6 +1390,7 @@ function freeParser(socket) {
   const conn = socket._clientConn;
   if (conn === undefined) return;
   socket._clientConn = undefined;
+  socket.parser = null;  /* as Node's: no parser on a socket between requests */
   clientSockets.delete(conn);
   httpDetach(conn);
 }
@@ -1401,6 +1402,7 @@ function freeParserAfterRead(socket) {
   const conn = socket._clientConn;
   if (conn === undefined) return;
   socket._clientConn = undefined;
+  socket.parser = null;  /* as Node's: no parser on a socket between requests */
   httpDetach(conn, true);
   queueMicrotask(() => {
     if (clientSockets.get(conn) === socket && socket._clientConn !== conn) clientSockets.delete(conn);

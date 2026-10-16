@@ -17,6 +17,7 @@ import { bindContext } from "./internal/async_context.js";
 import { codeError, invalidArgType, invalidArgValue, notSupported, outOfRange, validateFunction, validateString } from "./internal/errors.js";
 import { isIP, isIPv4, isIPv6 } from "./internal/net.js";
 import { BlockList, SocketAddress } from "./internal/socketaddress.js";
+import { AbortError } from "./internal/streams/errors.js";
 import { Duplex } from "./stream.js";
 import { callableClass } from "./internal/features.js";
 
@@ -155,7 +156,19 @@ class SocketClass extends Duplex {
     else options = { ...options };
     /* Node's: not half-open by default, 'close' emitted by the socket itself, strings written as given */
     const allowHalfOpen = Boolean(options.allowHalfOpen);
-    super({ ...options, allowHalfOpen, emitClose: false, autoDestroy: true, decodeStrings: false });
+    super({ ...options, signal: undefined, allowHalfOpen, emitClose: false, autoDestroy: true, decodeStrings: false });
+    /* the signal option, as Node's socket has it: aborted, the socket is destroyed with an AbortError
+     * (one already aborted: on the next tick, once connect() has begun) */
+    if (options.signal !== undefined) {
+      const signal = options.signal;
+      if (signal === null || typeof signal !== "object" || !("aborted" in signal)) throw invalidArgType("options.signal", "an instance of AbortSignal", signal);
+      const onAbort = () => this.destroy(new AbortError(undefined, { cause: signal.reason }));
+      if (signal.aborted) process.nextTick(onAbort);
+      else {
+        signal.addEventListener("abort", onAbort, { once: true });
+        this.once("close", () => signal.removeEventListener("abort", onAbort));
+      }
+    }
     this.connecting = false;
     this._hadError = false;
     this._handle = null;     /* the host handle's id while open */

@@ -361,6 +361,47 @@ static void hook_close(void *data) { release_conn(data); }
 
 static const JSNetHook http_hook = { hook_read, hook_close };
 
+/* ---- An idle client socket's guard --------------------------------------------------------- */
+
+/* Bytes a socket reads while it waits in an agent's pool (no request on it): a server sending what
+ * nobody asked for, which the next request would take for its response. Node's free socket data
+ * guard: the bytes are dropped and JS destroys the socket. Its end and errors go on to JS. */
+static JSValue guard_callback = JS_UNDEFINED;
+static bool guard_rooted;
+
+static bool guard_read(void *data, ssize_t n, const char *bytes) {
+    (void)bytes;
+    if (n <= 0) return false;
+    int id = (int)(intptr_t)data;
+    js_net_hook(id, NULL, NULL);
+    if (js_is_callable(guard_callback)) {
+        JSValue arg = js_int32(id);
+        js_uv_nest(1);
+        (void)js_uv_call(guard_callback, 1, &arg, NULL);
+        js_uv_nest(-1);
+        (void)js_uv_drain();
+    }
+    return true;
+}
+
+static void guard_close(void *data) { (void)data; }
+
+static const JSNetHook guard_hook = { guard_read, guard_close };
+
+/* httpGuard(conn, onData) → whether it's guarded: onData(conn) when the socket reads while idle */
+JSValue js_host_http_guard(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    (void)callee, (void)this_val, (void)new_target;
+    if (argc < 2 || !js_is_int32(argv[0])) return JS_FALSE;
+    int id = js_as_int32(argv[0]);
+    if (id < 0 || ((size_t)id < nconns && conns[id])) return JS_FALSE;  /* a parser has it */
+    if (!guard_rooted) {
+        js_add_root(ctx->rt, &guard_callback);
+        guard_rooted = true;
+    }
+    guard_callback = argv[1];
+    return js_bool(js_net_hook(id, &guard_hook, (void *)(intptr_t)id));
+}
+
 /* httpParsers(onHead, onBody, onComplete, onUpgrade, onError, onDrain) → id */
 JSValue js_host_http_parsers(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
     (void)callee, (void)this_val, (void)new_target;
