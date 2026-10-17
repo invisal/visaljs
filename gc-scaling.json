@@ -1,0 +1,548 @@
+[
+  {
+    "program": "live-heap",
+    "size": 10,
+    "feature": "default",
+    "node": {
+      "ms": 67.788445
+    },
+    "visaljs": {
+      "ms": 308.61895,
+      "rss": 31891456,
+      "live": 9768960,
+      "young": {
+        "count": 142,
+        "p50": 0.024,
+        "p99": 0.585,
+        "max": 0.721
+      },
+      "full": {
+        "count": 2,
+        "max": 1.421
+      },
+      "maxPause": 1.421,
+      "pauseMs": 9.643,
+      "sweepMs": 1.433
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 10,
+    "feature": "no incremental",
+    "node": {
+      "ms": 67.788445
+    },
+    "visaljs": {
+      "ms": 297.452014,
+      "rss": 28516352,
+      "live": 9740288,
+      "young": {
+        "count": 144,
+        "p50": 0.025,
+        "p99": 0.47,
+        "max": 0.702
+      },
+      "full": {
+        "count": 2,
+        "max": 1.763
+      },
+      "maxPause": 1.763,
+      "pauseMs": 7.854,
+      "sweepMs": 1.429
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 10,
+    "feature": "no helper threads",
+    "node": {
+      "ms": 67.788445
+    },
+    "visaljs": {
+      "ms": 398.672271,
+      "rss": 31883264,
+      "live": 9768960,
+      "young": {
+        "count": 142,
+        "p50": 0.025,
+        "p99": 0.543,
+        "max": 0.646
+      },
+      "full": {
+        "count": 2,
+        "max": 1.57
+      },
+      "maxPause": 1.57,
+      "pauseMs": 9.693,
+      "sweepMs": 1.469
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 10,
+    "feature": "neither",
+    "node": {
+      "ms": 67.788445
+    },
+    "visaljs": {
+      "ms": 351.534543,
+      "rss": 28815360,
+      "live": 9739264,
+      "young": {
+        "count": 144,
+        "p50": 0.024,
+        "p99": 0.572,
+        "max": 0.597
+      },
+      "full": {
+        "count": 2,
+        "max": 2.801
+      },
+      "maxPause": 2.801,
+      "pauseMs": 9.331,
+      "sweepMs": 1.454
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 100,
+    "feature": "default",
+    "node": {
+      "ms": 214.964023
+    },
+    "visaljs": {
+      "ms": 642.539549,
+      "rss": 200744960,
+      "live": 104402944,
+      "young": {
+        "count": 166,
+        "p50": 0.149,
+        "p99": 1.332,
+        "max": 1.383
+      },
+      "full": {
+        "count": 4,
+        "max": 1.069
+      },
+      "maxPause": 3.542,
+      "pauseMs": 97.849,
+      "sweepMs": 4.328
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 100,
+    "feature": "no incremental",
+    "node": {
+      "ms": 214.964023
+    },
+    "visaljs": {
+      "ms": 632.530925,
+      "rss": 212619264,
+      "live": 96864256,
+      "young": {
+        "count": 193,
+        "p50": 0.148,
+        "p99": 0.744,
+        "max": 1.247
+      },
+      "full": {
+        "count": 5,
+        "max": 23.345
+      },
+      "maxPause": 23.345,
+      "pauseMs": 82.724,
+      "sweepMs": 3.995
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 100,
+    "feature": "no helper threads",
+    "node": {
+      "ms": 214.964023
+    },
+    "visaljs": {
+      "ms": 657.715234,
+      "rss": 200687616,
+      "live": 104401920,
+      "young": {
+        "count": 166,
+        "p50": 0.146,
+        "p99": 2.271,
+        "max": 2.303
+      },
+      "full": {
+        "count": 4,
+        "max": 1.562
+      },
+      "maxPause": 3.562,
+      "pauseMs": 102.335,
+      "sweepMs": 4.512
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 100,
+    "feature": "neither",
+    "node": {
+      "ms": 214.964023
+    },
+    "visaljs": {
+      "ms": 695.596962,
+      "rss": 215916544,
+      "live": 96864256,
+      "young": {
+        "count": 193,
+        "p50": 0.143,
+        "p99": 1.004,
+        "max": 1.982
+      },
+      "full": {
+        "count": 5,
+        "max": 66.532
+      },
+      "maxPause": 66.532,
+      "pauseMs": 141.094,
+      "sweepMs": 4.1
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 500,
+    "feature": "default",
+    "node": {
+      "ms": 838.958265
+    },
+    "visaljs": {
+      "ms": 2214.318252,
+      "rss": 961273856,
+      "live": 532504576,
+      "young": {
+        "count": 454,
+        "p50": 0.29,
+        "p99": 2.476,
+        "max": 7.49
+      },
+      "full": {
+        "count": 6,
+        "max": 2.114
+      },
+      "maxPause": 7.49,
+      "pauseMs": 450.879,
+      "sweepMs": 14.374
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 500,
+    "feature": "no incremental",
+    "node": {
+      "ms": 838.958265
+    },
+    "visaljs": {
+      "ms": 2171.141188,
+      "rss": 823635968,
+      "live": 506914816,
+      "young": {
+        "count": 414,
+        "p50": 0.31,
+        "p99": 4.927,
+        "max": 13.184
+      },
+      "full": {
+        "count": 7,
+        "max": 88.501
+      },
+      "maxPause": 88.501,
+      "pauseMs": 399.469,
+      "sweepMs": 16.059
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 500,
+    "feature": "no helper threads",
+    "node": {
+      "ms": 838.958265
+    },
+    "visaljs": {
+      "ms": 2298.049659,
+      "rss": 959582208,
+      "live": 532510720,
+      "young": {
+        "count": 454,
+        "p50": 0.281,
+        "p99": 5.654,
+        "max": 21.647
+      },
+      "full": {
+        "count": 6,
+        "max": 2.317
+      },
+      "maxPause": 21.647,
+      "pauseMs": 501.386,
+      "sweepMs": 14.674
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 500,
+    "feature": "neither",
+    "node": {
+      "ms": 838.958265
+    },
+    "visaljs": {
+      "ms": 2350.135372,
+      "rss": 847233024,
+      "live": 506914816,
+      "young": {
+        "count": 414,
+        "p50": 0.298,
+        "p99": 9.982,
+        "max": 29.676
+      },
+      "full": {
+        "count": 7,
+        "max": 206.884
+      },
+      "maxPause": 206.884,
+      "pauseMs": 634.906,
+      "sweepMs": 16.135
+    }
+  },
+  {
+    "program": "atoms",
+    "size": 10000,
+    "feature": "default",
+    "node": {
+      "ms": 38.930964
+    },
+    "visaljs": {
+      "ms": 245.104446,
+      "rss": 19042304,
+      "live": 0,
+      "young": {
+        "count": 146,
+        "p50": 0.007,
+        "p99": 0.015,
+        "max": 0.28
+      },
+      "full": {
+        "count": 0,
+        "max": 0
+      },
+      "maxPause": 0.28,
+      "pauseMs": 1.27,
+      "sweepMs": 0.585
+    }
+  },
+  {
+    "program": "atoms",
+    "size": 100000,
+    "feature": "default",
+    "node": {
+      "ms": 92.321674
+    },
+    "visaljs": {
+      "ms": 282.70933,
+      "rss": 31162368,
+      "live": 4361216,
+      "young": {
+        "count": 129,
+        "p50": 0.007,
+        "p99": 0.401,
+        "max": 0.466
+      },
+      "full": {
+        "count": 1,
+        "max": 4.998
+      },
+      "maxPause": 4.998,
+      "pauseMs": 7.073,
+      "sweepMs": 0.835
+    }
+  },
+  {
+    "program": "atoms",
+    "size": 1000000,
+    "feature": "default",
+    "node": {
+      "ms": 803.523201
+    },
+    "visaljs": {
+      "ms": 721.996564,
+      "rss": 185135104,
+      "live": 33991680,
+      "young": {
+        "count": 165,
+        "p50": 0.007,
+        "p99": 3.348,
+        "max": 3.36
+      },
+      "full": {
+        "count": 3,
+        "max": 42.737
+      },
+      "maxPause": 42.737,
+      "pauseMs": 109.768,
+      "sweepMs": 1.065
+    }
+  },
+  {
+    "program": "shapes",
+    "size": 10000,
+    "feature": "default",
+    "node": {
+      "ms": 48.432996
+    },
+    "visaljs": {
+      "ms": 244.673178,
+      "rss": 19042304,
+      "live": 0,
+      "young": {
+        "count": 147,
+        "p50": 0.007,
+        "p99": 0.108,
+        "max": 0.441
+      },
+      "full": {
+        "count": 0,
+        "max": 0
+      },
+      "maxPause": 0.441,
+      "pauseMs": 1.508,
+      "sweepMs": 0.643
+    }
+  },
+  {
+    "program": "shapes",
+    "size": 100000,
+    "feature": "default",
+    "node": {
+      "ms": 191.912883
+    },
+    "visaljs": {
+      "ms": 365.368719,
+      "rss": 47218688,
+      "live": 14951424,
+      "young": {
+        "count": 157,
+        "p50": 0.007,
+        "p99": 0.427,
+        "max": 0.457
+      },
+      "full": {
+        "count": 2,
+        "max": 1.306
+      },
+      "maxPause": 1.306,
+      "pauseMs": 8.741,
+      "sweepMs": 1.006
+    }
+  },
+  {
+    "program": "shapes",
+    "size": 1000000,
+    "feature": "default",
+    "node": {
+      "ms": 1895.968719
+    },
+    "visaljs": {
+      "ms": 2317.595662,
+      "rss": 433565696,
+      "live": 205296640,
+      "young": {
+        "count": 306,
+        "p50": 0.196,
+        "p99": 0.463,
+        "max": 2.203
+      },
+      "full": {
+        "count": 6,
+        "max": 24.781
+      },
+      "maxPause": 24.781,
+      "pauseMs": 180.869,
+      "sweepMs": 3.598
+    }
+  },
+  {
+    "program": "weakmap",
+    "size": 10000,
+    "feature": "default",
+    "node": {
+      "ms": 38.758644
+    },
+    "visaljs": {
+      "ms": 253.407278,
+      "rss": 19042304,
+      "live": 0,
+      "young": {
+        "count": 146,
+        "p50": 0.006,
+        "p99": 0.017,
+        "max": 0.709
+      },
+      "full": {
+        "count": 0,
+        "max": 0
+      },
+      "maxPause": 0.709,
+      "pauseMs": 1.66,
+      "sweepMs": 0.562
+    }
+  },
+  {
+    "program": "weakmap",
+    "size": 100000,
+    "feature": "default",
+    "node": {
+      "ms": 102.942624
+    },
+    "visaljs": {
+      "ms": 297.091007,
+      "rss": 29503488,
+      "live": 9267200,
+      "young": {
+        "count": 150,
+        "p50": 0.007,
+        "p99": 2.044,
+        "max": 5.519
+      },
+      "full": {
+        "count": 1,
+        "max": 5.089
+      },
+      "maxPause": 5.519,
+      "pauseMs": 15.682,
+      "sweepMs": 0.572
+    }
+  },
+  {
+    "program": "weakmap",
+    "size": 1000000,
+    "feature": "default",
+    "node": {
+      "ms": 554.077435
+    },
+    "visaljs": {
+      "ms": 839.474368,
+      "rss": 196845568,
+      "live": 128245760,
+      "young": {
+        "count": 175,
+        "p50": 0.007,
+        "p99": 3.19,
+        "max": 5.446
+      },
+      "full": {
+        "count": 4,
+        "max": 185.269
+      },
+      "maxPause": 185.269,
+      "pauseMs": 388.006,
+      "sweepMs": 0.949
+    }
+  }
+]
