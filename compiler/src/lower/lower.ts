@@ -82,6 +82,10 @@ interface ModuleContext {
   globals: GlobalSlot[];
   /** Each original file's import.meta object, cached in a hidden module slot. */
   importMetaSlots: Map<string, number>;
+  declaredFunctions: Map<Binding, FunctionInfo>;
+  classesById: Map<A.Identifier, A.ClassDeclaration | A.ClassExpression>;
+  /** The functions that read their own name's binding (a named function expression's). */
+  readsOwnName: Set<FunctionInfo>;
 }
 
 /** A function's `name` from its binding: a module's anonymous default export is "default"
@@ -136,17 +140,45 @@ export function lower(program: A.Program, info: SemanticInfo): ModuleIR {
     const captured = [...scope.bindings.values()].filter((b) => b.captured);
     if (captured.length) envs.set(scope, new Map(captured.map((b, i) => [b, i])));
   }
+  /* built once, not searched per call site: a large bundle has millions of references */
+  const declaredFunctions = new Map<Binding, FunctionInfo>();
+  const ownNames = new Map<Binding, FunctionInfo>();
+  for (const fn of info.functions.values()) {
+    const node = fn.node;
+    if (node.type === "FunctionDeclaration") {
+      const binding = info.declarations.get(node.id)!;
+      if (!declaredFunctions.has(binding)) declaredFunctions.set(binding, fn);
+    } else if (node.type === "FunctionExpression" && node.id) ownNames.set(info.declarations.get(node.id)!, fn);
+  }
+  const classesById = new Map<A.Identifier, A.ClassDeclaration | A.ClassExpression>();
+  for (const sc of info.scopes.values()) {
+    const cls = sc.node as A.ClassDeclaration | A.ClassExpression;
+    if (sc.kind === "class" && cls.id && !classesById.has(cls.id)) classesById.set(cls.id, cls);
+  }
   /* the test host's print is called directly, unless the script replaces it */
-  const printAssigned = [...info.references.values()].some((r) => r.id.name === "print" && r.write && !r.binding);
-  const m: ModuleContext = { info, slots, envs, ids, inferredNames: new Map(), printAssigned, globals, importMetaSlots: new Map() };
+  let printAssigned = false;
+  const readsOwnName = new Set<FunctionInfo>();
+  for (const r of info.references.values()) {
+    if (r.id.name === "print" && r.write && !r.binding) printAssigned = true;
+    if (r.binding && ownNames.get(r.binding) === r.func) readsOwnName.add(r.func);
+  }
+  const m: ModuleContext = {
+    info, slots, envs, ids, inferredNames: new Map(), printAssigned, globals, importMetaSlots: new Map(),
+    declaredFunctions, classesById, readsOwnName,
+  };
   const main = new FunctionLowering(m, info.program).run();
   const functions: FunctionIR[] = [];
-  for (const fn of info.functions.values()) if (fn !== info.program) functions.push(new FunctionLowering(m, fn).run());
-  /* names inferred while lowering the code that creates the functions */
-  for (const f of functions) {
-    const node = [...ids].find(([, id]) => id === f.name)![0];
-    if (node.type === "FunctionExpression" && !node.id) f.meta!.jsName = m.inferredNames.get(node) ?? "";
+  const nodes: A.FunctionNode[] = [];
+  for (const fn of info.functions.values()) {
+    if (fn === info.program) continue;
+    functions.push(new FunctionLowering(m, fn).run());
+    nodes.push(fn.node);
   }
+  /* names inferred while lowering the code that creates the functions */
+  functions.forEach((f, i) => {
+    const node = nodes[i]!;
+    if (node.type === "FunctionExpression" && !node.id) f.meta!.jsName = m.inferredNames.get(node) ?? "";
+  });
   return { main, functions, globals, source: program.source };
 }
 
@@ -245,7 +277,7 @@ class FunctionLowering {
       return;
     }
     const self = node.type === "FunctionExpression" && node.id ? this.info.declarations.get(node.id)! : null;
-    const readsSelf = self !== null && [...this.info.references.values()].some((r) => r.binding === self && r.func === fn);
+    const readsSelf = self !== null && m.readsOwnName.has(fn);
     const takesArguments = fn.argumentsBinding !== null;
     const mappedArguments = takesArguments && !fn.strict && fn.simpleParams;  // its `callee` is the function
     const classCtor = node.type === "FunctionExpression" ? node.classCtor : null;
@@ -390,7 +422,6 @@ class FunctionLowering {
     return b.emit("make_arguments", [args, this.hidden.callee!, env], { table, name: "arguments" });
   }
 
-  /** A parameter with a default: the argument, or the default when it's undefined. */
   // ---- Generators -----------------------------------------------------------------------------
 
   /** After gen_start or async_start: the resume function's first block. */
@@ -1235,7 +1266,6 @@ class FunctionLowering {
     }
     const catchLanding = s.handler ? b.newBlock(finallyLanding ?? outer) : null;
 
-    /* the try block */
     if (fin) this.frames.push(fin);
     const tryBlock = b.newBlock(catchLanding ?? finallyLanding);
     b.jump(tryBlock);
@@ -1253,7 +1283,6 @@ class FunctionLowering {
     };
     leave();
 
-    /* catch */
     if (s.handler && catchLanding) {
       b.seal(catchLanding);
       b.setBlock(catchLanding);
@@ -1268,7 +1297,6 @@ class FunctionLowering {
     }
     if (fin) this.frames.pop();
 
-    /* finally */
     if (fin && finallyLanding && s.finalizer) {
       b.seal(finallyLanding);
       b.setBlock(finallyLanding);
@@ -1641,8 +1669,6 @@ class FunctionLowering {
     else this.b.emit("set_elem", [ref.obj, ref.key, value]);
   }
 
-  /** An assignment target, evaluated once. `readFirst`: a compound assignment or update,
-   *  which converts a computed key once for both the read and the write. */
   // ---- this, super, classes ------------------------------------------------------
 
   /** A binding's current value, without a TDZ check. */
@@ -1778,6 +1804,8 @@ class FunctionLowering {
     return ctor;
   }
 
+  /** An assignment target, evaluated once. `readFirst`: a compound assignment or update,
+   *  which converts a computed key once for both the read and the write. */
   private targetRef(t: A.Target, readFirst: boolean): { id: A.Identifier } | MemberRef {
     if (t.type === "Identifier") return { id: t };
     const ref = this.memberRef(t);
@@ -1896,9 +1924,7 @@ class FunctionLowering {
       /* any other value: the generic entry, `this` undefined */
       return this.genericCall(this.expression(callee), b.const(undefined), e, calleeText(callee));
     }
-    const target = [...this.info.functions.values()].find(
-      (f) => f.node.type === "FunctionDeclaration" && this.info.declarations.get(f.node.id) === binding,
-    );
+    const target = this.m.declaredFunctions.get(binding);
     /* direct: a top-level declaration never reassigned; anything else through its value */
     if (binding.scope !== this.info.program.scope || binding.reassigned || !target || hasSpread(e.arguments) || target.argumentsBinding || target.generator)
       return this.genericCall(this.expression(callee), b.const(undefined), e, calleeText(callee));
@@ -1922,13 +1948,10 @@ class FunctionLowering {
     if (!binding || binding.reassigned) return null;
     let ctor: A.FunctionDeclaration | A.FunctionExpression | undefined;
     if (binding.kind === "function") {
-      ctor = [...this.info.functions.values()].find(
-        (f) => f.node.type === "FunctionDeclaration" && this.info.declarations.get(f.node.id) === binding,
-      )?.node as A.FunctionDeclaration | undefined;
+      ctor = this.m.declaredFunctions.get(binding)?.node as A.FunctionDeclaration | undefined;
     } else if (binding.kind === "class" || (binding.kind === "const" && binding.scope.kind === "class")) {
       /* the class's own name inside it, or its declaration's binding */
-      const cls = [...this.info.scopes.values()].find((sc) => sc.kind === "class" && (sc.node as A.ClassDeclaration).id === binding.node)?.node as
-        A.ClassDeclaration | A.ClassExpression | undefined;
+      const cls = this.m.classesById.get(binding.node);
       if (cls && !cls.superClass) ctor = cls.ctor;
     } else {
       /* `var C = class {…}` or `= function () {…}` (what bundlers make of declarations): before

@@ -1,13 +1,9 @@
-// The C compiler and the cached C libraries.
-//
-// Each C library (libjsrt from @visaljs/runtime, and the host packages' libraries) is built
-// once per (compiler, flags, sources) and cached in the user's cache directory, unless it comes
-// prebuilt (prebuiltArchive); programs then compile their C files (one, or for a big
-// program several in parallel) and link them with them.
+// The C compiler and the C libraries, each built once per (compiler, flags, sources) and cached,
+// unless it comes prebuilt (prebuiltArchive).
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from "node:fs";
-import { availableParallelism, homedir, tmpdir, totalmem } from "node:os";
+import { availableParallelism, homedir, tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, relative, resolve } from "node:path";
 
 import { RUNTIME_DIR, RUNTIME_INCLUDE, runtimeLibraries } from "@visaljs/runtime";
@@ -41,10 +37,8 @@ export function findCompiler(): string {
   return findCompilers()[0]!;
 }
 
-/** $CC alone, else each of the usual C compilers on the PATH that runs, in order of preference:
- *  a build falls back to the next when one fails. Names for the same program (cc, a link to
- *  gcc) count once. Last comes Zig's clang, which brings its own libc headers and linker: a C
- *  compiler for a machine whose own toolchain is missing or broken. */
+/** $CC alone, else each usual C compiler on the PATH that runs, in order of preference: a build
+ *  falls back to the next. Zig's clang comes last: it brings its own libc headers and linker. */
 export function findCompilers(): string[] {
   if (process.env.CC) {
     if (!compilerVersion(process.env.CC)) throw new Error(`$CC (${process.env.CC}) doesn't run`);
@@ -86,7 +80,6 @@ function command(cc: string): [string, ...string[]] {
   return [program, ...args];
 }
 
-/** Runs the compiler with `args`, synchronously (execFileSync's options and result). */
 function runCompiler(cc: string, args: string[], options: Parameters<typeof execFileSync>[2]) {
   const [program, ...prefix] = command(cc);
   return execFileSync(program, [...prefix, ...args], options);
@@ -186,13 +179,9 @@ function compileCommand(cc: string, src: string, common: readonly string[]): str
   return [...cmd, "-x", "c++", ...cxx(common)];
 }
 
-/** Prebuilt libraries (cli/scripts/prebuilt.ts): each platform's third-party libraries, built
- *  ahead with Zig, so a first build doesn't compile them. The published package has them in
- *  prebuilt/<target>/ (hostTarget), beside runtime/ and node/, as <name>-<prebuiltKey>.a: the key
- *  is the library's sources and flags, not the compiler's, so any C compiler for the platform
- *  links them. They're -O2 builds, used when the build is one (not --debug or VISALJS_GC_CHECKS)
- *  and the compiler targets this machine. VISALJS_PREBUILT names another directory of them (a
- *  cross-compiler's target's, or build/prebuilt/<target> in this repository), or 0 for none. */
+/** A prebuilt library (cli/scripts/prebuilt.ts, built with Zig): prebuilt/<target>/<name>-<prebuiltKey>.a.
+ *  The key leaves out the compiler, so any C compiler for the platform links it. Only for -O2 builds
+ *  whose compiler targets this machine; VISALJS_PREBUILT names another directory, or 0 for none. */
 export function prebuiltArchive(tc: Toolchain, lib: CLibrary): string | undefined {
   if (tc.opt.join(" ") !== PREBUILT_OPT.join(" ")) return undefined;
   const env = process.env.VISALJS_PREBUILT;
@@ -207,9 +196,9 @@ export function prebuiltArchive(tc: Toolchain, lib: CLibrary): string | undefine
 export const PREBUILT_COMMON = [...COMMON.filter((f) => f !== "-g"), "-g0"];
 export const PREBUILT_OPT = ["-O2"];
 
-/** A prebuilt library's key: its sources' and headers' paths (from the directory holding runtime/
- *  and node/: the same in this repository and in the published package) and contents, and its flags (their paths the same way). PREBUILT_COMMON and PREBUILT_OPT are
- *  the format's: changing them changes its version, the key's first line. */
+/** A prebuilt library's key: its files' paths (from runtime/'s parent: the same in this repository
+ *  and the package) and contents, and its flags. Changing PREBUILT_COMMON or PREBUILT_OPT bumps
+ *  the version, the key's first line. */
 export function prebuiltKey(lib: CLibrary): string {
   const root = dirname(RUNTIME_DIR);
   const portable = (s: string) => s.split(root).join("<root>").replaceAll("\\", "/");
@@ -293,16 +282,14 @@ export function programArchives(tc: Toolchain, hosts: readonly HostPackage[], bu
   return [...libraries.map((l) => libraryArchive(tc, l, building)), ...libraries.flatMap((l) => l.link ?? []).map((l) => `-l${l}`)];
 }
 
-/** Compiles the program's C files and links them with `archives` (programArchives). The
- *  linker takes only what the program reaches: a program without I/O links no libuv. The
- *  libraries keep their debug info (-g); stripping, when asked, happens at this link.
- *
- *  One file compiles and links in one command. A split program's files compile to
- *  objects, `jobs` at once, then link; `compiled` hears as each one is done. Asynchronous: the
- *  build's report keeps drawing while the compilers run. */
+/** Compiles the program's C files and links them with `archives` (programArchives), stripping at
+ *  this link when asked. A split program's files compile `jobs` at once; `compiled` hears as each
+ *  is done. Asynchronous, so the build's report keeps drawing. */
 export async function compileProgram(tc: Toolchain, cFiles: readonly string[], output: string, archives: readonly string[],
   { extraFlags = [], jobs = compileJobs(), compiled }: { extraFlags?: readonly string[]; jobs?: number; compiled?: (done: number, total: number) => void } = {}): Promise<void> {
-  const flags = [...COMMON, ...tc.opt, ...extraFlags];
+  /* a stripped binary drops the debug info -g makes, which takes the compilers half their memory and
+   * a fifth of their time; it never changes the code */
+  const flags = [...COMMON, ...tc.opt, ...(tc.strip ? ["-g0"] : []), ...extraFlags];
   const link = [...archives, "-lm", ...LINK, ...(tc.strip ? STRIP : []), "-o", output];
   if (cFiles.length === 1) return runCompilerAsync(tc.cc, [...flags, `-I${RUNTIME_INCLUDE}`, cFiles[0]!, ...link]);
   /* the biggest first: they take longest, and the small ones fill in around them */
@@ -327,10 +314,11 @@ export async function compileProgram(tc: Toolchain, cFiles: readonly string[], o
   await runCompilerAsync(tc.cc, [...flags, ...objects, ...link]);
 }
 
-/** How many of a split program's files compile at once: one per processor, and one per 1.5 GB
- *  of memory (a file of the split needs up to about 1 GB at -O2). */
-export function compileJobs(): number {
-  return Math.max(1, Math.min(availableParallelism(), Math.floor(totalmem() / 1.5e9)));
+/** How many of a split program's files compile at once: one per processor and per `perJob` bytes
+ *  of available memory (a cgroup's limit counts). A file needs up to about 1.1 GB at -O2 with
+ *  debug info, 0.55 GB without. */
+export function compileJobs(perJob = 1.5e9): number {
+  return Math.max(1, Math.min(availableParallelism(), Math.floor(process.availableMemory() / perJob)));
 }
 
 /** Runs the compiler; its stderr passes through (but for notes the program can't act on), and its

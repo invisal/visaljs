@@ -5,7 +5,7 @@ A change of a particular kind has its own template, with the sections its review
   optimization.md   making programs faster (optimizer passes, fast paths)
   runtime.md        built-ins and the C runtime (values, GC, strings, ECMAScript built-ins)
   node-api.md       Node's API (node/: the prelude modules and their host primitives)
-  framework.md      a framework plugin (cli/src/frameworks)
+  framework.md      a framework's integration (cli/src/integrations)
   bugfix.md         a program that behaves differently from Node
 
 Pick one by adding ?template=<name> to the pull request's URL, or with
