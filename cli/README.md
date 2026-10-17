@@ -1,7 +1,7 @@
 # visaljs
 
-An ahead-of-time JavaScript to C compiler: `visaljs build` turns a JavaScript program (ES modules,
-CommonJS, `node_modules`) into a native binary.
+An ahead-of-time JavaScript to C compiler: `visaljs build` turns a JavaScript or TypeScript program
+(ES modules, CommonJS, `node_modules`) into a native binary.
 
 ```sh
 npm install -g visaljs
@@ -63,13 +63,16 @@ takes a minute. `VISALJS_PREBUILT=0` builds them anyway.
 ```
 
 ```
-usage: visaljs build [entry.js | project directory] [options]
+usage: visaljs build [entry.js | entry.ts | project directory] [options]
        visaljs licenses   print the licenses to ship with a binary you distribute
 
 A project (the current directory when none is given) builds its framework's production server: a
 vinext app is built with its own `vite build` first, then its server is compiled. Any other
 project builds the file its package.json starts: its one "bin" command, the file "scripts.start"
 runs with node, or "main"; else index.js. The binary is named after the command or the project.
+
+TypeScript (.ts, .mts, .cts, .tsx) is compiled too: its types are stripped, not checked (run tsc
+for that), with the nearest tsconfig.json's settings (paths, decorators).
 
 options:
   -o <file>          output binary

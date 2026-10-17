@@ -25,7 +25,10 @@ export const VERSION = "0.0.7";
 /** A program's C splits into files of about this many IR instructions. */
 const PART_SIZE = 20_000;
 
-const USAGE = `usage: visaljs build [entry.js | project directory] [options]
+/** A TypeScript file, by its extension: the bundler strips its types. */
+const TYPESCRIPT = /\.(?:[cm]?ts|tsx)$/;
+
+const USAGE = `usage: visaljs build [entry.js | entry.ts | project directory] [options]
        visaljs licenses   print the licenses to ship with a binary you distribute
 
 A project (the current directory when none is given) builds its framework's production server: a
@@ -33,6 +36,9 @@ Next.js app is built with \`next build\` (as a standalone build, next.config unc
 vinext app with its own \`vite build\` first, then the server is compiled with the app. Any other
 project builds the file its package.json starts: its one "bin" command, the file "scripts.start"
 runs with node, or "main"; else index.js. The binary is named after the command or the project.
+
+TypeScript (.ts, .mts, .cts, .tsx) is compiled too: its types are stripped, not checked (run tsc
+for that), with the nearest tsconfig.json's settings (paths, decorators).
 
 options:
   -o <file>          output binary
@@ -181,6 +187,11 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
       return 1;
     }
   }
+  /* the bundler strips TypeScript's types: the parser takes JavaScript only */
+  if ((options.script || options["no-bundle"]) && TYPESCRIPT.test(entry)) {
+    io.stderr(`visaljs: ${entry} is TypeScript: it's compiled through the bundler, without ${options.script ? "--script" : "--no-bundle"}\n`);
+    return 1;
+  }
   const dump = options["dump-ast"] === true || options["dump-ir"] === true;
   const style = options.quiet || dump ? undefined : io.report;  /* none: no report, but warnings and errors */
   const report = new Report(io.stderr, style);
@@ -297,7 +308,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
     return 0;
   }
   let output = options.output ?? (framework ? join(framework.root, basename(framework.root))
-    : project ? join(project.root, project.name) : basename(entry).replace(/\.[cm]?js$/, ""));
+    : project ? join(project.root, project.name) : basename(entry).replace(/\.(?:[cm]?[jt]s|[jt]sx)$/, ""));
   if (process.platform === "win32" && !extname(output)) output += ".exe";  /* the linker would add it anyway */
   /* a bin file without an extension, or a directory of the command's name: the binary would replace it */
   if (resolve(output) === resolve(entry) || statSync(output, { throwIfNoEntry: false })?.isDirectory()) {
