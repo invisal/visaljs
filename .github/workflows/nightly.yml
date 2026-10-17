@@ -4,8 +4,11 @@
 # commit since the last night; run it by hand from the Actions tab (workflow_dispatch) to check a
 # branch.
 #
-# Every job runs on GitHub's runners. They're shared machines, so the benchmarks' timings vary from
-# night to night: binary size and memory are the steady numbers.
+# The benchmarks run on our own runner (label `bench`: a 4-core VM kept for them), one
+# job at a time, so their timings compare from night to night; the other jobs run on GitHub's
+# runners. The runner is self-hosted on a public repository: it only takes jobs of this
+# workflow, which runs on main, or by hand (workflow_dispatch) for those who can write to the
+# repository. A pull request's workflows must never use it.
 #
 # The numbers are published to the gh-pages branch (the publish job): a job uploads an artifact
 # named `<name>-json` holding its JSON files, and they appear at https://invisal.github.io/visaljs/.
@@ -52,7 +55,7 @@ jobs:
     name: Server benchmarks
     needs: changes
     if: needs.changes.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, bench]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -82,7 +85,7 @@ jobs:
     name: Kernel benchmarks
     needs: changes
     if: needs.changes.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, bench]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -111,7 +114,7 @@ jobs:
     name: GC benchmarks
     needs: changes
     if: needs.changes.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, bench]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup

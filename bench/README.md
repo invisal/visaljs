@@ -13,8 +13,9 @@ answer fails the run.
 | [Size](#size) | Binary size of every app in [`tests/apps`](../tests/apps) | `npm run bench:size` |
 
 The nightly workflow ([`nightly.yml`](../.github/workflows/nightly.yml)) runs the servers, kernels
-and GC suites on GitHub's Linux runners, and puts their tables in the run's summary. The runners
-are shared machines, so timings vary from night to night. Numbers compare programs on one machine; they don't carry across machines.
+and GC suites on our own runner (a 4-core Linux VM kept for them, one suite at a time),
+and puts their tables in the run's summary. A VM still shares its host: a night's numbers can
+move a few percent. Numbers compare programs on one machine; they don't carry across machines.
 
 ## Requirements
 
