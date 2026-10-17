@@ -1158,7 +1158,7 @@ static JSValue search_unmodified(JSContext *ctx, RegExpObject *re, JSValue s) {
     JSStrView v = js_string_view(ctx, s);
     uint8_t *small[32], **capture = capture_buffer(re->bytecode, small);
     int rc = run(ctx, re, v, 0, capture);
-    double index = rc > 0 ? index_of(v, capture[0]) : -1;
+    double index = rc > 0 ? (double)index_of(v, capture[0]) : -1;
     if (capture != small) free(capture);
     return rc < 0 ? throw_exec_failure(ctx, rc) : js_number(index);
 }

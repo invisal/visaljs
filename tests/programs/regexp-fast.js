@@ -54,6 +54,7 @@ const sections = {
     const n = /a/; n.lastIndex = 3; log(n.test("a"), n.lastIndex);
     const g = /b/g; g.lastIndex = 2; log("abcb".match(g), g.lastIndex);
     const s1 = /b/g; s1.lastIndex = 3; log("abcb".search(s1), s1.lastIndex);
+    log("abc".search(/z/), "abc".search(/z/g), long("abc").search(/needle/), "".search(/x/));
     const s2 = /b/y; s2.lastIndex = -0; log("bb".search(s2), Object.is(s2.lastIndex, -0));
     const r1 = /b/y; r1.lastIndex = 1; log("abb".replace(r1, "X"), r1.lastIndex, "abb".replace(r1, "X"), r1.lastIndex, "abb".replace(r1, "X"), r1.lastIndex);
     const r2 = /b/g; r2.lastIndex = 2; log("abb".replace(r2, "X"), r2.lastIndex);
