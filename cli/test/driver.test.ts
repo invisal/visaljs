@@ -124,6 +124,23 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     expect(existsSync(join(out, "program.c"))).toBe(true);
   });
 
+  it("compiles TypeScript through the bundler, with its tsconfig.json, and names the binary without .ts", async () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./lib/*"] } } }));
+    mkdirSync(join(dir, "lib"));
+    writeFileSync(join(dir, "lib", "math.ts"), "export enum Op { Add = 1 }\nexport function add(a: number, b: number): number { return a + b; }\n");
+    writeFileSync(join(dir, "app.ts"), 'import { add, Op, type Unused } from "@lib/math";\nconst n: number = add(1, 2) satisfies number;\nprint(n, Op.Add);\n');
+    const out = join(dir, "c");
+    expect(await run("build", join(dir, "app.ts"), "--emit-c", out)).toEqual({ code: 0, stdout: "", stderr: "" });
+    const bundle = readFileSync(join(out, "bundle.js"), "utf8");
+    expect(bundle).toContain("function add(a, b)");
+    expect(bundle).not.toContain(": number");
+    /* the parser takes JavaScript only */
+    expect(await run("build", join(dir, "app.ts"), "--no-bundle")).toEqual({
+      code: 1, stdout: "", stderr: `visaljs: ${join(dir, "app.ts")} is TypeScript: it's compiled through the bundler, without --no-bundle\n`,
+    });
+  });
+
   it("reports each step of a build, unless quiet", async () => {
     const dir = tempDir();
     writeFileSync(join(dir, "app.js"), 'import { add } from "./math.js";\nprint(add(1, 2), /a+/.test("aa"));\n');
