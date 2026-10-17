@@ -3,6 +3,7 @@
 import type { Integration } from "../pipeline/types.ts";
 
 export const sharp: Integration = {
+  id: "sharp",
   name: "sharp",
   detect: (project) => project.installed("sharp"),
   hooks: {

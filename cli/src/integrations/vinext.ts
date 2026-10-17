@@ -50,13 +50,17 @@ const plugins = (await flat(loaded?.config.plugins)).filter((p) => !p.name?.star
 export default { ...loaded?.config, root, plugins };
 `;
 
+/* the server imports the build by the path it computes from ./dist */
+export const BUILD_IMPORT = { file: /[\\/]vinext[\\/]dist[\\/]server[\\/]prod-server\.js$/, find: "import(resolveServerEntryImportUrl(entryPath))" };
+
 const MARKER = join("dist", "server", "vinext-server.json");  /* written by vinext's build */
 const BUILD_ENTRIES = ["dist/server/index.js", "dist/server/entry.js"];  /* App Router's, Pages Router's */
 
 export const vinext: Integration = {
+  id: "vinext",
   name: "vinext",
-  summary: "A vinext app: compiling its production server",
-  overrides: ["Next.js"],
+  provides: "entry",
+  overrides: ["next"],
   detect: (project) => project.packages.has("vinext"),
   hooks: {
     async frameworkBuild(ctx) {
@@ -112,14 +116,10 @@ export const vinext: Integration = {
 
     bundle(ctx) {
       const { root } = ctx;
-      /* the server imports the build by the path it computes from ./dist: one of these files */
+      /* one of these files */
       const entries = BUILD_ENTRIES.filter((f) => existsSync(join(root, f)));
       const choose = entries.map((f) => `entryPath.replaceAll("\\\\", "/").endsWith(${JSON.stringify("/" + f)}) ? import(${JSON.stringify(join(root, f))}) : `).join("");
-      ctx.rewrite({
-        file: /[\\/]vinext[\\/]dist[\\/]server[\\/]prod-server\.js$/,
-        find: "import(resolveServerEntryImportUrl(entryPath))",
-        replace: `(${choose}Promise.reject(new Error("visaljs: the build has no " + entryPath)))`,
-      });
+      ctx.rewrite({ ...BUILD_IMPORT, replace: `(${choose}Promise.reject(new Error("visaljs: the build has no " + entryPath)))` });
       /* the packages vinext's build left external, which its server code require()s */
       const externals = join(root, "dist", "server", "vinext-externals.json");
       if (existsSync(externals)) for (const name of JSON.parse(readFileSync(externals, "utf8")) as string[]) ctx.require(name);

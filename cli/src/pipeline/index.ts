@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import type { Plugin } from "rolldown";
 
 import type { BundleExtras, IgnoredModule } from "../bundle.ts";
-import { INTEGRATIONS } from "../integrations/index.ts";
+import { FALLBACK, INTEGRATIONS } from "../integrations/index.ts";
 import type { Report } from "../report.ts";
 
 import { CommandError, IntegrationError } from "./errors.ts";
@@ -23,14 +23,21 @@ export interface Pipeline {
 }
 
 /** The stages before bundling, for the project in `root` (absolute). `output` is -o's. */
-export async function runPipeline(root: string, options: { flags: Flags; output: string | undefined; report: Report; integrations?: readonly Integration<unknown>[] }): Promise<Pipeline> {
+export async function runPipeline(root: string, options: {
+  flags: Flags; output: string | undefined; report: Report; integrations?: readonly Integration<unknown>[]; fallback?: Integration<unknown>;
+}): Promise<Pipeline> {
   const { flags, report } = options;
   const project: Project = { root, pkg: packageJson(root), packages: new Set(Object.keys(dependencies(root))), installed: (name) => installed(root, name), flags };
 
   const detected = (options.integrations ?? INTEGRATIONS).filter((i) => i.detect(project));
   const replaced = new Set(detected.flatMap((i) => i.overrides ?? []));
-  const used = detected.filter((i) => !replaced.has(i.name));
-  for (const i of used) if (i.summary) report.info(` 🧭 ${i.summary}`);
+  const kept = detected.filter((i) => !replaced.has(i.id));
+  /* before any build runs: a conflict found in prepare would come after both frameworks' builds */
+  const frameworks = kept.filter((i) => i.provides === "entry");
+  if (frameworks.length > 1) throw new IntegrationError(`the project uses ${frameworks.map((f) => f.name).join(" and ")}: visaljs builds one framework's server`);
+  const framework = frameworks[0] ?? options.fallback ?? FALLBACK;
+  if (frameworks.length) report.info(` 🧭 A ${framework.name} app: compiling its production server`);
+  const used = [framework, ...kept.filter((i) => i !== framework)];
 
   const open = <T extends object>(fields: (guard: () => void) => T) => {
     let closed = false;
@@ -68,10 +75,6 @@ export async function runPipeline(root: string, options: { flags: Flags; output:
             throw new CommandError(`${command} failed in ${root}:\n${output.trimEnd().split("\n").slice(-30).join("\n")}`, output);
           }
         },
-        progress(label) {
-          guard();
-          report.relabel(label);
-        },
       }));
       await report.step("🏗️ ", `Building the ${i.name} app`, () => hook(ctx), (what) => what || `Built the ${i.name} app`);
       close();
@@ -79,39 +82,34 @@ export async function runPipeline(root: string, options: { flags: Flags; output:
   }
 
   const decided: { entryFile?: string | undefined; entrySource?: string | undefined; output?: string | undefined } = {};
-  const owners = new Map<"entry" | "output", string>();
-  const claim = (what: "entry" | "output", name: string) => {
-    const owner = owners.get(what);
-    if (owner !== undefined && owner !== name) throw new IntegrationError(`${owner} and ${name} both set the ${what === "entry" ? "entry" : "binary's path"}`);
-    owners.set(what, name);
-  };
   const states = new Map<Integration<unknown>, unknown>();
   for (const i of used) {
     const hook = i.hooks.prepare;
     if (!hook) continue;
+    const decide = (guard: () => void) => {
+      guard();
+      if (i !== framework) throw new Error(`${i.name} sets the entry or the output, which only the integration that provides the entry sets`);
+    };
     const { ctx, close } = open<Omit<PrepareContext, keyof Context>>((guard) => ({
       get entryFile() {
         return decided.entryFile;
       },
       set entryFile(file) {
-        guard();
-        claim("entry", i.name);
+        decide(guard);
         decided.entryFile = file;
       },
       get entrySource() {
         return decided.entrySource;
       },
       set entrySource(source) {
-        guard();
-        claim("entry", i.name);
+        decide(guard);
         decided.entrySource = source;
       },
       get output() {
         return decided.output;
       },
       set output(file) {
-        guard();
-        claim("output", i.name);
+        decide(guard);
         decided.output = file;
       },
     }));

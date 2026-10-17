@@ -15,9 +15,9 @@
 //   done            the binary is built: notes for the report
 //
 // What a stage decides is there for the stages after it, read-only (the entry, the output); what a
-// stage adds, it adds through its own context's methods, which throw once the stage is over. The
-// entry and the output are set once: a second integration setting either is an error, unless it
-// overrides the first.
+// stage adds, it adds through its own context's methods, which throw once the stage is over. One
+// integration provides the entry, and only it sets the entry and the output: the framework the
+// project uses (two are an error, unless one overrides the other), else the package.json fallback.
 import type { Plugin } from "rolldown";
 
 import type { IgnoredModule } from "../bundle.ts";
@@ -28,13 +28,15 @@ import type { PackageJson } from "./packages.ts";
  *  and what it does at each stage (`hooks`). `S` is its state: what `prepare` returns, which the
  *  hooks after it get. */
 export interface Integration<S = undefined> {
-  /** Its name in errors: "Next.js", "sharp". */
+  /** What `overrides` names it by: "next". */
+  id: string;
+  /** Its name in the report and errors: "Next.js". */
   name: string;
-  /** What the report says when the project uses it, before any stage runs: "A Next.js app:
-   *  compiling its production server". */
-  summary?: string;
-  /** The names of the integrations it replaces when both are detected: vinext's ["Next.js"], since
-   *  a vinext app depends on next too. Theirs don't run at all. */
+  /** "entry": it's a framework, whose server is the program. It alone sets the entry and the
+   *  output, and the report says "A Next.js app". */
+  provides?: "entry";
+  /** The ids of the integrations it replaces when both are detected: vinext's ["next"], since a
+   *  vinext app depends on next too. Theirs don't run at all. */
   overrides?: readonly string[];
   /** Whether the project uses it: from the project as it is before any build (its package.json,
    *  its installed packages), never from build output, which `frameworkBuild` makes. Runs for every
@@ -53,7 +55,7 @@ export interface Hooks<S> {
   frameworkBuild?(ctx: FrameworkBuildContext): Promise<string | void>;
 
   /** 2. After the framework's build (or in its place, with --no-framework-build): reads the build
-   *  output, and decides what the binary is. The framework sets the entry (`ctx.entryFile`, a file
+   *  output, and decides what the binary is. The integration that provides the entry sets it (`ctx.entryFile`, a file
    *  in the project, or `ctx.entrySource`, a module generated in the project's directory, whose
    *  imports resolve from there) and can set the binary's path (`ctx.output`). Returns the state
    *  `bundle` and `done` get, so what it read is read once. IntegrationError when the build output
@@ -92,13 +94,6 @@ export interface Flags {
   /** --no-framework-build: the project's build output is compiled as it is (the runner skips
    *  `frameworkBuild`). */
   readonly skipFrameworkBuild: boolean;
-  /** --node-env: process.env.NODE_ENV in the program, fixed at build time; undefined, read at run
-   *  time. */
-  readonly nodeEnv: string | undefined;
-  /** --debug: a build without optimization. */
-  readonly debug: boolean;
-  /** --all-features: every optional part of the Node modules is linked. */
-  readonly allFeatures: boolean;
 }
 
 /** What every stage's context has: the project, and the report. Each method throws once the
@@ -116,11 +111,9 @@ export interface FrameworkBuildContext extends Context {
   /** Runs `node <args>` in the project, its output captured: `[packageBin(…), "build"]`. `env`
    *  adds to the environment. CommandError when it fails: the last of its output, and all of it. */
   run(args: string[], options?: { env?: Record<string, string> }): Promise<{ stdout: string; stderr: string }>;
-  /** Renames the running step in the report: what the build is doing now. */
-  progress(label: string): void;
 }
 
-/** Given to `prepare`. Each of these is set once: a second integration setting it is an error. */
+/** Given to `prepare`. Only the integration that provides the entry sets these. */
 export interface PrepareContext extends Context {
   /** The entry: a file in the project (absolute). */
   entryFile: string | undefined;

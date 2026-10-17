@@ -174,7 +174,7 @@ function testRunners(root: string): string | undefined {
 }
 
 /* the build's loads: the table first, the original load as the fallback */
-const LOADS: Rewrite[] = [
+export const LOADS: Rewrite[] = [
   {
     file: /[\\/]next[\\/]dist[\\/]server[\\/]require\.js$/,
     find: "require(/* turbopackIgnore: true */ pagePath)",
@@ -255,8 +255,9 @@ function buildModules(root: string, distDir: string): Plugin {
 }
 
 export const next: Integration<{ config: RequiredServerFiles["config"]; distDir: string }> = {
+  id: "next",
   name: "Next.js",
-  summary: "A Next.js app: compiling its production server",
+  provides: "entry",
   detect: (project) => project.packages.has("next"),
   hooks: {
     async frameworkBuild(ctx) {

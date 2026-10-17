@@ -171,9 +171,8 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   /* a project directory: its integrations' pipeline gives the entry */
   let pipeline: Pipeline | undefined;
   if (statSync(entry, { throwIfNoEntry: false })?.isDirectory()) {
-    const flags = { skipFrameworkBuild: options["no-framework-build"] === true, nodeEnv, debug: options.debug === true, allFeatures: options["all-features"] === true };
     try {
-      pipeline = await runPipeline(resolve(entry), { flags, output: options.output, report });
+      pipeline = await runPipeline(resolve(entry), { flags: { skipFrameworkBuild: options["no-framework-build"] === true }, output: options.output, report });
     } catch (e) {
       if (!(e instanceof IntegrationError)) throw e;
       io.stderr(e instanceof EntryError ? `visaljs: ${entry === "." ? "the current directory" : entry}: ${e.message}: give an entry file\n` : `visaljs: ${e.message}\n`);

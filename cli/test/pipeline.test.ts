@@ -5,7 +5,6 @@ import { join } from "node:path";
 import type { Plugin } from "rolldown";
 import { describe, expect, it } from "vitest";
 
-import { project } from "../src/integrations/project.ts";
 import { IntegrationError } from "../src/pipeline/errors.ts";
 import { runPipeline } from "../src/pipeline/index.ts";
 import type { BundleContext, Integration } from "../src/pipeline/types.ts";
@@ -13,20 +12,20 @@ import { Report } from "../src/report.ts";
 
 const tempDir = () => realpathSync.native(mkdtempSync(join(tmpdir(), "visaljs-")));
 
-const flags = { skipFrameworkBuild: false, nodeEnv: "production", debug: false, allFeatures: false };
-
 function pipeline(root: string, integrations: Integration<unknown>[], options: { skipFrameworkBuild?: boolean; output?: string } = {}) {
   let reported = "";
   const report = new Report((t) => (reported += t), { live: false, color: false });
-  const run = runPipeline(root, { flags: { ...flags, skipFrameworkBuild: options.skipFrameworkBuild ?? false }, output: options.output, report, integrations });
+  const run = runPipeline(root, { flags: { skipFrameworkBuild: options.skipFrameworkBuild ?? false }, output: options.output, report, integrations });
   return { run, reported: () => reported };
 }
 
 /** A framework's integration: detected always, its entry generated. */
-const framework = (name: string, more: Partial<Integration<unknown>> = {}): Integration<unknown> => ({
-  name,
+const framework = (id: string, more: Partial<Integration<unknown>> = {}): Integration<unknown> => ({
+  id,
+  name: id,
+  provides: "entry",
   detect: () => true,
-  hooks: { prepare: (ctx) => void (ctx.entrySource = `print(${JSON.stringify(name)});\n`) },
+  hooks: { prepare: (ctx) => void (ctx.entrySource = `print(${JSON.stringify(id)});\n`) },
   ...more,
 });
 
@@ -35,8 +34,9 @@ describe("the integrations' pipeline", () => {
     const root = tempDir();
     const order: string[] = [];
     const a: Integration<{ n: number }> = {
-      name: "a",
-      summary: "An a app",
+      id: "a",
+      name: "A",
+      provides: "entry",
       detect: () => true,
       hooks: {
         frameworkBuild: async () => void order.push("frameworkBuild"),
@@ -52,7 +52,7 @@ describe("the integrations' pipeline", () => {
     expect(p.extras).toMatchObject({ source: "print(1);\n", requires: ["pkg"] });
     p.done("/bin/app");
     expect(order).toEqual(["frameworkBuild", "prepare", "bundle 42", "done 42"]);
-    expect(reported()).toContain(" 🧭 An a app\n");
+    expect(reported()).toContain(" 🧭 A A app: compiling its production server\n");
     expect(reported()).toContain("    • built /bin/app\n");
   });
 
@@ -68,21 +68,28 @@ describe("the integrations' pipeline", () => {
     expect(p.extras.source).toBe('print("vinext");\n');
   });
 
-  it("refuses two integrations setting the entry, or the output", async () => {
-    await expect(pipeline(tempDir(), [framework("a"), framework("b")]).run).rejects.toThrow(new IntegrationError("a and b both set the entry"));
-    const output = (name: string) => framework(name, { hooks: { prepare: (ctx) => void (ctx.output = `/${name}`) } });
-    await expect(pipeline(tempDir(), [output("a"), output("b")]).run).rejects.toThrow("a and b both set the binary's path");
+  it("refuses two frameworks before either builds", async () => {
+    let built = false;
+    const b = framework("b", { hooks: { frameworkBuild: async () => void (built = true) } });
+    await expect(pipeline(tempDir(), [framework("a"), b]).run).rejects.toThrow(new IntegrationError("the project uses a and b: visaljs builds one framework's server"));
+    expect(built).toBe(false);
   });
 
-  it("takes the entry from package.json when no framework set one, and -o over any integration's output", async () => {
+  it("lets only the integration that provides the entry set it", async () => {
+    const helper: Integration<unknown> = { id: "helper", name: "helper", detect: () => true, hooks: { prepare: (ctx) => void (ctx.output = "/out") } };
+    await expect(pipeline(tempDir(), [framework("a"), helper]).run).rejects.toThrow("helper sets the entry or the output");
+  });
+
+  it("takes the entry from package.json when the project uses no framework, and -o over any integration's output", async () => {
     const root = tempDir();
     writeFileSync(join(root, "package.json"), JSON.stringify({ name: "api", main: "server.js" }));
     writeFileSync(join(root, "server.js"), "");
-    const { run, reported } = pipeline(root, [project as Integration<unknown>]);
+    const { run, reported } = pipeline(root, []);
     const p = await run;
     expect(p).toMatchObject({ entry: join(root, "server.js"), output: join(root, "api") });
     expect(reported()).toContain(' 📄 Entry: server.js (package.json "main")\n');
-    expect((await pipeline(root, [framework("next"), project as Integration<unknown>], { output: "/out/app" }).run))
+    expect(reported()).not.toContain("🧭");
+    expect((await pipeline(root, [framework("next")], { output: "/out/app" }).run))
       .toMatchObject({ entry: join(root, "visaljs-entry.js"), output: "/out/app" });
   });
 
@@ -94,7 +101,8 @@ describe("the integrations' pipeline", () => {
   });
 
   it("rewrites the files a rewrite names: as they are, else an error or nothing, as `missing` says", async () => {
-    const a = framework("Thing", {
+    const a = framework("thing", {
+      name: "Thing",
       hooks: {
         prepare: (ctx) => void (ctx.entrySource = ""),
         bundle(ctx) {

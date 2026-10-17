@@ -118,11 +118,12 @@ export function projectEntry(root: string): ProjectEntry {
 }
 
 export const project: Integration = {
+  id: "project",
   name: "package.json",
+  provides: "entry",
   detect: () => true,
   hooks: {
     prepare(ctx) {
-      if (ctx.entryFile !== undefined || ctx.entrySource !== undefined) return;
       const entry = projectEntry(ctx.root);
       ctx.entryFile = entry.file;
       ctx.output = join(ctx.root, entry.name);
