@@ -28,6 +28,9 @@
  *   ttySetRawMode(id, raw) → 0 | -errno
  *   dnsLookup(host, family, cb) → cb(errno, code, [[address, family], …]) */
 #define _POSIX_C_SOURCE 200809L  /* libuv's headers: pthread_rwlock_t, struct addrinfo */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE  /* IP_TOS, which _POSIX_C_SOURCE hides on macOS */
+#endif
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
