@@ -1,6 +1,8 @@
-// bench/servers.json (written by `npm run bench:servers -- --json=…`, nightly): the HTTP apps as
-// visaljs's binary, Node's single executable application and Bun's compiled binary, read at build
-// time for the front page's cards: binary size and memory.
+// servers.json (written by `npm run bench:servers -- --json=…`): the HTTP apps as visaljs's binary
+// against Node and Bun (their single executable and compiled binary; for Next.js and vinext, which
+// have none, their production servers), read at build time for the front page's cards: binary size
+// and memory. The last night's, from gh-pages (nightly.yml's publish job); bench/servers.json when
+// that can't be fetched (offline).
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -22,11 +24,12 @@ interface Report {
   apps: { app: string; framework?: string; version?: string; routes: string[]; results: Result[] }[];
 }
 
-/** The rows of a card, in this order; the names are bench/servers.ts's. */
+/** The rows of a card, in this order; the names are bench/servers.ts's: a binary's, or for a project
+ *  (Next.js, vinext) the runtime's running its server. */
 const TARGETS = [
-  { name: "visaljs", label: "visaljs" },
-  { name: "bun (compiled)", label: "Bun" },
-  { name: "node (SEA)", label: "Node" },
+  { names: ["visaljs"], label: "visaljs" },
+  { names: ["bun (compiled)", "bun"], label: "Bun" },
+  { names: ["node (SEA)", "node"], label: "Node" },
 ];
 
 export interface Row {
@@ -38,26 +41,39 @@ export interface Row {
 }
 
 export interface Card {
-  framework: string;
+  /** the folder in tests/apps */
   app: string;
   rows: Row[];
 }
 
-/** The cards of the frameworks named, in that order. */
-export function serverCards(frameworks: string[]) {
+const NIGHTLY = "https://invisal.github.io/visaljs/servers.json";
+
+async function report(): Promise<Report> {
+  try {
+    const res = await fetch(NIGHTLY, { signal: AbortSignal.timeout(10_000) });
+    if (res.ok) return (await res.json()) as Report;
+    console.warn(`${NIGHTLY}: ${res.status}, using bench/servers.json`);
+  } catch (e) {
+    console.warn(`${NIGHTLY}: ${(e as Error).message}, using bench/servers.json`);
+  }
   /* from web/, where astro runs */
   const root = resolve(process.cwd(), "..");
-  const report = JSON.parse(readFileSync(resolve(root, "bench/servers.json"), "utf8")) as Report;
-  const cards: Card[] = frameworks.flatMap((framework) => {
-    const a = report.apps.find((x) => x.framework === framework);
+  return JSON.parse(readFileSync(resolve(root, "bench/servers.json"), "utf8")) as Report;
+}
+
+/** The cards of the apps named, in that order, and the day they were measured. */
+export async function serverCards(apps: string[]) {
+  const data = await report();
+  const cards: Card[] = apps.flatMap((app) => {
+    const a = data.apps.find((x) => x.app === app);
     if (!a) return [];
-    const rows = TARGETS.map(({ name, label }) => {
-      const r = a.results.find((x) => x.name === name);
+    const rows = TARGETS.map(({ names, label }) => {
+      const r = a.results.find((x) => names.includes(x.name));
       return { label, size: r?.size ?? null, memory: r?.peak ?? null };
     });
-    return [{ framework, app: a.app, rows }];
+    return [{ app, rows }];
   });
-  return cards;
+  return { date: data.date, cards };
 }
 
 /** decimal megabytes, as `ls -lh --si` and file managers show them */

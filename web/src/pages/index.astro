@@ -1,6 +1,7 @@
 ---
-// The front page: what visaljs is, then the popular frameworks' binary size and memory against Node
-// and Bun (bench/servers.json). Requests per second stay out: they depend on the machine.
+// The front page: what visaljs is, then the servers' binary size and memory against Node and Bun
+// (the last night's servers.json, lib/servers.ts). Requests per second stay out: they depend on the
+// machine.
 import { LinkButton } from "@cloudflare/kumo/components/button";
 import BenchCard, { type BenchMetric } from "../components/BenchCard.tsx";
 import UsageCard from "../components/UsageCard.tsx";
@@ -11,8 +12,14 @@ import { mb, serverCards, type Row } from "../lib/servers.ts";
 import { Badge } from "@cloudflare/kumo/components/badge";
 
 const REPO = "https://github.com/invisal/visaljs";
-const cards = serverCards(["hono", "express"]);
-const NAMES: Record<string, string> = { express: "Express", hono: "Hono" };
+const { date: measured, cards } = await serverCards(["http-hello", "hono", "express", "vinext", "nextjs"]);
+const NAMES: Record<string, string> = {
+  "http-hello": "HTTP server",
+  hono: "Hono",
+  express: "Express",
+  vinext: "vinext",
+  nextjs: "Next.js",
+};
 
 /** How to use: a title, the commands and what they do */
 const usage: [string, string, string][] = [
@@ -143,19 +150,25 @@ const benchMetrics = (rows: Row[]): BenchMetric[] =>
         class="mx-auto mt-3 max-w-2xl text-center leading-normal text-kumo-subtle"
       >
         One small binary to copy and run, with nothing else to install. The same
-        Hono and Express servers, built by visaljs, Bun and Node.
+        servers, from a bare node:http one to Next.js, built by visaljs, Bun and
+        Node.
       </p>
-      <div class="mt-8 grid items-start gap-4 md:grid-cols-2">
+      <div class="mt-8 grid items-start gap-4 md:grid-cols-2 lg:grid-cols-3">
         {
           cards.map((card) => (
             <BenchCard
-              title={NAMES[card.framework] ?? card.framework}
+              title={NAMES[card.app] ?? card.app}
               href={`${REPO}/tree/main/tests/apps/${card.app}`}
               metrics={benchMetrics(card.rows)}
             />
           ))
         }
       </div>
+      <p class="mx-auto mt-6 max-w-2xl text-center text-sm text-kumo-subtle">
+        Measured nightly on GitHub's runners, last on {measured}. Node and Bun
+        can't build Next.js or vinext into one binary: their rows run
+        <code>next start</code> and <code>vinext start</code>, without a size.
+      </p>
     </section>
 
     <section class="border-t border-kumo-hairline">
