@@ -9,7 +9,7 @@ interface Props {
 }
 
 const { current } = Astro.props;
-const all = (await chapters()).map((c) => ({ id: c.id, title: c.data.title, icon: c.data.icon, soon: c.data.soon }));
+const all = (await chapters()).map((c) => ({ id: c.id, title: c.data.title, group: c.data.group, icon: c.data.icon, soon: c.data.soon }));
 ---
 
 <GuideSidebar chapters={all} current={current} />

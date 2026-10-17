@@ -1,6 +1,7 @@
 ---
 title: "Representing JavaScript values"
-order: 2
+group: "Values"
+order: 1
 icon: "binary"
 ---
 
@@ -104,7 +105,7 @@ static inline double js_as_double(JSValue v) {
 
 ### What about strings and objects?
 
-They're the pointers in the table above. They live in memory, and the `JSValue` holds their address under the `0x0000` tag. An address uses only the low 48 bits, so it fits as it is. How their memory is freed is the garbage collector's job (chapter Garbage Collector, coming soon).
+They're the pointers in the table above. They live in memory, and the `JSValue` holds their address under the `0x0000` tag. An address uses only the low 48 bits, so it fits as it is. We build strings in [Strings](/guide/strings).
 
 ## Emit to C
 
