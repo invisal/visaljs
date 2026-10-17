@@ -1,16 +1,21 @@
-// The server benchmarks: HTTP apps from tests/apps (Express, Hono, a bare node:http server), each
-// as a standalone binary from visaljs, Bun (`bun build --compile`) and Node (a single executable
-// application), measured one after another. (Node and Bun running the source run the same engines
-// as their binaries: the same throughput.) For each: binary size, startup (spawn to the first
-// response), idle and peak memory, and throughput and latency under wrk.
+// The server benchmarks: HTTP apps from tests/apps (Express, Hono, a bare node:http server, Next.js,
+// vinext), each as a standalone binary from visaljs, Bun (`bun build --compile`) and Node (a single
+// executable application), measured one after another. (Node and Bun running the source run the
+// same engines as their binaries: the same throughput.) Next.js and vinext are projects, not one
+// file, and have no Node or Bun binary: Node and Bun run their production servers (`next start`,
+// `vinext start`), without a size. For each: binary size, startup (spawn to the first response),
+// idle and peak memory, and throughput and latency under wrk.
 //
-//   node bench/servers.ts [app...] [--duration=10] [--connections=50] [--only=visaljs,bun] [--min-ratio=1] [--json=file]
+//   node bench/servers.ts [app...] [--duration=10] [--connections=50] [--only=visaljs,bun] [--min-ratio=1] [--gate=express] [--json=file]
 //
 // Names pick apps (default: all of SERVERS below). --only: targets by name or its first word
 // ("node" is "node (SEA)"). --min-ratio: exit 1 when visaljs's req/s on a route is below that
-// multiple of Node's (SEA), or when visaljs had errors: the nightly regression check
-// (.github/workflows/nightly.yml). --json: also write the results to a file (the website's
-// bench/servers.json); an app's entry replaces the one already there, and the others stay.
+// multiple of Node's or it had errors: the nightly regression check (.github/workflows/nightly.yml);
+// --gate: only those apps count (default: all; Next.js and vinext have errors under wrk's load with
+// Node too). visaljs failing to build or serve an app exits 1 too; Node or Bun failing leaves their
+// row out, with a warning. Every app is measured first, and the report written, before the exit.
+// --json: also write the results to a file (the website's bench/servers.json); an app's entry
+// replaces the one already there, and the others stay.
 //
 // Needs wrk on the PATH, and bun for the Bun rows (skipped without it). On Linux the server and
 // wrk run on separate cores (taskset). Numbers are for comparing on one machine, not across them.
@@ -24,12 +29,16 @@ import { parseArgs } from "node:util";
 import { APPS, ensureInstalled } from "../tests/apps/install.ts";
 import { buildBun, buildNodeSea, buildVisaljs } from "./lib/standalone.ts";
 
-/** The apps measured, the routes wrk loads, and the npm package whose version the report names. */
-interface Server { app: string; routes: string[]; framework?: string }
+/** The apps measured, the routes wrk loads, and the npm package whose version the report names.
+ *  `start`: a project's production server under Node (as tests/apps/check.ts), which Node and Bun
+ *  run in place of a binary of theirs. */
+interface Server { app: string; routes: string[]; framework?: string; start?: string[] }
 const SERVERS: Server[] = [
   { app: "http-hello", routes: ["/"] },
   { app: "express", routes: ["/", "/json", "/users/42?q=x&tag=a&tag=b"], framework: "express" },
   { app: "hono", routes: ["/", "/json", "/users/42?q=x"], framework: "hono" },
+  { app: "nextjs", routes: ["/", "/posts/7", "/api/hello?name=visaljs"], framework: "next", start: ["node_modules/next/dist/bin/next", "start"] },
+  { app: "vinext", routes: ["/", "/posts/3", "/api/hello?name=visaljs"], framework: "vinext", start: ["node_modules/vinext/dist/cli.js", "start"] },
 ];
 
 const { values: options, positionals } = parseArgs({
@@ -40,6 +49,7 @@ const { values: options, positionals } = parseArgs({
     only: { type: "string" },
     "startup-runs": { type: "string", default: "5" },
     "min-ratio": { type: "string" },
+    gate: { type: "string" },
     json: { type: "string" },
   },
 });
@@ -62,10 +72,16 @@ mkdirSync(OUT, { recursive: true });
 const has = (cmd: string) => !spawnSync(cmd, ["--version"], { stdio: "ignore" }).error;
 const version = (cmd: string) => execFileSync(cmd, ["--version"], { encoding: "utf8" }).trim().split("\n")[0];
 
-function targets(entry: string, app: string): Target[] {
-  const binary = (name: string) => join(OUT, `${app}-${name}`);
+function targets(entry: string, server: Server): Target[] {
+  const binary = (name: string) => join(OUT, `${server.app}-${name}`);
+  const visaljs: Target = { name: "visaljs", command: binary("visaljs"), args: [], binary: binary("visaljs"), build: () => buildVisaljs(entry, binary("visaljs")) };
+  if (server.start) {
+    const list: Target[] = [visaljs, { name: "node", command: process.execPath, args: server.start }];
+    if (has("bun")) list.push({ name: "bun", command: "bun", args: ["--bun", ...server.start] });
+    return list;
+  }
   const list: Target[] = [
-    { name: "visaljs", command: binary("visaljs"), args: [], binary: binary("visaljs"), build: () => buildVisaljs(entry, binary("visaljs")) },
+    visaljs,
     { name: "node (SEA)", command: binary("node"), args: [], binary: binary("node"), build: () => buildNodeSea(entry, binary("node")) },
   ];
   if (has("bun")) list.push({ name: "bun (compiled)", command: binary("bun"), args: [], binary: binary("bun"), build: () => buildBun(entry, binary("bun")) });
@@ -237,22 +253,43 @@ const report: Report = {
 };
 
 const failures: string[] = [];
+const gated = options.gate?.split(",");
+/** A target that failed to build or serve: a failure of the check when it's visaljs, a warning otherwise. */
+function failed(app: string, t: Target, what: string, e: unknown) {
+  const message = `${app}: ${t.name} failed to ${what}: ${(e as Error).message.split("\n")[0]}`;
+  if (t.name === "visaljs") failures.push(message);
+  else console.warn(`bench: ${message}`);
+}
 let port = 3100;
 for (const server of servers) {
   const cwd = join(APPS, server.app);
   const entry = join(cwd, JSON.parse(readFileSync(join(cwd, "package.json"), "utf8")).main);
   ensureInstalled(server.app);
-  const chosen = targets(entry, server.app).filter((t) => !only || only.some((o) => t.name === o || t.name.split(" ")[0] === o));
+  let chosen = targets(entry, server).filter((t) => !only || only.some((o) => t.name === o || t.name.split(" ")[0] === o));
+  const built: Target[] = [];
   for (const t of chosen) {
-    if (!t.build) continue;
-    process.stderr.write(`${server.app}: building ${t.name}…\n`);
-    await t.build();
+    if (t.build) {
+      process.stderr.write(`${server.app}: building ${t.name}…\n`);
+      try {
+        await t.build();
+      } catch (e) {
+        failed(server.app, t, "build", e);
+        continue;
+      }
+    }
+    built.push(t);
   }
+  chosen = built;
   const results: Result[] = [];
   for (const t of chosen) {
     process.stderr.write(`${server.app}: measuring ${t.name}…\n`);
-    results.push(await measure(t, server, cwd, port++));
+    try {
+      results.push(await measure(t, server, cwd, port++));
+    } catch (e) {
+      failed(server.app, t, "serve", e);
+    }
   }
+  if (!results.length) continue;
 
   const frameworkVersion = server.framework
     ? (JSON.parse(readFileSync(join(cwd, "node_modules", server.framework, "package.json"), "utf8")).version as string)
@@ -262,22 +299,20 @@ for (const server of servers) {
   report.apps.push({ app: server.app, framework: server.framework, version: frameworkVersion, routes: server.routes, results });
   console.log(table(server.routes, results));
 
-  /* the regression check: visaljs against Node's binary, route by route */
-  if (options["min-ratio"] !== undefined) {
+  /* the regression check: visaljs against Node, route by route */
+  const ours = results.find((r) => r.name === "visaljs");
+  const node = results.find((r) => r.name.split(" ")[0] === "node");
+  if (options["min-ratio"] !== undefined && ours && node) {
     const min = Number(options["min-ratio"]);
-    const ours = results.find((r) => r.name === "visaljs");
-    const node = results.find((r) => r.name === "node (SEA)");
-    if (!ours || !node) {
-      console.error("bench: --min-ratio needs the visaljs and node (SEA) rows");
-      process.exit(1);
-    }
-    console.log(`\n| visaljs / node (SEA) | ${server.routes.map((p) => `\`${p}\``).join(" | ")} |\n|---|${server.routes.map(() => "---:").join("|")}|`);
+    console.log(`\n| visaljs / ${node.name} | ${server.routes.map((p) => `\`${p}\``).join(" | ")} |\n|---|${server.routes.map(() => "---:").join("|")}|`);
     const ratios = ours.routes.map((r, i) => r.rps / node.routes[i]!.rps);
     console.log(`| req/s | ${ratios.map((x) => `${x.toFixed(2)}×`).join(" | ")} |`);
-    ours.routes.forEach((r, i) => {
-      if (!(ratios[i]! >= min)) failures.push(`${server.app} ${r.path}: ${ratios[i]!.toFixed(2)}× node's req/s, below ${min}×`);
-      if (r.errors) failures.push(`${server.app} ${r.path}: ${r.errors} errors`);
-    });
+    if (!gated || gated.includes(server.app)) {
+      ours.routes.forEach((r, i) => {
+        if (!(ratios[i]! >= min)) failures.push(`${server.app} ${r.path}: ${ratios[i]!.toFixed(2)}× node's req/s, below ${min}×`);
+        if (r.errors) failures.push(`${server.app} ${r.path}: ${r.errors} errors`);
+      });
+    }
   }
 }
 if (options.json) {

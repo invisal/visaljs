@@ -6,6 +6,9 @@
 #
 # Every job runs on GitHub's runners. They're shared machines, so the benchmarks' timings vary from
 # night to night: binary size and memory are the steady numbers.
+#
+# The numbers are published to the gh-pages branch (the publish job): a job uploads an artifact
+# named `<name>-json` holding its JSON files, and they appear at https://invisal.github.io/visaljs/.
 name: Nightly
 
 on:
@@ -37,11 +40,14 @@ jobs:
           fi
 
   bench:
-    # The server benchmarks (bench/servers.ts): Express and Hono as visaljs's binary, Node's single
-    # executable and Bun's compiled binary, measured one after another. Fails when visaljs serves
-    # under 0.8× Node's requests per second on an Express route (it serves about 1.3×; the margin
-    # is the shared runner's noise), or has errors (Hono runs at about Node's speed: a gate on it
-    # would fail at random). The tables go to the job summary.
+    # The server benchmarks (bench/servers.ts): http-hello, Express, Hono, Next.js and vinext as
+    # visaljs's binary against Node and Bun (their single executable and compiled binary; Next.js's
+    # and vinext's production servers, which have none), measured one after another. Fails when
+    # visaljs serves under 0.8× Node's requests per second on an Express route (it serves about
+    # 1.3×; the margin is the shared runner's noise), has errors there, or fails to build or serve
+    # an app; the other apps' speeds are for reading (on Hono, about Node's, a gate would fail at
+    # random). Every app is measured before the check, and the numbers are kept either way: the
+    # tables go to the job summary, servers.json to gh-pages (the publish job), the website's.
     # Locally: npm run bench:servers
     name: Server benchmarks
     needs: changes
@@ -53,26 +59,26 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - name: wrk
         run: command -v wrk || sudo -n apt-get install -y wrk
-      - run: npm run apps:install -- express hono
+      - run: npm run apps:install -- http-hello express hono nextjs vinext
       - name: Benchmark
         run: |
           set -o pipefail
-          npm run --silent bench:servers -- express --min-ratio=0.8 --json=bench/servers.json | tee bench.md
-          npm run --silent bench:servers -- hono --json=bench/servers.json | tee -a bench.md
+          npm run --silent bench:servers -- --min-ratio=0.8 --gate=express --json=servers.json | tee bench.md
       - name: Summary
         if: always()
         run: if [ -f bench.md ]; then cat bench.md >> "$GITHUB_STEP_SUMMARY"; fi
-      # the website's numbers: download it and commit it as bench/servers.json to update the site
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: servers-json
-          path: bench/servers.json
+          path: servers.json
+          if-no-files-found: ignore
 
   kernels:
     # The compute kernels (bench/kernels.ts): ours, Are We Fast Yet and the Benchmarks Game, each
     # built by visaljs and timed against Node. Fails when a build fails or a kernel's output
     # differs from Node's, except for kernels marked unsupported; the times are for reading (job
-    # summary), not a gate. Locally: npm run bench:kernels
+    # summary, kernels.json on gh-pages), not a gate. Locally: npm run bench:kernels
     name: Kernel benchmarks
     needs: changes
     if: needs.changes.outputs.run == 'true'
@@ -83,10 +89,16 @@ jobs:
       - name: Benchmark
         run: |
           set -o pipefail
-          npm run --silent bench:kernels | tee kernels.md
+          npm run --silent bench:kernels -- --json=kernels.json | tee kernels.md
       - name: Summary
         if: always()
         run: if [ -f kernels.md ]; then cat kernels.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: kernels-json
+          path: kernels.json
+          if-no-files-found: ignore
 
   gc-bench:
     # The GC benchmarks (bench/gc.ts): each built by visaljs and run against
@@ -94,7 +106,7 @@ jobs:
     # (bench/gc-scaling.ts): pauses as the live heap and the runtime's tables grow; then the server
     # benchmark (bench/gc-server.ts): latency and memory under load and idle. Fails when a build
     # fails, an output differs from Node's or a request fails; the numbers are for reading (job
-    # summary), and kept as the gc-json artifact, to compare nights.
+    # summary), and published to gh-pages, to compare nights.
     # Locally: npm run bench:gc, npm run bench:gc-scaling, npm run bench:gc-server (needs wrk)
     name: GC benchmarks
     needs: changes
@@ -125,6 +137,57 @@ jobs:
             gc-scaling.json
             gc-server.json
           if-no-files-found: ignore
+
+  publish:
+    # Every artifact named `*-json` onto the gh-pages branch, which GitHub Pages serves at
+    # https://invisal.github.io/visaljs/: its files at the branch's root (servers.json, gc.json, …),
+    # each night's replacing the last, so the branch's log is the numbers' history. Only from main
+    # (a run by hand on another branch publishes nothing); a job that failed uploads nothing, and its
+    # files keep the last night's numbers. Creates the branch when it's missing.
+    name: Publish the numbers
+    needs: [changes, bench, kernels, gc-bench]
+    if: always() && needs.changes.outputs.run == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        continue-on-error: true  # every job failed: nothing to publish
+        with:
+          pattern: "*-json"
+          path: data
+          merge-multiple: true
+      - name: Commit to gh-pages
+        env:
+          REPO: ${{ github.repository }}
+          TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          shopt -s nullglob
+          files=(data/*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No numbers to publish." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git init -q pages && cd pages
+          git remote add origin "https://x-access-token:$TOKEN@github.com/$REPO.git"
+          if git fetch -q --depth=1 origin gh-pages; then
+            git checkout -q -b gh-pages FETCH_HEAD
+          else
+            git checkout -q --orphan gh-pages
+          fi
+          touch .nojekyll  # plain files: no Jekyll build
+          cp "${files[@]/#/../}" .
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The numbers are unchanged." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "Nightly numbers: main at ${SHA:0:7}"
+          git push -q origin gh-pages
+          echo "Published: $(cd ../data && ls *.json | tr '\n' ' ')" >> "$GITHUB_STEP_SUMMARY"
 
   gc-checks:
     # The program tests against a checking runtime (programs.yml's gc-stress), in shards. The
