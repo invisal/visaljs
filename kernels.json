@@ -1,159 +1,159 @@
 [
   {
     "kernel": "fib",
-    "visaljs": 55.924712,
-    "node": 89.960905
+    "visaljs": 44.006044,
+    "node": 92.585685
   },
   {
     "kernel": "nbody",
-    "visaljs": 575.59157,
-    "node": 80.637577
+    "visaljs": 563.294105,
+    "node": 56.241304
   },
   {
     "kernel": "objects",
-    "visaljs": 189.594785,
-    "node": 70.402679
+    "visaljs": 192.33018,
+    "node": 111.086655
   },
   {
     "kernel": "sieve",
-    "visaljs": 110.940983,
-    "node": 127.608594
+    "visaljs": 107.024261,
+    "node": 117.712022
   },
   {
     "kernel": "strings",
-    "visaljs": 203.332933,
-    "node": 163.843493
+    "visaljs": 202.392601,
+    "node": 149.604437
   },
   {
     "kernel": "sum-loop",
-    "visaljs": 67.952306,
-    "node": 95.488533
+    "visaljs": 69.22631,
+    "node": 96.829601
   },
   {
     "kernel": "top-level",
-    "visaljs": 29.720743,
-    "node": 54.613456
+    "visaljs": 29.004482,
+    "node": 49.636969
   },
   {
     "kernel": "awfy/bounce",
-    "visaljs": 327.814998,
-    "node": 65.70705
+    "visaljs": 313.198213,
+    "node": 61.170408
   },
   {
     "kernel": "awfy/cd",
-    "visaljs": 463.230918,
-    "node": 139.055115
+    "visaljs": 462.132505,
+    "node": 124.114565
   },
   {
     "kernel": "awfy/deltablue",
-    "visaljs": 155.33179,
-    "node": 118.40899
+    "visaljs": 149.334921,
+    "node": 110.051653
   },
   {
     "kernel": "awfy/havlak",
-    "visaljs": 1138.947238,
-    "node": 176.248732
+    "visaljs": 1140.261572,
+    "node": 200.136346
   },
   {
     "kernel": "awfy/json",
-    "visaljs": 307.473638,
-    "node": 119.77648
+    "visaljs": 298.460657,
+    "node": 89.900067
   },
   {
     "kernel": "awfy/list",
-    "visaljs": 151.150451,
-    "node": 55.820597
+    "visaljs": 151.386598,
+    "node": 76.329413
   },
   {
     "kernel": "awfy/mandelbrot",
-    "visaljs": 34.471977,
-    "node": 62.816695
+    "visaljs": 34.819174,
+    "node": 73.389544
   },
   {
     "kernel": "awfy/nbody",
-    "visaljs": 335.256213,
-    "node": 50.765206
+    "visaljs": 324.660964,
+    "node": 51.883578
   },
   {
     "kernel": "awfy/permute",
-    "visaljs": 169.076638,
-    "node": 60.927603
+    "visaljs": 182.038271,
+    "node": 60.500041
   },
   {
     "kernel": "awfy/queens",
-    "visaljs": 166.116039,
-    "node": 55.742158
+    "visaljs": 161.233438,
+    "node": 52.436698
   },
   {
     "kernel": "awfy/richards",
-    "visaljs": 1059.951611,
-    "node": 119.428667
+    "visaljs": 1037.184707,
+    "node": 196.015555
   },
   {
     "kernel": "awfy/sieve",
-    "visaljs": 100.423352,
-    "node": 95.311457
+    "visaljs": 95.987768,
+    "node": 83.256183
   },
   {
     "kernel": "awfy/storage",
-    "visaljs": 496.44225,
-    "node": 106.337429
+    "visaljs": 480.558037,
+    "node": 103.952724
   },
   {
     "kernel": "awfy/towers",
-    "visaljs": 294.633675,
-    "node": 66.832317
+    "visaljs": 286.901981,
+    "node": 67.083445
   },
   {
     "kernel": "benchmarks-game/binary-trees",
-    "visaljs": 1067.795682,
-    "node": 203.552842
+    "visaljs": 986.07604,
+    "node": 183.982757
   },
   {
     "kernel": "benchmarks-game/fannkuch-redux",
-    "visaljs": 2292.119394,
-    "node": 230.788347
+    "visaljs": 2240.301443,
+    "node": 224.521089
   },
   {
     "kernel": "benchmarks-game/fasta",
-    "visaljs": 236.676265,
-    "node": 184.464341
+    "visaljs": 218.567689,
+    "node": 184.941856
   },
   {
     "kernel": "benchmarks-game/k-nucleotide",
-    "visaljs": 998.450954,
-    "node": 654.346136
+    "visaljs": 994.342586,
+    "node": 615.264847
   },
   {
     "kernel": "benchmarks-game/mandelbrot",
     "visaljs": null,
-    "node": 163.976852,
+    "node": 193.096567,
     "unsupported": "process.stdout.write of a Uint8Array writes its numbers as text, not its bytes",
-    "error": "output differs from Node's at byte 848 (125013 and 125013 bytes): \"\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0006\\u0000\\u0000\\u0000\\u0000\\u0000À\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\", Node's \"\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\""
+    "error": "output differs from Node's at byte 10842 (125013 and 125013 bytes): \"\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000h\\u0004\\u0000\\u000fÿÿÿÿÿÿâP\\u0000\\u0000\\b\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\", Node's \"\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\""
   },
   {
     "kernel": "benchmarks-game/n-body",
-    "visaljs": 6519.111187,
-    "node": 325.255277
+    "visaljs": 6517.23432,
+    "node": 301.926614
   },
   {
     "kernel": "benchmarks-game/pidigits",
-    "visaljs": 108.637337,
-    "node": 190.869442
+    "visaljs": 117.932701,
+    "node": 203.235013
   },
   {
     "kernel": "benchmarks-game/regex-redux",
-    "visaljs": 315.384076,
-    "node": 164.162119
+    "visaljs": 280.334388,
+    "node": 172.84338
   },
   {
     "kernel": "benchmarks-game/reverse-complement",
-    "visaljs": 211.009089,
-    "node": 71.42396
+    "visaljs": 196.884347,
+    "node": 70.543265
   },
   {
     "kernel": "benchmarks-game/spectral-norm",
-    "visaljs": 3683.570285,
-    "node": 207.78208
+    "visaljs": 3591.881322,
+    "node": 198.260981
   }
 ]
