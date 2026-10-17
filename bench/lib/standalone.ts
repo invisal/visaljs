@@ -1,4 +1,3 @@
-// Standalone binaries of a JavaScript program from Node and Bun, to compare visaljs's against.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -6,16 +5,13 @@ import { dirname, join } from "node:path";
 import { rolldown } from "rolldown";
 
 const POSTJECT = "postject@1.0.0-alpha.6";
+const NEXTJS_BUILD_HEAP_MB = 4096;
 
-/** Node's single executable application: the program bundled into one CommonJS file, its blob
- *  injected into a copy of the node binary. Scratch files go next to `binary`. */
 export async function buildNodeSea(entry: string, binary: string) {
   const bundle = `${binary}.sea.cjs`;
   try {
     await (await rolldown({ input: entry, platform: "node", logLevel: "silent" })).write({ file: bundle, format: "cjs", codeSplitting: false });
   } catch {
-    /* top-level await has no CommonJS form, and Node 22's SEA main must be CommonJS: an ES module
-       bundle instead, which the main imports from a data: URL */
     const esm = `${binary}.sea.mjs`;
     await (await rolldown({ input: entry, platform: "node", logLevel: "silent" })).write({ file: esm, format: "esm", codeSplitting: false });
     writeFileSync(bundle, `import(${JSON.stringify(`data:text/javascript;base64,${readFileSync(esm).toString("base64")}`)});\n`);
@@ -32,12 +28,10 @@ export async function buildNodeSea(entry: string, binary: string) {
   if (mac) execFileSync("codesign", ["--sign", "-", binary]);
 }
 
-/** Bun's compiled binary (`bun build --compile`). */
 export function buildBun(entry: string, binary: string) {
   execFileSync("bun", ["build", "--compile", entry, "--outfile", binary], { stdio: "ignore" });
 }
 
-/** visaljs's binary, from the repository's CLI. */
 export function buildVisaljs(entry: string, binary: string) {
-  execFileSync(process.execPath, [join(import.meta.dirname, "..", "..", "cli", "src", "cli.ts"), "build", entry, "-o", binary, "--quiet"], { stdio: "inherit" });
+  execFileSync(process.execPath, [`--max-old-space-size=${NEXTJS_BUILD_HEAP_MB}`, join(import.meta.dirname, "..", "..", "cli", "src", "cli.ts"), "build", entry, "-o", binary, "--quiet"], { stdio: "inherit" });
 }
