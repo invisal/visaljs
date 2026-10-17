@@ -9,17 +9,18 @@
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import {
   errnoMessage, errnoName, netAddress, netBind, netCallback, netChmod, netClose, netConnect, netGuessHandle, netKeepAlive, netListen,
-  netNoDelay, netOpen, netOpenFd, netReadStart, netReadStop, netRef, netReset, netShutdown, netWrite, timerUnref,
+  netFd, netNoDelay, netOpen, netOpenFd, netReadStart, netReadStop, netRef, netReset, netShutdown, netWrite, timerUnref,
 } from "visaljs:host";
-import { lookup } from "./dns.js";
+import { ADDRCONFIG, lookup } from "./dns.js";
 import { EventEmitter } from "./events.js";
 import { bindContext } from "./internal/async_context.js";
-import { codeError, invalidArgType, invalidArgValue, notSupported, outOfRange, validateFunction, validateString } from "./internal/errors.js";
+import { codeError, invalidArgType, invalidArgValue, outOfRange, validateFunction, validateString } from "./internal/errors.js";
 import { isIP, isIPv4, isIPv6 } from "./internal/net.js";
 import { BlockList, SocketAddress } from "./internal/socketaddress.js";
 import { AbortError } from "./internal/streams/errors.js";
+import { validateInt32 } from "./internal/streams/validators.js";
 import { Duplex } from "./stream.js";
-import { callableClass } from "./internal/features.js";
+import { callableClass, feature, features, lazyClass, lazyFunction } from "./internal/features.js";
 
 export { BlockList, isIP, isIPv4, isIPv6, SocketAddress };
 
@@ -83,6 +84,9 @@ function validatePort(port, name = "Port", allowZero = true) {
   return +port;
 }
 
+/* for internal/net_bound.js (BoundSocket) */
+features.net = { errnoException, exceptionWithHostPort, validatePort };
+
 const toNumber = (x) => ((x = Number(x)) >= 0 ? x : false);
 const isPipeName = (s) => typeof s === "string" && toNumber(s) === false;
 
@@ -122,6 +126,7 @@ export function setDefaultAutoSelectFamilyAttemptTimeout(value) {
 
 /* a descriptor as a handle: Node's createHandle */
 function handleForFd(fd, cb) {
+  validateInt32(fd, "fd", 0);
   const type = netGuessHandle(fd);
   if (type !== "PIPE" && type !== "TCP") throw codeError(TypeError, "ERR_INVALID_FD_TYPE", "Unsupported fd type: " + type);
   return netOpen(type === "PIPE", bindContext(cb));
@@ -129,6 +134,14 @@ function handleForFd(fd, cb) {
 
 function validateBlockList(value, name) {
   if (value !== undefined && !BlockList.isBlockList(value)) throw invalidArgType(name, "an net.BlockList", value);
+}
+
+/* Node's ERR_INVALID_ADDRESS_FAMILY, with the host and port */
+function addressFamilyError(addressType, host, port) {
+  const err = codeError(RangeError, "ERR_INVALID_ADDRESS_FAMILY", "Invalid address family: " + addressType + " " + host + ":" + port);
+  err.host = host;
+  err.port = port;
+  return err;
 }
 
 const ipBlocked = (ip) => codeError(Error, "ERR_IP_BLOCKED", "IP(" + ip + ") is blocked by net.BlockList");
@@ -154,6 +167,11 @@ class SocketClass extends Duplex {
   constructor(options) {
     if (typeof options === "number") options = { fd: options };
     else options = { ...options };
+    if (options.objectMode) throw invalidArgValue("options.objectMode", "is not supported", options.objectMode);
+    if (options.readableObjectMode || options.writableObjectMode) {
+      const name = options.readableObjectMode ? "readableObjectMode" : "writableObjectMode";
+      throw invalidArgValue("options." + name, "is not supported", options[name]);
+    }
     /* Node's: not half-open by default, 'close' emitted by the socket itself, strings written as given */
     const allowHalfOpen = Boolean(options.allowHalfOpen);
     super({ ...options, signal: undefined, allowHalfOpen, emitClose: false, autoDestroy: true, decodeStrings: false });
@@ -195,6 +213,12 @@ class SocketClass extends Duplex {
     this._timeoutMs = 0;
     this._lastActive = 0;
     this._onread = null;
+    if (options.typeOfService !== undefined) feature("validateTypeOfService")(options.typeOfService);
+    this._tos = options.typeOfService;  /* internal/net_tos.js's: the type of service, set at connect when given before it */
+    this._boundSource = false;  /* the handle is an adopted BoundSocket's */
+    this._boundPath = undefined;  /* an adopted pipe BoundSocket's path, its local address */
+    this._perfConnect = null;  /* a TCP connect's start, while a PerformanceObserver takes 'net' entries */  /* set at connect when given before it */
+    this._onreadRest = null;  /* internal/net_onread.js's: the bytes read but not yet given when reading stopped */
     this.timeout = undefined;
     this.autoSelectFamilyAttemptedAddresses = undefined;
     validateBlockList(options.blockList, "options.blockList");
@@ -202,10 +226,28 @@ class SocketClass extends Duplex {
     const onread = options.onread;
     if (onread !== null && typeof onread === "object" && (typeof onread.buffer === "function" || onread.buffer instanceof Uint8Array) &&
       typeof onread.callback === "function") {
+      feature("onread");  /* internal/net_onread.js's */
       this._onread = onread;
     }
     this.on("end", onReadableStreamEnd);
-    if (options.handle !== undefined) {
+    /* an adopted BoundSocket's handle: bound, not yet connected, so not read until it is */
+    const bound = options.handle !== undefined ? features.adoptBoundSocket?.(options.handle) : null;
+    if (bound) {
+      const { id, path } = bound;
+      this._handle = id;
+      this._boundSource = true;
+      this._isPipe = path !== undefined;
+      netCallback(id, bindContext((event, value) => this._onEvent(event, value, id)));
+      if (path !== undefined) {
+        this._boundPath = path;
+        /* a pipe's bind leaves its stream unopened: opened on its own descriptor, as Node's */
+        const fd = netFd(id);
+        if (fd >= 0) {
+          const err = netOpenFd(id, fd);
+          if (err) throw errnoException(err, "open");
+        }
+      }
+    } else if (options.handle !== undefined) {
       const id = options.handle;
       this._isPipe = !!options._isPipe;
       this._attach(id);
@@ -223,7 +265,7 @@ class SocketClass extends Duplex {
       }
       this._attach(id);
     }
-    if (this._handle !== null && options.readable !== false) {
+    if (this._handle !== null && !bound && options.readable !== false) {
       if (options.pauseOnCreate) this._readableState.flowing = false;
       else if (!options.manualStart) this.read(0);
     }
@@ -271,7 +313,7 @@ class SocketClass extends Duplex {
       this._bytesRead += value.byteLength;
       this._unrefTimer();
       let more;
-      if (this._onread) more = this._deliver(value);
+      if (this._onread) more = features.onread.deliver(this, value);
       else more = this.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
       if (!more) {
         this._reading = false;
@@ -287,22 +329,31 @@ class SocketClass extends Duplex {
       this.destroy(errnoException(value, "read"));
       return;
     }
+    if (this._onread) features.onread.eof(this);
     this.push(null);
     this.read(0);
   }
 
-  /* onread: the bytes in the user's buffer, a buffer's worth at a time; false stops reading */
-  _deliver(bytes) {
-    let more = true;
-    for (let at = 0; at < bytes.length;) {
-      const { buffer, callback } = this._onread;
-      const buf = typeof buffer === "function" ? buffer() : buffer;
-      const n = Math.min(buf.length, bytes.length - at);
-      buf.set(bytes.subarray(at, at + n));
-      at += n;
-      if (callback.call(this, n, buf) === false) more = false;
+  /* with onread, pausing stops reading from the handle and resuming starts it, as Node's */
+  pause() {
+    if (this._onread) features.onread.pause(this);
+    return super.pause();
+  }
+
+  resume() {
+    if (this._onread) features.onread.resume(this);
+    return super.resume();
+  }
+
+  /* reading from the handle again (with onread, the bytes left from the last read first) */
+  _startReading() {
+    this._reading = true;
+    if (this._onreadRest) {
+      features.onread.rest(this);
+      return;
     }
-    return more;
+    const err = netReadStart(this._handle);
+    if (err) this.destroy(errnoException(err, "read"));
   }
 
   get pending() {
@@ -318,25 +369,36 @@ class SocketClass extends Duplex {
   }
 
   get bufferSize() {
-    return this._handle !== null ? this.writableLength : undefined;
+    return this._handle !== null || this.connecting ? this.writableLength : undefined;
+  }
+
+  get _connecting() {
+    return this.connecting;
   }
 
   get bytesRead() {
     return this._bytesRead;
   }
 
+  /* Node's: what was sent, and what's still buffered (undefined on the prototype) */
   get bytesWritten() {
+    const writableBuffer = this.writableBuffer;
+    if (!writableBuffer) return undefined;
     let bytes = this._bytesDispatched;
-    const state = this._writableState;
-    for (const el of state.buffered) bytes += typeof el.chunk === "string" ? Buffer.byteLength(el.chunk, el.encoding) : el.chunk.length;
+    for (const el of writableBuffer) bytes += typeof el.chunk === "string" ? Buffer.byteLength(el.chunk, el.encoding) : el.chunk.length;
     const data = this._pendingData;
-    if (data) bytes += typeof data === "string" ? Buffer.byteLength(data, this._pendingEncoding) : data.length;
+    if (Array.isArray(data)) {
+      for (const el of data) bytes += typeof el.chunk === "string" ? Buffer.byteLength(el.chunk, el.encoding) : el.chunk.length;
+    } else if (data) {
+      bytes += typeof data === "string" ? Buffer.byteLength(data, this._pendingEncoding) : data.length;
+    }
     return bytes;
   }
 
-  /* a pipe's ends have no address object: Node's Pipe has no getpeername/getsockname */
+  /* a pipe's ends have no address object: Node's Pipe has no getpeername/getsockname;
+   * once closed, the address read while connected */
   _getpeername() {
-    if (this._handle === null || this._isPipe) return {};
+    if (this._handle === null || this._isPipe || this.connecting) return this._peername || {};
     if (!this._peername) {
       const a = netAddress(this._handle, true);
       if (typeof a === "number") return {};
@@ -346,7 +408,8 @@ class SocketClass extends Duplex {
   }
 
   _getsockname() {
-    if (this._handle === null || this._isPipe) return {};
+    if (this._boundPath !== undefined) return { address: this._boundPath };
+    if (this._handle === null || this._isPipe) return this._sockname || {};
     if (!this._sockname) {
       const a = netAddress(this._handle, false);
       if (typeof a === "number") return {};
@@ -462,11 +525,7 @@ class SocketClass extends Duplex {
 
   _read(n) {
     if (this.connecting || this._handle === null) this.once("connect", () => this._read(n));
-    else if (!this._reading) {
-      this._reading = true;
-      const err = netReadStart(this._handle);
-      if (err) this.destroy(errnoException(err, "read"));
-    }
+    else if (!this._reading) this._startReading();
   }
 
   /* Node's _writeGeneric: a write before the connection waits for it; a write the kernel takes at
@@ -512,7 +571,7 @@ class SocketClass extends Duplex {
 
   /* end(): shut the write side down once the writes are out */
   _final(cb) {
-    if (this.pending) {
+    if (this.connecting) {
       this.once("connect", () => this._final(cb));
       return;
     }
@@ -565,7 +624,7 @@ class SocketClass extends Duplex {
 
   /* close with a TCP RST instead of a FIN */
   resetAndDestroy() {
-    if (this._handle !== null) {
+    if (this._handle !== null || this.connecting) {
       if (this._isPipe) throw codeError(TypeError, "ERR_INVALID_HANDLE_TYPE", "This handle type cannot be sent");
       if (this.connecting) this.once("connect", () => this._reset());
       else this._reset();
@@ -588,12 +647,27 @@ class SocketClass extends Duplex {
   connect(...args) {
     const [options, cb] = args[0] && args[0][normalizedArgs] ? args[0] : normalizeArgs(args);
     if (this.write !== Socket.prototype.write) this.write = Socket.prototype.write;
-    if (this.destroyed) throw notSupported("reconnecting a destroyed socket");
+    if (options.port === undefined && options.path == null) {
+      throw codeError(TypeError, "ERR_MISSING_ARGS", 'The "options" or "port" or "path" argument must be specified');
+    }
+    /* a closed socket connects again, as Node's: its streams undestroyed, its counts the new handle's */
+    if (this.destroyed) {
+      this._handle = null;
+      this._peername = null;
+      this._sockname = null;
+      this._bytesRead = 0;
+      this._bytesDispatched = 0;
+      this._hadError = false;
+      this._perfConnect = null;
+      this._undestroy();
+    }
     const { path } = options;
     if (cb !== null) this.once("connect", cb);
     this._unrefTimer();
     this.connecting = true;
-    if (path) {
+    /* an adopted handle is a pipe or not whatever the options say; once it's gone, the path does */
+    const pipe = this._boundSource && this._handle !== null ? this._isPipe : !!path;
+    if (pipe) {
       validateString(path, "options.path");
       this._isPipe = true;
       this._internalConnect(path);
@@ -608,23 +682,37 @@ class SocketClass extends Duplex {
     const host = options.host || "localhost";
     let { port, autoSelectFamilyAttemptTimeout: attemptTimeout, autoSelectFamily: selectFamily } = options;
     if (localAddress && !isIP(localAddress)) throw codeError(TypeError, "ERR_INVALID_IP_ADDRESS", "Invalid IP address: " + localAddress);
-    if (localPort !== undefined && typeof localPort !== "number") throw invalidArgType("options.localPort", "of type number", localPort);
+    if (localPort && typeof localPort !== "number") throw invalidArgType("options.localPort", "of type number", localPort);
     if (typeof host !== "string") throw invalidArgType("options.host", "of type string", host);
+    if (host.includes("\0")) throw invalidArgValue("options.host", "must be a string without null bytes", host);
+    /* an adopted BoundSocket owns the local end and the address family */
+    if (this._boundSource) {
+      if (localAddress !== undefined || localPort !== undefined) {
+        throw invalidArgValue("options", "localAddress and localPort cannot be used with an adopted bound socket", options);
+      }
+      selectFamily = false;
+    }
     if (typeof port !== "undefined") {
       if (typeof port !== "number" && typeof port !== "string") throw invalidArgType("options.port", "of type number or string", port);
       port = validatePort(port);
     }
     port |= 0;
-    if (selectFamily !== undefined && typeof selectFamily !== "boolean") throw invalidArgType("options.autoSelectFamily", "of type boolean", selectFamily);
+    if (selectFamily != null && typeof selectFamily !== "boolean") throw invalidArgType("options.autoSelectFamily", "of type boolean", selectFamily);
     selectFamily ??= autoSelectFamily;
-    if (attemptTimeout !== undefined) {
-      if (typeof attemptTimeout !== "number") throw invalidArgType("options.autoSelectFamilyAttemptTimeout", "of type number", attemptTimeout);
+    if (attemptTimeout != null) {
+      validateInt32(attemptTimeout, "options.autoSelectFamilyAttemptTimeout", 1);
       if (attemptTimeout < 10) attemptTimeout = 10;
     } else {
       attemptTimeout = autoSelectFamilyAttemptTimeout;
     }
     this._host = host;
     const addressType = isIP(host);
+    /* an adopted BoundSocket connects in this tick, so its local address is known at once (a
+     * failure still comes as an 'error' event) */
+    if (addressType && this._boundSource) {
+      this._internalConnect(host, port, addressType, localAddress, localPort);
+      return;
+    }
     if (addressType) {
       process.nextTick(() => {
         if (this.connecting) this._internalConnect(host, port, addressType, localAddress, localPort);
@@ -634,17 +722,19 @@ class SocketClass extends Duplex {
     let family = options.family ?? 0;
     if (family === "IPv4") family = 4;
     else if (family === "IPv6") family = 6;
-    const dnsopts = { family, all: selectFamily && family === 0 };
     const lookupFn = options.lookup ?? lookup;
     if (typeof lookupFn !== "function") throw invalidArgType("options.lookup", "of type function", lookupFn);
+    const dnsopts = { family, hints: options.hints || 0, all: false };
+    if (process.platform !== "win32" && family !== 4 && family !== 6 && dnsopts.hints === 0) dnsopts.hints = ADDRCONFIG;
+    dnsopts.all = family !== 4 && family !== 6 && !localAddress && selectFamily;
     if (!dnsopts.all) {
       lookupFn(host, dnsopts, (err, ip, addressType) => {
         this.emit("lookup", err, ip, addressType, host);
         if (!this.connecting) return;
         if (err) process.nextTick(() => this.destroy(err));
-        else if (!isIP(ip)) process.nextTick(() => this.destroy(codeError(TypeError, "ERR_INVALID_IP_ADDRESS", "Invalid IP address: " + ip)));
+        else if (typeof ip !== "string" || !isIP(ip)) process.nextTick(() => this.destroy(codeError(TypeError, "ERR_INVALID_IP_ADDRESS", "Invalid IP address: " + ip)));
         else if (addressType !== 4 && addressType !== 6) {
-          process.nextTick(() => this.destroy(codeError(TypeError, "ERR_INVALID_ADDRESS_FAMILY", "Invalid address family: " + addressType + " " + host + ":" + port)));
+          process.nextTick(() => this.destroy(addressFamilyError(addressType, host, options.port)));
         } else {
           this._unrefTimer();
           this._internalConnect(ip, port, addressType, localAddress, localPort);
@@ -675,7 +765,7 @@ class SocketClass extends Duplex {
         const first = addresses[0];
         const error = !first || !isIP(first.address)
           ? codeError(TypeError, "ERR_INVALID_IP_ADDRESS", "Invalid IP address: " + first?.address)
-          : codeError(TypeError, "ERR_INVALID_ADDRESS_FAMILY", "Invalid address family: " + first.family + " " + host + ":" + port);
+          : addressFamilyError(first.family, host, options.port);
         process.nextTick(() => this.destroy(error));
         return;
       }
@@ -701,14 +791,23 @@ class SocketClass extends Duplex {
   /* a new handle bound to the local address, if any, and connecting: 0 or the failure as Node reports it */
   _open(address, port, addressType, localAddress, localPort, onConnect) {
     let id;
-    id = netOpen(this._isPipe, bindContext((event, value) => {
+    const cb = bindContext((event, value) => {
       if (event === NET_CONNECT) {
         if (this._handle === id) onConnect(value, id);
       } else {
         this._onEvent(event, value, id);
       }
-    }));
-    this._handle = id;
+    });
+    if (this._boundSource && this._handle !== null) {  /* an adopted BoundSocket's, already bound */
+      id = this._handle;
+      netCallback(id, cb);
+    } else {
+      id = netOpen(this._isPipe, cb);
+      this._handle = id;
+    }
+    if (!this._isPipe && this._perfConnect === null && features.perfObserving?.("net")) {
+      this._perfConnect = { start: features.perfNow(), host: address, port };
+    }
     if (!this._isPipe && (localAddress || localPort)) {
       localAddress ||= addressType === 4 ? "0.0.0.0" : "::";
       const err = netBind(id, localAddress, localPort | 0, 0);
@@ -794,11 +893,20 @@ class SocketClass extends Duplex {
     }
     this._attach(this._handle);
     this._unrefTimer();
+    if (this._perfConnect !== null) {
+      const { start, host, port } = this._perfConnect;
+      this._perfConnect = null;
+      features.perfObserve(features.perfEntry("connect", "net", start, features.perfNow() - start, { host, port }));
+    }
+    if (this._tos !== undefined && !this._isPipe) features.applyTypeOfService(this);
     this.emit("connect");
     this.emit("ready");
     if (this.readable && !this.isPaused()) this.read(0);
   }
 }
+/* internal/net_tos.js's, linked when the program names them */
+SocketClass.prototype.setTypeOfService = lazyFunction("setTypeOfService", 1);
+SocketClass.prototype.getTypeOfService = lazyFunction("getTypeOfService");
 export const Socket = callableClass(SocketClass, "Socket");  /* Socket(…) without new, as Node's */
 
 export const Stream = Socket;
@@ -818,6 +926,7 @@ class ServerClass extends EventEmitter {
     }
     if (typeof connectionListener === "function") this.on("connection", connectionListener);
     this._connections = 0;
+    this._listeningId = 1;  /* a listen or close since a lookup began makes the lookup's result stale */
     this._handle = null;
     this._isPipe = false;
     this._pipeName = undefined;
@@ -842,7 +951,16 @@ class ServerClass extends EventEmitter {
     if (typeof options.callback === "function") cb = options.callback;
     if (this._handle !== null) throw codeError(Error, "ERR_SERVER_ALREADY_LISTEN", "Listen method has been called more than once without closing.");
     if (cb !== null) this.once("listening", cb);
+    this._listeningId++;
     const backlogFromArgs = toNumber(args.length > 1 && args[1]) || toNumber(args.length > 2 && args[2]);
+    /* listen(boundSocket) or listen({ handle: boundSocket }): the server takes its handle */
+    const bound = features.adoptBoundSocket?.(options) ?? features.adoptBoundSocket?.(options.handle);
+    if (bound) {
+      if (bound.path !== undefined) this._pipeName = bound.path;
+      this._isPipe = bound.path !== undefined;
+      this._setupListen(null, -1, -1, backlogFromArgs, undefined, 0, bound.id);
+      return this;
+    }
     if (options._handle !== undefined && options._handle !== null) options = options._handle;
     else if (options.handle !== undefined && options.handle !== null) options = options.handle;
     const flags = (options.ipv6Only ? 1 : 0) | (options.reusePort ? 2 : 0);
@@ -895,7 +1013,9 @@ class ServerClass extends EventEmitter {
   }
 
   _lookupAndListen(port, address, backlog, flags) {
+    const listeningId = this._listeningId;
     lookup(address, (err, ip, addressType) => {
+      if (listeningId !== this._listeningId) return;
       if (err) this.emit("error", err);
       else this._setupListen(ip, port, ip ? addressType : 4, backlog, undefined, flags);
     });
@@ -985,6 +1105,7 @@ class ServerClass extends EventEmitter {
       process.nextTick(() => this.emit("error", ex));
       return;
     }
+    this._connectionKey = addressType + ":" + address + ":" + port;
     if (this._unref) netRef(id, false);
     process.nextTick(() => {
       if (this._handle !== null) this.emit("listening");
@@ -1039,6 +1160,7 @@ class ServerClass extends EventEmitter {
 
   /* close([cb]): stop accepting; 'close' once the open connections end too */
   close(cb) {
+    this._listeningId++;
     if (typeof cb === "function") {
       if (this._handle === null) this.once("close", () => cb(codeError(Error, "ERR_SERVER_NOT_RUNNING", "Server is not running.")));
       else this.once("close", cb);
@@ -1049,6 +1171,12 @@ class ServerClass extends EventEmitter {
     }
     this._emitCloseIfDrained();
     return this;
+  }
+
+  /* captureRejections: a 'connection' listener's rejection destroys the socket, as Node's */
+  [Symbol.for("nodejs.rejection")](err, event, sock) {
+    if (event === "connection") sock.destroy(err);
+    else this.emit("error", err);
   }
 
   _emitCloseIfDrained() {
@@ -1095,7 +1223,10 @@ export function connect(...args) {
 
 export const createConnection = connect;
 
+/* internal/net_bound.js's, linked when the program names it */
+export const BoundSocket = lazyClass("BoundSocket");
+
 export default {
-  BlockList, SocketAddress, isIP, isIPv4, isIPv6, Socket, Stream, Server, connect, createConnection, createServer,
+  BlockList, BoundSocket, SocketAddress, isIP, isIPv4, isIPv6, Socket, Stream, Server, connect, createConnection, createServer,
   getDefaultAutoSelectFamily, setDefaultAutoSelectFamily, getDefaultAutoSelectFamilyAttemptTimeout, setDefaultAutoSelectFamilyAttemptTimeout,
 };

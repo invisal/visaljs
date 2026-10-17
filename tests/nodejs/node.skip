@@ -22,6 +22,7 @@ test-timers-immediate-queue-throw.js     domain
 
 # no eval: Function() and vm compile source text
 test-stream-ispaused.js                  Function() constructor
+test-net-binary.js                       eval()
 # not provided: http2
 test-stream-pipeline-http2.js            http2
 # async_hooks' resource events (init/before/after) aren't emitted
@@ -38,9 +39,18 @@ test-fs-watch-recursive-assert-leaks.js  process._getActiveHandles (Node's inter
 
 # Node's libuv handle objects (socket._handle), which a compiled program's sockets don't have
 test-http-client-spurious-aborted.js     patches res.socket._handle.close
+test-net-connect-keepalive.js            patches client._handle.setKeepAlive
+test-net-connect-nodelay.js              patches client._handle.setNoDelay
+test-net-keepalive-interval-count.js     patches client._handle.setKeepAlive
+test-net-server-keepalive.js             patches server._handle.onconnection
+test-net-server-nodelay.js               patches server._handle.onconnection
+test-net-socket-setnodelay.js            sockets made over fake handle objects
+test-net-socket-write-after-close.js     closes client._handle itself
 
 # the internet: a remote host's name looked up
 test-http-client-req-error-dont-double-fire.js  ../common/internet (a remote host)
+test-net-better-error-messages-port-hostname.js  ../common/internet (an unresolvable name looked up)
+test-net-connect-immediate-finish.js     ../common/internet (an unresolvable name looked up)
 
 # Node's HTTPParser on the socket (socket.parser): ours parses in C, without one
 test-http-server-keepalive-end.js        req.socket.parser.incoming
@@ -49,6 +59,18 @@ test-http-server-connection-list-when-close.js  req.socket.parser.free
 # another Node process: a compiled program has no Node to fork (child_process.fork, cluster)
 test-http-server-stale-close.js          child_process.fork
 test-http-server-drop-connections-in-cluster.js  cluster.fork
+test-net-listen-exclusive-random-ports.js  cluster.fork
+test-net-listen-handle-in-cluster-1.js   cluster.fork
+test-net-listen-twice.js                 cluster.fork
+test-net-server-close-before-ipc-response.js  cluster.fork
+test-net-socket-constructor.js           cluster.fork (a worker given descriptors 4–6)
+test-net-child-process-connect-reset.js  child_process.spawn of node with an 'ipc' channel
+
+# no threads: a socket or server moved to a worker (worker_threads, MessageChannel)
+test-net-server-transfer-worker.js       worker_threads.Worker
+test-net-socket-transfer-worker.js       worker_threads.Worker
+test-net-socket-transfer-worker-http.js  worker_threads.Worker
+test-net-transfer-guards.js              MessageChannel transfer lists
 
 # process.report (Node's diagnostic report)
 test-http-agent-reuse-drained-socket-only.js  process.report.getReport()

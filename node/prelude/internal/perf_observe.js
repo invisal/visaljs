@@ -109,7 +109,13 @@ class PerformanceResourceTiming extends PerformanceEntry {
   }
 }
 
-/* perf_hooks.js calls this with each mark and measure */
+/* whether an observer takes entries of this type: net.js times a connect only then */
+features.perfObserving = (type) => {
+  for (const observer of observers) if (observer._observes(type)) return true;
+  return false;
+};
+
+/* perf_hooks.js calls this with each mark and measure, net.js with a connect's entry */
 features.perfObserve = (entry) => {
   for (const observer of observers) if (observer._observes(entry.entryType)) observer._enqueue(entry);
 };
