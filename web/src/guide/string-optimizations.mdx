@@ -1,0 +1,115 @@
+---
+title: "String Optimizations"
+group: "Values"
+order: 4
+icon: "scissors"
+---
+
+A JavaScript string can't be modified. Operations like joining, uppercasing and slicing always return a new string. Because strings never change, two strings can safely share the same characters, and that opens the door to some optimizations.
+
+## Ropes
+
+It's very common to see JavaScript that builds HTML like this.
+
+```js
+let header = "<header>...</header>";  // thousands of characters
+let body = "<main>...</main>";        // thousands more
+let page = header + body;
+let html = "<html>" + page + "</html>";
+```
+
+With our current implementation, every concatenation copies both sides into a new string, so the same characters get copied again and again. That wastes both memory and time.
+
+So we introduce a new kind of string, a rope. Instead of copying, it remembers its two halves.
+
+```c
+typedef struct {
+    JSCell   cell;     /* JS_CELL_ROPE */
+    uint32_t length;
+    JSValue  left, right;
+} JSRope;
+```
+
+`js_concat` now makes a rope instead of copying.
+
+```c
+JSValue js_concat(JSValue a, JSValue b) {
+    uint32_t length = js_string_length(a) + js_string_length(b);
++     if (length >= JS_ROPE_MIN) {
++         JSRope *r = malloc(sizeof(JSRope));
++         r->cell.kind = JS_CELL_ROPE;
++         r->length = length;
++         r->left = a;
++         r->right = b;
++         return js_cell_value(&r->cell);
++     }
+    /* a short result: copy both sides, as before */
+}
+```
+
+When the characters are finally needed, to print or compare the string, we flatten the rope: walk the tree and copy each piece into one plain string. The rope keeps the result, so it's flattened only once.
+
+```c
+const char *js_string_chars(JSValue v) {
+    JSCell *c = js_as_cell(v);
++     if (c->kind == JS_CELL_ROPE)
++         c = &js_flatten((JSRope *)c)->cell;
+    return ((JSString *)c)->chars;
+}
+```
+
+We don't always need a rope. A rope takes 24 bytes, so a result shorter than 13 characters is cheaper to copy. And flattening walks the tree recursively, so a rope that grows too deep is flattened right away.
+
+## Slices
+
+It's just as common to cut a big string into pieces, like reading a file and splitting off its parts.
+
+```js
+let file = readFile("access.log");  // 10 MB
+let first = file.slice(0, 1000);
+let rest = file.slice(1000);
+```
+
+Slicing has the same problem. Each piece gets its own copy of the characters it keeps, so after the slices above, the 10 MB file is in memory twice.
+
+So we introduce another kind of string, a slice. Instead of copying, it points into its parent's characters.
+
+```c
+typedef struct {
+    JSCell   cell;     /* JS_CELL_SLICE */
+    uint32_t length;
+    JSValue  parent;   /* the string it was cut from */
+    uint32_t offset;
+} JSSlice;
+```
+
+`js_substring` now makes a slice instead of copying.
+
+```c
+JSValue js_substring(JSValue s, uint32_t start, uint32_t end) {
+    uint32_t length = end - start;
++     if (length >= JS_SLICE_MIN && length >= js_string_length(s) / 4) {
++         JSSlice *sl = malloc(sizeof(JSSlice));
++         sl->cell.kind = JS_CELL_SLICE;
++         sl->length = length;
++         sl->parent = s;
++         sl->offset = start;
++         return js_cell_value(&sl->cell);
++     }
+    /* otherwise: copy the characters, as before */
+}
+```
+
+We don't always need a slice. Sometimes it's cheaper to copy. A slice shorter than 13 characters is cheaper to copy. A slice also keeps its whole parent alive, so a 10-character piece of a 10 MB file would hold on to all 10 MB. So we only make a slice when it's at least a quarter of its parent.
+
+## More optimizations
+
+There are a few more.
+
+- **One byte or two.** JavaScript strings are UTF-16, two bytes per character, but most text fits in Latin-1, the first 256 characters. Those strings use one byte per character, half the memory.
+- **One-character strings are ready-made.** All 256 Latin-1 one-character strings are built in, so `s[i]` allocates nothing.
+- **Literals are static.** A string literal never changes, so the compiler writes it into the binary once, and the program never allocates it.
+- **Append buffers.** A `+=` loop writes into a buffer with room to grow, instead of building a deeper and deeper rope.
+- **Atoms.** Each property name is stored once, so comparing two names is a pointer comparison. More on that in Objects.
+
+Every string we create calls `malloc`, and nothing ever calls `free`. A program that runs long enough runs out of memory. Freeing what's no longer used is the garbage collector's job, and that's the next chapter.

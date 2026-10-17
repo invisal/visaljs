@@ -1,0 +1,129 @@
+---
+title: "Strings"
+group: "Values"
+order: 3
+icon: "text-aa"
+---
+
+A string has no fixed size, so it can't fit inside a `JSValue`. Instead, the string lives in memory, and the `JSValue` stores a pointer to it. When the top 16 bits are `0x0000`, the rest of the bits are the address, as we saw in [Representing JavaScript values](/guide/jsvalue).
+
+Every value in memory starts with a small header, a *cell*. Its `kind` says what the value is, so a pointer `JSValue` can always find out what it points to.
+
+```c
+typedef enum {
+    JS_CELL_STRING
+    /* only strings for now, more kinds later */
+} JSCellKind;
+
+typedef struct {
+    uint8_t kind;
+} JSCell;
+```
+
+A string is a cell, followed by its length and its characters. We store the length because a C string ends at its first `'\0'`, but `"a\0b"` is a valid JavaScript string.
+
+```c
+typedef struct {
+    JSCell   cell;     /* always first */
+    uint32_t length;
+    char     chars[];  /* the characters, right after the header */
+} JSString;
+```
+
+## Creating a string
+
+Now we have the building blocks, so we can write a helper function that creates a string.
+
+```c
+static inline JSValue js_cell_value(JSCell *c) { return (JSValue){ (uint64_t)(uintptr_t)c }; }
+static inline JSCell *js_as_cell(JSValue v) { return (JSCell *)(uintptr_t)v.bits; }
+
+JSValue js_new_string(const char *chars, uint32_t length) {
+    JSString *s = malloc(sizeof(JSString) + length);
+    s->cell.kind = JS_CELL_STRING;
+    s->length = length;
+    memcpy(s->chars, chars, length);
+    return js_cell_value(&s->cell);
+}
+```
+
+<Note>
+
+We allocate but never free. Let's not worry about freeing memory for now. The [garbage collector](/guide/garbage-collector) handles it later.
+
+</Note>
+
+Now we can emit strings to C.
+
+<Pair>
+
+```js
+let hello = "hello world";
+```
+
+```c
+JSValue hello = js_new_string("hello world", 11);
+```
+
+</Pair>
+
+## Joining strings
+
+To join two strings, we allocate a new string long enough for both and copy each one in.
+
+```c
+JSValue js_concat(JSValue a, JSValue b) {
+    JSString *x = (JSString *)js_as_cell(a);
+    JSString *y = (JSString *)js_as_cell(b);
+    JSString *s = malloc(sizeof(JSString) + x->length + y->length);
+    s->cell.kind = JS_CELL_STRING;
+    s->length = x->length + y->length;
+    memcpy(s->chars, x->chars, x->length);
+    memcpy(s->chars + x->length, y->chars, y->length);
+    return js_cell_value(&s->cell);
+}
+```
+
+`a` and `b` stay as they are, and the result is a new string.
+
+`js_add` from [Operators](/guide/operators) already calls `js_concat` when either side is a string. All it needs is a way to tell that a value is a string: it's a pointer, and its cell's `kind` says string.
+
+```c
++ static inline bool js_is_string(JSValue v) {
++     return js_is_pointer(v) && js_as_cell(v)->kind == JS_CELL_STRING;
++ }
+
+JSValue js_add(JSValue a, JSValue b) {
+    if (js_is_double(a) && js_is_double(b))
+        return js_double(js_as_double(a) + js_as_double(b));
+    a = js_to_primitive(a);
+    b = js_to_primitive(b);
++     if (js_is_string(a) || js_is_string(b))
++         return js_concat(js_to_string(a), js_to_string(b));
+    return js_double(js_to_number(a) + js_to_number(b));
+}
+```
+
+Now `+` on strings compiles the same way as `+` on numbers.
+
+<Pair>
+
+```js
+let a = "hello";
+let b = " world";
+let c = a + b;
+```
+
+```c
+JSValue a = js_new_string("hello", 5);
+JSValue b = js_new_string(" world", 6);
+JSValue c = js_add(a, b);
+```
+
+</Pair>
+
+## What's next?
+
+Our strings work, but they're slow. Every string operation copies characters into a new string: joining copies both sides, and taking a slice copies the part it keeps. A typical program easily does thousands, even millions, of string operations, and all those copies add up.
+
+There are several optimizations we can make. In the next chapter, we look at [String Optimizations](/guide/string-optimizations).
