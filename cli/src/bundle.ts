@@ -9,6 +9,7 @@ import { type Plugin, rolldown, RolldownMagicString, type RolldownLog } from "ro
 import { parseSync } from "rolldown/utils";
 
 import { type HostPackage, hostModules as providedModules } from "./hosts.ts";
+import { isStaticModule } from "./static/boundary.ts";
 
 export interface Bundle {
   code: string;
@@ -148,7 +149,8 @@ function hostModules(hosts: readonly HostPackage[]): Plugin {
     name: "visaljs-host",
     resolveId(source, importer, { kind }) {
       if (source === HOST_MODULE) {
-        if (importer && (preludes.some((dir) => importer.startsWith(dir)) || importer.startsWith(RUNTIME_COPY))) return { id: source, external: true };
+        if (importer && (preludes.some((dir) => importer.startsWith(dir)) || importer.startsWith(RUNTIME_COPY) || isStaticModule(importer)))
+          return { id: source, external: true };
         this.error({ message: `${HOST_MODULE} is internal to the host prelude`, ...(importer ? { id: importer } : {}) });
       }
       if (!source.startsWith("node:") && !isBuiltin(source)) return null;

@@ -17,7 +17,8 @@ import { compileJobs, compileProgram, describeCompiler, findCompilers, gcCheckFl
 import { evalCalls, evalWarning } from "./eval.ts";
 import { licensesText } from "./licenses.ts";
 import { DEFAULT_HOSTS, hostPrimitives } from "./hosts.ts";
-import { annotateTypedCalls, buildTypedUnit, TYPED_PREFIX, typedImports, type TypedUnit } from "./typed.ts";
+import { annotateTypedCalls, staticImports } from "./static/boundary.ts";
+import { buildTypedUnit, TYPED_PREFIX, type TypedUnit } from "./static/unit.ts";
 import { EntryError } from "./integrations/project.ts";
 import { IntegrationError } from "./pipeline/errors.ts";
 import { type Pipeline, runPipeline } from "./pipeline/index.ts";
@@ -218,7 +219,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   if (bundled) {
     try {
       const b = await report.step("📦", "Rolling the modules into a single file", () => bundle(entry, hosts, (message, where) => report.warn(message, where),
-        { ...pipeline?.extras, nodeEnv, allFeatures: options["all-features"] === true, plugins: [...(pipeline?.extras.plugins ?? []), ...(options["no-static"] ? [] : [typedImports(typedFiles)])] }),
+        { ...pipeline?.extras, nodeEnv, allFeatures: options["all-features"] === true, plugins: [...(pipeline?.extras.plugins ?? []), ...(options["no-static"] ? [] : [staticImports(typedFiles)])] }),
         (b) => `Rolled ${count(b.modules, "module")} into a single file (${size(Buffer.byteLength(b.code))})` +
           (b.required.length ? `; for a require() at run time: ${b.required.join(", ")}` : ""));
       source = b.code;

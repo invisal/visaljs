@@ -129,17 +129,26 @@ export function linkUnit(program: ts.Program, files: readonly string[], hostPrim
     exports.set(name, locKey(declaration));
   };
   for (const sf of sources)
-    for (const st of sf.statements) {
-      const exported = ts.canHaveModifiers(st) && ts.getModifiers(st)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
-      if (exported && ts.isFunctionDeclaration(st) && st.name) exportFunction(st.name.text, st.name, st);
-      else if (exported && ts.isVariableStatement(st))
-        for (const d of st.declarationList.declarations) exportFunction(d.name.getText(sf), d, undefined);
-      else if (ts.isExportDeclaration(st) && !st.isTypeOnly && !st.moduleSpecifier && st.exportClause && ts.isNamedExports(st.exportClause))
-        for (const spec of st.exportClause.elements) {
-          if (spec.isTypeOnly) continue;
-          const symbol = checker.getExportSpecifierLocalTargetSymbol(spec);
-          exportFunction(spec.name.text, spec, symbol?.valueDeclaration);
-        }
+    for (const { name, at } of exportsOf(sf)) {
+      const declaration = ts.isExportSpecifier(at) ? checker.getExportSpecifierLocalTargetSymbol(at)?.valueDeclaration
+        : ts.isFunctionDeclaration(at.parent) ? at.parent : undefined;
+      exportFunction(name, at, declaration);
     }
   return { ast: convertStaticUnit(unit, hostPrimitives), exports };
+}
+
+/** A static file's exported values, by name: where each is named (a function's name, a
+ *  variable's declaration, an export specifier). Read from the syntax alone, for the program's
+ *  bundle too (boundary.ts). */
+export function exportsOf(sf: ts.SourceFile): { name: string; at: ts.Node }[] {
+  const out: { name: string; at: ts.Node }[] = [];
+  for (const st of sf.statements) {
+    const exported = ts.canHaveModifiers(st) && ts.getModifiers(st)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+    if (exported && ts.isFunctionDeclaration(st) && st.name) out.push({ name: st.name.text, at: st.name });
+    else if (exported && ts.isVariableStatement(st))
+      for (const d of st.declarationList.declarations) out.push({ name: d.name.getText(sf), at: d });
+    else if (ts.isExportDeclaration(st) && !st.isTypeOnly && !st.moduleSpecifier && st.exportClause && ts.isNamedExports(st.exportClause))
+      for (const spec of st.exportClause.elements) if (!spec.isTypeOnly) out.push({ name: spec.name.text, at: spec });
+  }
+  return out;
 }

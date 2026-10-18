@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_HOSTS, hostPrimitives } from "../src/hosts.ts";
-import { buildTypedUnit } from "../src/typed.ts";
+import { buildTypedUnit } from "../src/static/unit.ts";
 
 const DIR = join(import.meta.dirname, "..", "..", "tests", "static", "errors");
 
