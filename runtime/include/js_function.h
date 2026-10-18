@@ -79,7 +79,7 @@ typedef struct JSFunction {       /* kind = FUNCTION */
     JSContext             *realm;        /* the realm the function was created in */
     uint32_t               flags;
     uint32_t               pad_;
-    struct JSShape        *instance_shape;  /* a class's instances' root shape, made at its first `new` (js_new_class_instance) */
+    struct JSShape        *instance_shape;  /* the root shape of the objects `new` makes with it as new.target: inline slots for all their constructors add */
 } JSFunction;
 
 extern const JSClass js_class_function;

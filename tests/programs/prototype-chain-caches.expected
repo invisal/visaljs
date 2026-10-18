@@ -1,0 +1,10 @@
+x=1 | x=1 | x=1 | TypeError | _seen=undefined | x=1
+35:own:29:6 35:own:29:6 35:own:29:6 35:own:29:6 35:own:29:6
+undefined 30 false own
+{"other":true,"z":1} {"other":true,"z":1}
+101 0 99 L
+101 0 99 L
+101 0 99 L
+Q p,q,r,t,u
+Q p,q,r,t,u
+Q p,q,r,t,u

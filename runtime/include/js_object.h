@@ -296,7 +296,7 @@ JS_WARN_UNUSED JSValue js_own_keys(JSContext *ctx, JSObject *o);
 #define JS_IC_EMPTY  0
 #define JS_IC_OWN    1  /* get: an own data property; set: an own writable data property */
 #define JS_IC_PROTO  2  /* get: a data property of `holder`, `depth` prototypes up */
-#define JS_IC_ADD    3  /* set: adding the key takes the receiver from `shape` to `next` */
+#define JS_IC_ADD    3  /* set: adding the key takes the receiver from `shape` to `next`; `depth` prototypes up to null, or to one whose writable data property it shadows */
 #define JS_IC_GETTER 4  /* get: an accessor of `holder` (NULL: the receiver), `depth` prototypes up */
 #define JS_IC_ABSENT 5  /* get: no such property on the receiver or its `depth` prototypes (the last's proto is null) */
 #define JS_IC_MAX_DEPTH 8  /* prototypes a cache can check: Node's sockets are 6 deep (Socket, Duplex, Readable, Stream, EventEmitter, Object) */
@@ -314,7 +314,7 @@ typedef struct JSPropCache {
     JSShape  *fast;                     /* OWN, inline slot: the receiver shape; else NULL */
     uint16_t  fast_off;                 /* with `fast`: the slot's byte offset in the object */
     uint8_t   kind;                     /* JS_IC_* */
-    uint8_t   depth;                    /* PROTO: hops to the holder; ADD: prototypes up to null */
+    uint8_t   depth;                    /* PROTO: hops to the holder; ADD: prototypes checked (JS_IC_ADD) */
     uint32_t  slot;                     /* OWN, PROTO: the slot */
     JSShape  *shape;                    /* receiver shape; NULL = empty */
     JSObject *holder;                   /* PROTO */

@@ -1083,8 +1083,10 @@ int js_set_prop_slow(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool s
         return 1;
     }
     int r = js_set(ctx, o, key, v, obj, strict);
-    /* a plain add (no setter or read-only property on the chain): remember the transition */
-    if (r == 1 && cacheable && !l.holder && !before->cls->define_own_property && !is_dictionary(o) &&
+    /* a plain add (no setter or read-only property on the chain, or a prototype's writable data
+     * property it shadows, as EventEmitter.prototype._events): remember the transition */
+    bool shadows = l.holder && l.holder != o && (l.attrs & (JS_PROP_WRITABLE | JS_PROP_ACCESSOR)) == JS_PROP_WRITABLE;
+    if (r == 1 && cacheable && (!l.holder || shadows) && !before->cls->define_own_property && !is_dictionary(o) &&
         o->shape->parent == before && js_same_bits(o->shape->key, key)) {
         JSPropCache c = { .kind = JS_IC_ADD, .depth = l.depth, .shape = before, .next = o->shape, .epoch = epoch };
         memcpy(c.chain, l.chain, sizeof c.chain);
