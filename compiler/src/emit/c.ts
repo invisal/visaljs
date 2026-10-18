@@ -277,6 +277,7 @@ function keyValue(k: PropKey, strings: Strings): string {
 /** C types and initial values of the IR's representations. */
 /** A typed-arrays view's element type: its JSTypedArrayType. */
 const TA_TYPE: Record<NonNullable<Instr["taView"]>, string> = { i8: "JS_TA_INT8", u8: "JS_TA_UINT8", i32: "JS_TA_INT32", f64: "JS_TA_FLOAT64" };
+const TA_CLASS: Record<NonNullable<Instr["taView"]>, string> = { i8: "Int8Array", u8: "Uint8Array", i32: "Int32Array", f64: "Float64Array" };
 const C_TYPE: Record<Repr, string> = { boxed: "JSValue", f64: "double", i32: "int32_t", i64: "int64_t", bool: "bool" };
 const C_ZERO: Record<Repr, string> = { boxed: "JS_UNDEFINED", f64: "0", i32: "0", i64: "0", bool: "false" };
 /** What a direct entry returns after a throw: unboxed, any value, the pending
@@ -405,6 +406,19 @@ function typeTest(t: Type, v: string): string {
   return tests.length ? tests.join(" || ") : "false";
 }
 
+/** A declared parameter's type as ERR_INVALID_ARG_TYPE words it: "of type string or undefined". */
+function expectedText(t: Type, view: Instr["taView"] | undefined): string {
+  if (view) return `an instance of ${TA_CLASS[view]}`;
+  const names: string[] = [];
+  if (t & T.Boolean) names.push("boolean");
+  if (t & (T.Double | T.Int64)) names.push("number");
+  else if (t & T.Int32) names.push("i32");
+  if (t & T.String) names.push("string");
+  if (t & T.Undefined) names.push("undefined");
+  if (t & T.Null) names.push("null");
+  return `of type ${names.length > 2 ? `${names.slice(0, -1).join(", ")}, or ${names.at(-1)}` : names.join(" or ")}`;
+}
+
 /** The generic entry: unpacks argv into the direct entry's parameters. */
 function genericEntry(fn: FunctionIR, prefix: string): string {
   const meta = fn.meta!;
@@ -433,10 +447,11 @@ function genericEntry(fn: FunctionIR, prefix: string): string {
   const hidden = fn.params.length - declared - Number(meta.hasRest);
   const checks = (meta.declared ?? []).flatMap((t, k) => {
     if (t === undefined) return [];
-    const v = `argc > ${k - hidden} ? argv[${k - hidden}] : JS_UNDEFINED`;
+    const v = `(argc > ${k - hidden} ? argv[${k - hidden}] : JS_UNDEFINED)`;
     const view = meta.declaredViews?.[k];
-    const test = view ? `js_ta_is(ctx, (${v}), ${TA_TYPE[view]})` : typeTest(t, `(${v})`);
-    return [`    if (!(${test})) return ${prefix}jsf_${ident(meta.untyped!)}__generic(ctx, callee, this_val, argc, argv, new_target);  /* the plain JS */`];
+    const test = view ? `js_ta_is(ctx, ${v}, ${TA_TYPE[view]})` : typeTest(t, v);
+    const name = cString(fn.params[k]!.name ?? `argument ${k - hidden + 1}`);
+    return [`    if (!(${test})) return js_throw_invalid_arg_type(ctx, ${name}, ${cString(expectedText(t, view))}, ${v});`];
   });
   return [
     `${meta.declared ? "" : "static "}JSValue ${direct}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {`,
@@ -804,17 +819,21 @@ class FunctionEmitter {
   }
 
   /** A call of a typed unit's export: its typed entry when the arguments are proven of the
-   *  declared types (as many as it declares); else, for arguments C can test (not typed arrays),
-   *  the typed entry when the tests pass; else its checked entry, called directly. */
+   *  declared types (as many as it declares); else, for as many arguments as it declares, the
+   *  typed entry when C's tests of them pass; else its checked entry, called directly. */
   private typedCall(i: Instr, tc: TypedCall, args: string[]) {
     const operands = i.operands.slice(2);
     const fits = typedCallFits(i);
-    if (!fits && (operands.length !== tc.params.length || tc.params.some((p) => p.type & T.Object))) {
+    if (!fits && operands.length !== tc.params.length) {
       this.genericCall(i, tc, args);
       return;
     }
     this.hosts.typed.set(tc.direct, `${C_TYPE[tc.returnRepr]} ${tc.direct}(JSContext *${tc.params.map((p) => `, ${C_TYPE[p.repr]}`).join("")});  /* typed entry */`);
-    const tests = fits ? [] : operands.flatMap((o, k) => isSubtype(o.type & ~T.Empty, tc.params[k]!.type) ? [] : [`(${typeTest(tc.params[k]!.type, args[k + 2]!)})`]);
+    const tests = fits ? [] : operands.flatMap((o, k) => {
+      const { type, view } = tc.params[k]!;
+      if (view) return [`js_ta_is(ctx, ${args[k + 2]!}, ${TA_TYPE[view]})`];
+      return isSubtype(o.type & ~T.Empty, type) ? [] : [`(${typeTest(type, args[k + 2]!)})`];
+    });
     const call = `${tc.direct}(ctx${operands.map((o, k) => `, ${tests.length ? convert(args[k + 2]!, "boxed", tc.params[k]!.repr) : this.as(o, tc.params[k]!.repr)}`).join("")})`;
     if (tests.length) this.lines.push(`    if (${tests.join(" && ")}) {`);
     if (tc.returnRepr === "boxed") this.boxedCall(i, call);

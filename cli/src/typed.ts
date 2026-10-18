@@ -2,10 +2,10 @@
 //
 // The program's bundle leaves them out: an import of one resolves to "visaljs:host", and each
 // of their exports becomes a host primitive whose C function is the export's generic entry in
-// the unit (which checks its arguments against the declared types). The unit is bundled on its
-// own, its functions' parameter types read with tsc's checker, and compiled as a "harness
-// script" (emitHarnessScript): its own prefix, its tables registered and its top level run
-// before the program's.
+// the unit (which checks its arguments against the declared types: a TypeError for any other).
+// The unit is bundled on its own, its functions' parameter types read with tsc's checker, and
+// compiled as a "harness script" (emitHarnessScript): its own prefix, its tables registered and
+// its top level run before the program's.
 //
 // A Float64Array's element is a number there, as its type says: past the end, NaN (undefined as
 // a number).
@@ -293,17 +293,6 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
   const ast = parseModule(code, "typed.js", undefined, undefined, primitives);
   const ir = lower(ast, analyze(ast));
   unmarkLiterals(ir);
-  /* each function's untyped copy: what a typed function's generic entry runs for arguments that
-     aren't the declared types (lowered again: the same module slots, its own function names) */
-  const copy = lower(ast, analyze(ast));
-  unmarkLiterals(copy);
-  const untypedName = (name: string) => `${name}$untyped`;
-  for (const fn of copy.functions) {
-    fn.name = untypedName(fn.name);
-    for (const b of fn.blocks)
-      for (const i of b.instrs)
-        if (i.target && (i.op === "call_direct" || i.op === "make_function" || i.op === "same_function" || i.op === "construct_direct")) i.target = untypedName(i.target);
-  }
   const byJsName = new Map<string, number>();
   for (const fn of ir.functions) byJsName.set(fn.meta!.jsName, (byJsName.get(fn.meta!.jsName) ?? 0) + 1);
   const exports: Record<string, { c: string; length: number }> = {};
@@ -318,9 +307,6 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
     const declaredInts = ints.get(meta.jsName);
     if (declaredInts) convertInts(fn, declaredInts);
     meta.external = true;
-    meta.untyped = untypedName(fn.name);
-    const twin = copy.functions.find((f) => f.name === meta.untyped)!;
-    twin.meta!.external = true;
   }
   /* a typed function's call of another: C's implicit conversion of each argument to an integer
      parameter's type, so that (n - 1) passes as an int and the call takes the typed entry */
@@ -340,7 +326,6 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
         }
       }
   }
-  ir.functions.push(...copy.functions);
   for (const [name, local] of exported) {
     const fn = ir.functions.find((f) => f.meta!.jsName === local && f.meta!.declared);
     if (!fn) throw new Error(`typed unit: export '${name}' is not a function declaration whose parameters are all number, string or boolean`);
@@ -360,8 +345,8 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
     calls[name] = {
       direct: `${TYPED_PREFIX}jsf_${ident(fn.name)}`,
       generic: exports[name]!.c,
-      params: fn.params.map((p, k) => ({ type: declared[k]!, repr: p.repr })),
-      returns: returns === T.None ? T.Undefined : returns,
+      params: fn.params.map((p, k) => ({ type: declared[k]!, repr: p.repr, ...(fn.meta!.declaredViews?.[k] ? { view: fn.meta!.declaredViews[k] } : {}) })),
+      returns: returns === T.None ? T.Undefined : returns & T.Int64 ? (returns & ~T.Int64) | T.Int32 | T.Double : returns,
       returnRepr: fn.returnRepr ?? "boxed",
     };
   }

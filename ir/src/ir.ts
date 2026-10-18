@@ -237,7 +237,10 @@ export type JSConst = number | string | boolean | null | undefined;
 export interface TypedCall {
   direct: string;
   generic: string;
-  params: { type: Type; repr: Repr }[];
+  /** view: a typed array parameter's element type (its type is only Object) */
+  params: { type: Type; repr: Repr; view?: NonNullable<Instr["taView"]> }[];
+  /** what the call returns either way (the checked entry throws for anything else): a Number,
+   *  never an Int64, which stays inside typed code */
   returns: Type;
   returnRepr: Repr;
 }
@@ -249,8 +252,8 @@ function accepts(t: Type): Type {
 
 /** Whether a direct call of a typed function ("use static") may take its typed entry: each
  *  declared parameter's argument proven of its type (`type`: the types; inference passes the ones
- *  it is inferring). Otherwise the call goes through the checked entry, whose untyped copy takes
- *  any arguments: tsc lets typed code pass a number to an `int`. */
+ *  it is inferring). Otherwise the call goes through the checked entry, which throws a TypeError
+ *  for an argument that isn't: tsc lets typed code pass a number to an `int`, so a check remains. */
 export function declaredCallFits(i: Instr, callee: FunctionIR, type: (v: Instr) => Type = (v) => v.type): boolean {
   const declared = callee.meta?.declared;
   if (!declared) return true;
@@ -263,10 +266,11 @@ export function declaredCallFits(i: Instr, callee: FunctionIR, type: (v: Instr) 
 }
 
 /** Whether a typed export's call takes its typed entry: as many arguments as it declares, each
- *  proven of its declared type (inference, unboxing and C emission all ask this). */
+ *  proven of its declared type (inference, unboxing and C emission all ask this). A typed array
+ *  never is: the type lattice doesn't tell one from any other object. */
 export function typedCallFits(i: Instr, type: (v: Instr) => Type = (v) => v.type): boolean {
   const tc = i.typedCall;
-  if (!tc || i.operands.length - 2 !== tc.params.length) return false;
+  if (!tc || i.operands.length - 2 !== tc.params.length || tc.params.some((p) => p.view)) return false;
   return i.operands.slice(2).every((o, k) => {
     const t = type(o) & ~T.Empty;
     return t !== T.None && isSubtype(t, accepts(tc.params[k]!.type));
@@ -388,16 +392,13 @@ export interface FunctionMeta {
   hasRest: boolean;
   /** A "use static" file's function: its parameters' declared types, trusted (as fn.params, the
    *  hidden ones undefined). Typed callers were checked by tsc; every other call comes through
-   *  the generic entry, which checks them. */
+   *  the generic entry, which checks them and throws a TypeError (ERR_INVALID_ARG_TYPE). */
   declared?: (Type | undefined)[];
   /** The declared parameters that are typed arrays: their element types (as `declared`). */
   declaredViews?: (Instr["taView"] | undefined)[];
   /** Called from outside the module (a typed unit's entries): its parameters can't be inferred
    *  from its call sites. */
   external?: boolean;
-  /** A typed function's untyped copy (its name): what its generic entry runs when the arguments
-   *  aren't the declared types, so the call behaves as the plain JS would. */
-  untyped?: string;
   /** The direct entry's hidden leading parameters: the environment it
    *  closes over, the function object (a named expression reading its own name),
    *  and `this` (only when used). */

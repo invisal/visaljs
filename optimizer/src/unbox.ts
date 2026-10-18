@@ -120,7 +120,7 @@ function unboxModule(m: ModuleIR) {
           const callee = byName.get(i.target!);
           i.repr = callee && declaredCallFits(i, callee) ? callee.returnRepr ?? "boxed" : "boxed";  /* else through the checked entry */
         }
-        else if (typedCallFits(i)) i.repr = i.typedCall!.returnRepr;  /* a typed unit's typed entry */
+        else if (typedCallFits(i)) i.repr = i.typedCall!.returnRepr === "i64" ? "f64" : i.typedCall!.returnRepr;  /* a typed unit's typed entry; an int leaves it a Number */
       }
   }
   /* an int32 in an int32_t, an int in an int64_t, any other Number in a double */

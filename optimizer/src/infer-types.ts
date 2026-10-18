@@ -3,7 +3,7 @@
 // to a fixpoint (the lattice is a bitset of 10 kinds, so that's quick). A phi is the union of its
 // inputs; an operation's type comes from its operands' (`transfer`). Operations it knows nothing
 // about are Unknown: any JS value, or EMPTY.
-import { declaredCallFits, dominators, isSubtype, Number_, OPS, Primitive, readsDouble, T, typedCallFits, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { dominators, isSubtype, Number_, OPS, Primitive, readsDouble, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { callers, closedFunctions, functionsOf, pauses, reversePostorder } from "./cfg.ts";
 import { trustedBuiltin } from "./specialize.ts";
@@ -35,14 +35,12 @@ export const inferTypes: Pass = {
 interface Signatures {
   params: Map<Instr, Type>;
   returns: Map<string, Type>;
-  /** typed functions by name: a call that doesn't fit their declared types runs the untyped copy */
-  declared: Map<string, FunctionIR>;
 }
 
 /** Infers every function's types; returns the closed functions. */
 function inferModule(m: ModuleIR): Set<FunctionIR> {
   const closed = closedFunctions(m);
-  const sig: Signatures = { params: new Map(), returns: new Map(), declared: new Map(m.functions.filter((fn) => fn.meta?.declared).map((fn) => [fn.name, fn])) };
+  const sig: Signatures = { params: new Map(), returns: new Map() };
   for (const fn of m.functions) {
     if (!pauses(fn)) sig.returns.set(fn.name, T.None);
     const declared = fn.meta?.declared;
@@ -254,11 +252,8 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
       return T.Boolean;
     case "get_prop":  // a string's length: its own, non-writable, at most 2^30 - 1
       return i.key && "name" in i.key && i.key.name === "length" && isSubtype(t(a!), T.String) ? T.Int32 : Unknown;
-    case "call_direct": {
-      const typed = sig?.declared.get(i.target!);
-      if (typed && !declaredCallFits(i, typed, t)) return Unknown;  /* the untyped copy's result */
+    case "call_direct":
       return sig?.returns.get(i.target!) ?? Unknown;
-    }
     case "get_elem": case "get_index":  /* typed code's typed array view: an element, or (an integer array's) undefined past the end */
       if (readsDouble(i)) return T.Int32 | T.Double;
       if (i.taView && i.block.fn.meta?.declared) return T.Int32 | T.Undefined;
@@ -275,8 +270,9 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
     case "call": {
       /* typed code trusts the built-ins to be the standard ones, as tsc's types do */
       if (trustedBuiltin(i, t)) return Number_;
-      /* a typed unit's export: its declared result, when its typed entry runs */
-      return i.typedCall && typedCallFits(i, t) ? i.typedCall.returns : Unknown;
+      /* a typed unit's export: its declared result, whichever entry runs (the checked one throws
+         for arguments of other types) */
+      return i.typedCall ? i.typedCall.returns : Unknown;
     }
     default:
       return Unknown;
