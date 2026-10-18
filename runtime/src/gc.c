@@ -1646,8 +1646,10 @@ static void mark_roots(JSRuntime *rt, JSTracer *trc) {
     js_trace_value(trc, rt->async_context);
     js_jobs_trace(rt, trc);  /* queued jobs, unhandled rejections */
     js_weak_trace_roots(rt, trc);  /* the WeakRef kept-alive set */
-    for (JSContext *realm = rt->realms; realm; realm = realm->next_realm)
+    for (JSContext *realm = rt->realms; realm; realm = realm->next_realm) {
         for (unsigned i = 0; i < JS_INTRINSIC_COUNT; i++) js_trace_value(trc, realm->intrinsics[i]);
+        if (realm->array_shape) js_trace_cell(trc, &realm->array_shape->cell);
+    }
     for (size_t t = 0; t < h->root_table_count; t++)
         for (size_t i = 0; i < h->root_tables[t].n; i++) js_trace_value(trc, h->root_tables[t].slots[i]);
     for (size_t i = 0; i < h->root_count; i++) js_trace_value(trc, *h->roots[i]);

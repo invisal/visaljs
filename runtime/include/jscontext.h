@@ -240,6 +240,7 @@ struct JSContext {
     uint8_t    barrier_threshold; /* js_store's slow path runs for an owner whose GC byte is this or more */
     JSValue    intrinsics[JS_INTRINSIC_COUNT];
     JSContext *next_realm;
+    struct JSShape *array_shape;  /* the root shape of its arrays with Array.prototype (js_new_array), made at the first */
 };
 
 JSRuntime *js_runtime_new(void);
