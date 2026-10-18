@@ -1,4 +1,4 @@
-// error: typed unit: export 'sum' is not a function declaration whose parameters are all number, string or boolean
+// error: parameter 'xs' of 'sum': number[] isn't a static type yet
 "use static";
 
 export function sum(xs: number[]): number {

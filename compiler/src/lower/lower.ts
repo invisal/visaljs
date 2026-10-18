@@ -1340,8 +1340,11 @@ class FunctionLowering {
     const b = this.b;
     b.loc = e.loc;
     switch (e.type) {
-      case "Literal":
-        return b.const(e.value);
+      case "Literal": {
+        const c = b.const(e.value);
+        if (e.float) c.floatLit = true;
+        return c;
+      }
       case "BigIntLiteral":
         return b.emit("bigint", [], { bigint: e.value });
       case "RegExpLiteral":

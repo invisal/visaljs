@@ -430,6 +430,8 @@ export type Expression =
 export interface Literal extends Base {
   type: "Literal";
   value: number | string | boolean | null;
+  /** static code's number written as a floating-point literal (1.0, 1e3): a double, as in C */
+  float?: true;
 }
 
 /** A BigInt literal (§12.9.3): its value in decimal digits, without the `n`. */

@@ -3,25 +3,24 @@
 // The program's bundle leaves them out: an import of one resolves to "visaljs:host", and each
 // of their exports becomes a host primitive whose C function is the export's generic entry in
 // the unit (which checks its arguments against the declared types: a TypeError for any other).
-// The unit is bundled on its own, its functions' parameter types read with tsc's checker, and
-// compiled as a "harness script" (emitHarnessScript): its own prefix, its tables registered and
-// its top level run before the program's.
+// The unit's files are checked by tsc and against the subset (static/subset.ts), linked into one
+// module (static/link.ts), their declared types read with tsc's checker, and compiled as a
+// "harness script" (emitHarnessScript): its own prefix, its tables registered and its top level
+// run before the program's.
 //
 // A Float64Array's element is a number there, as its type says: past the end, NaN (undefined as
 // a number).
-//
-// Limits: parameters of type number, int, i32, string, boolean (and unions of them, null,
-// undefined) or Int8/Uint8/Int32/Float64Array; the unit imports only other "use static" files
-// and "visaljs:host"; export names are unique across the unit and don't collide with the host's
-// primitives.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { analyze, emitHarnessScript, HOST_MODULE, type HostPrimitives, lower, parseModule, programNames } from "@visaljs/compiler";
+import { analyze, emitHarnessScript, HOST_MODULE, type HostPrimitives, lower, programNames } from "@visaljs/compiler";
 import { type FunctionIR, type Instr, type IntKind, type ModuleIR, OPS, STATIC_TYPES, T, type Type, type TypedCall, viewOf, type ViewKind } from "@visaljs/ir";
 import { optimize, type PassReport } from "@visaljs/optimizer";
-import { type Plugin, rolldown } from "rolldown";
+import type { Plugin } from "rolldown";
 import ts from "typescript";
+
+import { compileError, linkUnit, locKey } from "./static/link.ts";
+import { checkSubset } from "./static/subset.ts";
 
 export const TYPED_PREFIX = "vt_";
 
@@ -59,66 +58,88 @@ export interface TypedUnit {
   report: PassReport[];
 }
 
-/** A function's integer declarations: its locals', its parameters' (by index), its return's. */
+/** A function's integer declarations: its locals' (by name), its parameters' (by index), its
+ *  return's. */
 interface Ints {
   locals: Map<string, IntKind>;
   params: Map<number, IntKind>;
+  /** its parameters in the source (the IR's has hidden ones first) */
+  paramCount: number;
   returns: IntKind | undefined;
-}
-
-/** An integer type ("visaljs"'s, or an alias of the same name), as the source names it. */
-const intType = (node: ts.TypeNode | undefined, sf: ts.SourceFile): IntKind | undefined => (node ? staticType(node.getText(sf))?.int : undefined);
-
-const staticType = (name: string) => (Object.hasOwn(STATIC_TYPES, name) ? STATIC_TYPES[name] : undefined);
-
-/** Each top-level function's integer declarations. */
-function intDeclarations(sf: ts.SourceFile): Map<string, Ints> {
-  const out = new Map<string, Ints>();
-  for (const st of sf.statements) {
-    if (!ts.isFunctionDeclaration(st) || !st.name || !st.body) continue;
-    const ints: Ints = { locals: new Map(), params: new Map(), returns: intType(st.type, sf) };
-    st.parameters.forEach((p, k) => {
-      const t = intType(p.type, sf);
-      if (t) ints.params.set(k, t);
-    });
-    const visit = (n: ts.Node): void => {
-      if (ts.isFunctionLike(n) && n !== st) return;  /* a nested function's are its own */
-      const t = ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) ? intType(n.type, sf) : undefined;
-      if (t) ints.locals.set((n as ts.VariableDeclaration).name.getText(sf), t);
-      ts.forEachChild(n, visit);
-    };
-    ts.forEachChild(st.body, visit);
-    if (ints.locals.size || ints.params.size || ints.returns) out.set(st.name.text, ints);
-  }
-  return out;
 }
 
 const TYPES_FILE = resolve(import.meta.dirname, "..", "types", "visaljs.d.ts");
 
-/** The declared parameter types of the top-level functions of the typed files, by name; their
- *  integer declarations into `ints`. */
-function declaredSignatures(files: readonly string[], ints: Map<string, Ints>): Map<string, { types: Type[]; views: (ViewKind | undefined)[] }> {
-  const program = ts.createProgram([...files, TYPES_FILE], {
-    strict: true, noEmit: true, target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler, allowImportingTsExtensions: true, skipLibCheck: true,
-  });
-  const errors = ts.getPreEmitDiagnostics(program).filter((d) => d.category === ts.DiagnosticCategory.Error && files.includes(d.file?.fileName ?? ""));
-  if (errors.length) throw new Error(ts.formatDiagnostics(errors, { getCanonicalFileName: (f) => f, getCurrentDirectory: () => process.cwd(), getNewLine: () => "\n" }));
-  const checker = program.getTypeChecker();
-  const out = new Map<string, { types: Type[]; views: (ViewKind | undefined)[] }>();
-  for (const file of files) {
-    const sf = program.getSourceFile(file)!;
-    for (const [name, i] of intDeclarations(sf)) ints.set(name, i);
-    for (const st of sf.statements) {
-      if (!ts.isFunctionDeclaration(st) || !st.name) continue;
-      /* a parameter of another type (an array, an object): the function stays untyped; an export
-         of one is an error (buildTypedUnit) */
-      const types = st.parameters.map((p) => (intType(p.type, sf) ? staticType(p.type!.getText(sf))!.type : irType(checker, checker.getTypeAtLocation(p))));
-      const views = st.parameters.map((p) => viewOf(checker.getTypeAtLocation(p).getSymbol()?.name ?? ""));
-      if (types.every((t) => t !== null)) out.set(st.name.text, { types: types as Type[], views });
-    }
+/** The integer a type annotation names: "visaljs"'s `int` or `i32`, through imports and aliases. */
+function intKind(checker: ts.TypeChecker, node: ts.TypeNode | undefined): IntKind | undefined {
+  if (!node || !ts.isTypeReferenceNode(node)) return undefined;
+  let symbol = checker.getSymbolAtLocation(node.typeName);
+  if (symbol && symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
+  const declaration = symbol?.declarations?.[0];
+  if (!symbol || !declaration || !ts.isTypeAliasDeclaration(declaration)) return undefined;
+  if (resolve(declaration.getSourceFile().fileName) !== TYPES_FILE) return intKind(checker, declaration.type);
+  return Object.hasOwn(STATIC_TYPES, symbol.name) ? STATIC_TYPES[symbol.name]!.int : undefined;
+}
+
+type FunctionWithBody = ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction;
+
+/** Each function's integer declarations, by where it starts (locKey), nested functions too. Two
+ *  bindings of one name in a function with different types are an error: the IR knows a local
+ *  by its name. */
+function intDeclarations(checker: ts.TypeChecker, sf: ts.SourceFile, out: Map<string, Ints>) {
+  const declare = (fn: FunctionWithBody) => {
+    const ints: Ints = { locals: new Map(), params: new Map(), paramCount: fn.parameters.length, returns: intKind(checker, fn.type) };
+    const kinds = new Map<string, IntKind | undefined>();
+    const bind = (name: ts.Identifier, kind: IntKind | undefined) => {
+      if (kinds.has(name.text) && kinds.get(name.text) !== kind)
+        throw compileError(name, `'${name.text}' is declared twice in this function with different types: give one of them another name`);
+      kinds.set(name.text, kind);
+    };
+    fn.parameters.forEach((p, k) => {
+      const kind = intKind(checker, p.type);
+      if (ts.isIdentifier(p.name)) bind(p.name, kind);
+      if (kind) ints.params.set(k, kind);
+    });
+    const visit = (n: ts.Node): void => {
+      if (ts.isFunctionLike(n)) return;  /* a nested function's are its own */
+      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name)) {
+        const kind = intKind(checker, n.type);
+        bind(n.name, kind);
+        if (kind) ints.locals.set(n.name.text, kind);
+      }
+      ts.forEachChild(n, visit);
+    };
+    if (fn.body) ts.forEachChild(fn.body, visit);
+    if (ints.locals.size || ints.params.size || ints.returns) out.set(locKey(fn), ints);
+  };
+  const visit = (n: ts.Node): void => {
+    if ((ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isArrowFunction(n)) && n.body) declare(n);
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+}
+
+interface Signature {
+  types: Type[];
+  views: (ViewKind | undefined)[];
+}
+
+/** The declared parameter types of a file's top-level functions, by where each starts: each a
+ *  type static code takes, or an error. */
+function declaredSignatures(checker: ts.TypeChecker, sf: ts.SourceFile, out: Map<string, Signature>) {
+  for (const st of sf.statements) {
+    if (!ts.isFunctionDeclaration(st) || !st.name) continue;
+    const types = st.parameters.map((p) => {
+      const kind = intKind(checker, p.type);
+      if (kind) return kind === "i64" ? STATIC_TYPES.int!.type : STATIC_TYPES.i32!.type;
+      const type = checker.getTypeAtLocation(p);
+      const t = irType(type);
+      if (t === null) throw compileError(p, `parameter '${p.name.getText(sf)}' of '${st.name!.text}': ${checker.typeToString(type)} isn't a static type yet`);
+      return t;
+    });
+    const views = st.parameters.map((p) => viewOf(checker.getTypeAtLocation(p).getSymbol()?.name ?? ""));
+    out.set(locKey(st), { types, views });
   }
-  return out;
 }
 
 /** tsc's primitive types (and their literals), by the name STATIC_TYPES knows them by. */
@@ -131,11 +152,11 @@ const PRIMITIVE_FLAGS: [ts.TypeFlags, string][] = [
 ];
 
 /** A TypeScript type as the IR's, if static code takes it. */
-function irType(checker: ts.TypeChecker, t: ts.Type): Type | null {
+function irType(t: ts.Type): Type | null {
   if (t.isUnion()) {
     let u: Type = T.None;
     for (const part of t.types) {
-      const p = irType(checker, part);
+      const p = irType(part);
       if (p === null) return null;
       u |= p;
     }
@@ -185,7 +206,7 @@ function convertInts(fn: FunctionIR, ints: Ints) {
       replaced.set(i, convert(b, i, at + 1, type));
     }
   /* an int parameter, on entry: whoever called (any Number is taken; an i32's is checked) */
-  const hidden = fn.params.length - fn.meta!.declared!.filter((t) => t !== undefined).length;
+  const hidden = fn.params.length - ints.paramCount;
   const entry = fn.blocks[0]!;
   let at = entry.instrs.findIndex((i) => i.op !== "param");
   for (const [k, type] of ints.params) {
@@ -208,133 +229,69 @@ function ident(name: string): string {
   return out;
 }
 
-/** Numeric literals through bundling: the bundler folds constant expressions with JS's
- *  arithmetic (1 / 4 * 4 to 1, where C's integer division gives 0) and writes 1.0 as 1. Each
- *  literal in an expression is marked, unfoldable, and the marks become the constants again after
- *  lowering (unmarkLiterals): a float-written one with an integer value (1.0, 1e3) flagged. */
-const FLOAT_MARK = "__visaljs_f64";
-const NUMBER_MARK = "__visaljs_num";
-
-function markLiterals(code: string): string {
-  const sf = ts.createSourceFile("typed.ts", code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-  const marks: { start: number; end: number; text: string }[] = [];
-  const visit = (n: ts.Node): void => {
-    if (ts.isTypeNode(n) || (ts.isPropertyName(n) && ts.isPropertyAssignment(n.parent) && n.parent.name === n)) return;  /* types, keys */
-    if (ts.isNumericLiteral(n)) {
-      const text = n.getText(sf);
-      const float = /[.eE]/.test(text) && !/^0[xXbBoO]/.test(text) && Number.isInteger(Number(text.replaceAll("_", "")));
-      marks.push({ start: n.getStart(sf), end: n.getEnd(), text: `${float ? FLOAT_MARK : NUMBER_MARK}(${text})` });
-      return;
-    }
-    ts.forEachChild(n, visit);
-  };
-  visit(sf);
-  let out = "";
-  let last = 0;
-  for (const m of marks) {
-    out += code.slice(last, m.start) + m.text;
-    last = m.end;
-  }
-  return out + code.slice(last);
-}
-
-/** The literal marks as their constants, a float-written one flagged (floatLit). */
-function unmarkLiterals(m: ModuleIR) {
-  for (const fn of [m.main, ...m.functions]) {
-    const replaced = new Map<Instr, Instr>();
-    const dead = new Set<Instr>();
-    for (const b of fn.blocks)
-      for (const i of b.instrs) {
-        const callee = i.operands[0];
-        const value = i.operands[2];
-        if (i.op !== "call" || callee?.op !== "global_name" || (callee.target !== FLOAT_MARK && callee.target !== NUMBER_MARK) || value?.op !== "const") continue;
-        if (callee.target === FLOAT_MARK) value.floatLit = true;
-        replaced.set(i, value);
-        dead.add(i).add(callee);
-      }
-    if (!dead.size) continue;
-    for (const b of fn.blocks) b.instrs = b.instrs.filter((i) => !dead.has(i));
-    replaceUses(fn, replaced);
-  }
-}
-
 /** Compiles the typed files as one unit. */
-export async function buildTypedUnit(files: readonly string[], primitives: HostPrimitives): Promise<TypedUnit> {
-  const ints = new Map<string, Ints>();
-  const signatures = declaredSignatures(files, ints);
-  const ENTRY = "\0visaljs-typed-entry";
-  const bundle = await rolldown({
-    input: ENTRY,
-    external: [HOST_MODULE],
-    plugins: [{
-      name: "visaljs-typed-entry",
-      resolveId: (s) => (s === ENTRY ? s : null),
-      load: (id) => (id === ENTRY ? files.map((f) => `export * from ${JSON.stringify(resolve(f))};`).join("\n") : null),
-      transform: (code, id) => (files.includes(id) ? markLiterals(code) : null),
-    }],
-    logLevel: "silent",
+export function buildTypedUnit(files: readonly string[], primitives: HostPrimitives): TypedUnit {
+  const program = ts.createProgram([...files, TYPES_FILE], {
+    strict: true, noEmit: true, target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler, allowImportingTsExtensions: true, skipLibCheck: true,
   });
-  const { output } = await bundle.generate({ format: "esm" });
-  await bundle.close();
-  const code = output[0].code;
+  checkSubset(program, files);  /* first: its errors say what static code can't do, tsc's what the types don't allow */
+  const errors = ts.getPreEmitDiagnostics(program).filter((d) => d.category === ts.DiagnosticCategory.Error && files.includes(d.file?.fileName ?? ""));
+  if (errors.length) throw new Error(ts.formatDiagnostics(errors, { getCanonicalFileName: (f) => f, getCurrentDirectory: () => process.cwd(), getNewLine: () => "\n" }));
+  const checker = program.getTypeChecker();
+  const ints = new Map<string, Ints>();
+  const signatures = new Map<string, Signature>();
+  for (const file of files) {
+    const sf = program.getSourceFile(file)!;
+    intDeclarations(checker, sf, ints);
+    declaredSignatures(checker, sf, signatures);
+  }
+  const { ast, exports: exported } = linkUnit(program, files, primitives);
 
-  /* `export { local as name, … }`: the bundle's export clause */
-  const exported = new Map<string, string>();
-  for (const m of code.matchAll(/export\s*\{([^}]*)\}/g))
-    for (const part of m[1]!.split(",").map((s) => s.trim()).filter(Boolean)) {
-      const [local, name] = part.split(/\s+as\s+/);
-      exported.set(name ?? local!, local!);
-    }
-
-  const ast = parseModule(code, "typed.js", undefined, undefined, primitives);
   const ir = lower(ast, analyze(ast));
   for (const fn of [ir.main, ...ir.functions]) fn.dialect = "static";
-  unmarkLiterals(ir);
-  const byJsName = new Map<string, number>();
-  for (const fn of ir.functions) byJsName.set(fn.meta!.jsName, (byJsName.get(fn.meta!.jsName) ?? 0) + 1);
-  const exports: Record<string, { c: string; length: number }> = {};
+  const at = (fn: FunctionIR) => (fn.loc ? `${fn.loc.file}:${fn.loc.line}:${fn.loc.column}` : "");
   for (const fn of ir.functions) {
     const meta = fn.meta!;
-    const sig = signatures.get(meta.jsName);
-    if (!sig || byJsName.get(meta.jsName) !== 1 || meta.generator || meta.async || meta.hasRest) continue;
+    const fnInts = ints.get(at(fn));
+    if (fnInts) convertInts(fn, fnInts);
+    const sig = signatures.get(at(fn));
+    if (!sig) continue;
     const hidden = fn.params.length - sig.types.length;
-    if (hidden < 0) continue;
     meta.declared = fn.params.map((_, k) => (k < hidden ? undefined : sig.types[k - hidden]));
     meta.declaredViews = fn.params.map((_, k) => (k < hidden ? undefined : sig.views[k - hidden]));
-    const declaredInts = ints.get(meta.jsName);
-    if (declaredInts) convertInts(fn, declaredInts);
     meta.external = true;
   }
-  /* a typed function's call of another: C's implicit conversion of each argument to an integer
+  /* a call of a function with integer parameters: C's implicit conversion of each argument to the
      parameter's type, so that (n - 1) passes as an int and the call takes the typed entry */
   const byName = new Map(ir.functions.map((f) => [f.name, f]));
   for (const fn of ir.functions) {
-    if (!fn.meta?.declared) continue;
     const convert = converter(fn);
     for (const b of fn.blocks)
       for (const i of [...b.instrs]) {
         const callee = i.op === "call_direct" ? byName.get(i.target!) : undefined;
-        const calleeInts = callee?.meta?.declared ? ints.get(callee.meta.jsName) : undefined;
+        const calleeInts = callee ? ints.get(at(callee)) : undefined;
         if (!callee || !calleeInts?.params.size) continue;
-        const hidden = callee.params.length - callee.meta!.declared!.filter((t) => t !== undefined).length;
+        const hidden = callee.params.length - calleeInts.paramCount;
         for (const [k, type] of calleeInts.params) {
           const arg = i.operands[hidden + k];
           if (arg) i.operands[hidden + k] = convert(b, arg, b.instrs.indexOf(i), type);  /* fewer arguments: undefined */
         }
       }
   }
-  for (const [name, local] of exported) {
-    const fn = ir.functions.find((f) => f.meta!.jsName === local && f.meta!.declared);
-    if (!fn) throw new Error(`typed unit: export '${name}' is not a function declaration whose parameters are all number, string or boolean`);
-    if (Object.hasOwn(primitives, name)) throw new Error(`typed unit: export '${name}' is a host primitive's name`);
+  const exports: Record<string, { c: string; length: number }> = {};
+  const exportedFns = new Map<string, string>();
+  for (const [name, loc] of exported) {
+    const fn = ir.functions.find((f) => at(f) === loc)!;
+    exportedFns.set(name, fn.name);
     exports[name] = { c: `${TYPED_PREFIX}jsf_${ident(fn.name)}__generic`, length: fn.meta!.length };
   }
   const report: PassReport[] = [];
   const optimized = optimize(ir, undefined, report);
   /* how the program calls each export: the typed entry takes the declared parameters only */
   const calls: Record<string, TypedCall> = {};
-  for (const [name, local] of exported) {
-    const fn = optimized.functions.find((f) => f.meta!.jsName === local && f.meta!.declared)!;
+  for (const [name, fnName] of exportedFns) {
+    const fn = optimized.functions.find((f) => f.name === fnName)!;
     const declared = fn.meta!.declared!;
     if (declared.some((t) => t === undefined)) continue;  /* hidden parameters (this, …): the checked entry only */
     let returns: Type = T.None;

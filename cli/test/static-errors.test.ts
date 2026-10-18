@@ -12,10 +12,10 @@ const DIR = join(import.meta.dirname, "..", "..", "tests", "static", "errors");
 
 describe("static code that doesn't compile", () => {
   for (const file of readdirSync(DIR).filter((f) => f.endsWith(".ts")).sort()) {
-    it(file, async () => {
+    it(file, () => {
       const expected = /^\/\/ error: (.*)$/m.exec(readFileSync(join(DIR, file), "utf8").split("\n")[0]!)?.[1];
       expect(expected, "the first line names the error").toBeDefined();
-      await expect(buildTypedUnit([join(DIR, file)], hostPrimitives(DEFAULT_HOSTS))).rejects.toThrow(expected!);
+      expect(() => buildTypedUnit([join(DIR, file)], hostPrimitives(DEFAULT_HOSTS))).toThrow(expected!);
     });
   }
 });
