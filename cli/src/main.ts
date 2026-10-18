@@ -17,7 +17,8 @@ import { compileJobs, compileProgram, describeCompiler, findCompilers, gcCheckFl
 import { evalCalls, evalWarning } from "./eval.ts";
 import { licensesText } from "./licenses.ts";
 import { DEFAULT_HOSTS, hostPrimitives } from "./hosts.ts";
-import { annotateTypedCalls, buildTypedUnit, TYPED_PREFIX, typedImports, type TypedUnit } from "./typed.ts";
+import { annotateTypedCalls, staticImports } from "./static/boundary.ts";
+import { buildTypedUnit, TYPED_PREFIX, type TypedUnit } from "./static/unit.ts";
 import { EntryError } from "./integrations/project.ts";
 import { IntegrationError } from "./pipeline/errors.ts";
 import { type Pipeline, runPipeline } from "./pipeline/index.ts";
@@ -51,6 +52,7 @@ options:
   --debug            build without optimization (-O0), keeping symbols and debug info
   --symbols          keep symbols and debug info in the optimized build (for profilers such as perf)
   --no-optimize      skip the IR optimizer (to compare, or to rule it out)
+  --no-static        compile "use static" files as plain TypeScript (to compare)
   -j, --jobs <n>     compile at most n C files at once (default: one per processor, memory permitting)
   --embed-source     embed the source text: Function.prototype.toString returns it
   --all-builtins     install every built-in, not only those the program names
@@ -89,6 +91,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
         debug: { type: "boolean" },
         symbols: { type: "boolean" },
         "no-optimize": { type: "boolean" },
+        "no-static": { type: "boolean" },
         jobs: { type: "string", short: "j" },
         "embed-source": { type: "boolean" },
         "all-builtins": { type: "boolean" },
@@ -147,6 +150,7 @@ interface BuildOptions {
   debug?: boolean | undefined;
   symbols?: boolean | undefined;
   "no-optimize"?: boolean | undefined;
+  "no-static"?: boolean | undefined;
   jobs?: string | undefined;
   "embed-source"?: boolean | undefined;
   "all-builtins"?: boolean | undefined;
@@ -215,7 +219,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   if (bundled) {
     try {
       const b = await report.step("📦", "Rolling the modules into a single file", () => bundle(entry, hosts, (message, where) => report.warn(message, where),
-        { ...pipeline?.extras, nodeEnv, allFeatures: options["all-features"] === true, plugins: [...(pipeline?.extras.plugins ?? []), typedImports(typedFiles)] }),
+        { ...pipeline?.extras, nodeEnv, allFeatures: options["all-features"] === true, plugins: [...(pipeline?.extras.plugins ?? []), ...(options["no-static"] ? [] : [staticImports(typedFiles)])] }),
         (b) => `Rolled ${count(b.modules, "module")} into a single file (${size(Buffer.byteLength(b.code))})` +
           (b.required.length ? `; for a require() at run time: ${b.required.join(", ")}` : ""));
       source = b.code;

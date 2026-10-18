@@ -28,6 +28,9 @@ JS_WARN_UNUSED JSValue js_throw_reference_error(JSContext *ctx, const char *fmt,
 JS_WARN_UNUSED JSValue js_throw_syntax_error(JSContext *ctx, const char *fmt, ...);
 JS_WARN_UNUSED JSValue js_throw_uri_error(JSContext *ctx, const char *fmt, ...);
 JS_WARN_UNUSED JSValue js_throw_stack_overflow(JSContext *ctx);  /* RangeError: Maximum call stack size exceeded */
+/* ERR_INVALID_ARG_TYPE: `The "dest" argument must be <expected>. Received …` (Node's wording
+ * of the value). Generated code calls it: a "use static" function's checked entry. */
+JS_WARN_UNUSED JSValue js_throw_invalid_arg_type(JSContext *ctx, const char *name, const char *expected, JSValue value);
 
 /* ---- Catching ---------------------------------------------------------- */
 

@@ -3,6 +3,7 @@
 // representation consistency (a repr agrees with the type).
 import { isExceptionalEdge, OPS, readsDouble, successors, throwingInstr, typedCallFits, type Block, type FunctionIR, type Instr } from "./ir.ts";
 import { Any, isSubtype, Number_, T, typeName, type Repr, type Type } from "./types.ts";
+import { isStatic } from "./static.ts";
 
 export class VerifyError extends Error {
   readonly problems: string[];
@@ -114,8 +115,11 @@ export function verify(fn: FunctionIR): void {
      converts between reprs where a value is used); an int64_t only ints and Int32s */
   const REPR_TYPE: Record<Repr, Type> = { boxed: Any | T.Empty, f64: Number_, i32: T.Int32, i64: T.Int64 | T.Int32, bool: T.Boolean };
   const reprFits = (repr: Repr, t: Type) => isSubtype(t, REPR_TYPE[repr]);
+  /* a JavaScript function's Numbers are doubles: an int64 (C's arithmetic) stays in static code */
+  const int64 = (t: Type) => (t & T.Int64) !== 0 && isSubtype(t, T.Int64 | T.Int32);
   for (const i of [...fn.params, ...fn.blocks.flatMap((b) => [...b.phis, ...b.instrs])]) {
     if (!reprFits(i.repr, i.type)) bad(`%${i.id} ${i.op} is ${i.repr} but its type is ${typeName(i.type)}`);
+    if (!isStatic(fn) && int64(i.type)) bad(`%${i.id} ${i.op} is an int64 outside static code`);
     /* a direct call's result is its callee's return repr: a throw then shows as the pending exception */
     if (i.repr !== "boxed" && ((i.mayThrow && i.op !== "call_direct" && i.op !== "int_div" && i.op !== "int_mod" && !readsDouble(i) && !typedCallFits(i)) || !OPS[i.op].result)) bad(`%${i.id} ${i.op} is ${i.repr} but can throw or has no result`);
   }

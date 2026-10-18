@@ -16,6 +16,10 @@
 // spawnSync's input isn't). unsupported: the kernel is
 // reported but doesn't fail the run (one that works again says so, to drop the entry).
 //
+// The static suite (static/): each kernel's `"use static"` code is also built as plain TypeScript
+// (--no-static), and its C reference (`<name>.c`, the same algorithm with C's types) is built with
+// cc -O2: their columns show what the types buy and how far from C they are.
+//
 // Names pick kernels: "fib", "awfy/richards", or a whole suite, "awfy". Prints a markdown table
 // per suite: each kernel's best wall time over the runs, visaljs's and Node's, their ratio, and
 // the ratios' geometric mean. visaljs's output must equal Node's, byte for byte (the run exits 1
@@ -105,7 +109,24 @@ function difference(ours: Buffer, node: Buffer): string {
   return `output differs from Node's at byte ${i} (${ours.length} and ${node.length} bytes): ${at(ours)}, Node's ${at(node)}`;
 }
 
-interface Row { kernel: string; visaljs: number | null; node: number; unsupported?: string; error?: string }
+interface Row { kernel: string; visaljs: number | null; node: number; plain?: number | null; c?: number | null; unsupported?: string; error?: string }
+
+const STATIC_SUITE = "static";
+
+/** A static kernel's other builds: as plain TypeScript, and its C reference (null: no C compiler). */
+function staticVariants(k: Kernel, args: string[], node: Buffer): { plain: number; c: number | null } {
+  const binary = join(OUT, `${k.name.replaceAll("/", "-")}-plain`);
+  buildVisaljs(k.source, binary, ["--no-static"]);
+  const plain = time(binary, args, undefined);
+  if (!plain.stdout.equals(node)) throw new Error(`--no-static: ${difference(plain.stdout, node)}`);
+  const cc = process.env.CC ?? "cc";
+  const cBinary = join(OUT, `${k.name.replaceAll("/", "-")}-c`);
+  const built = spawnSync(cc, ["-O2", "-o", cBinary, k.source.replace(/\.js$/, ".c"), "-lm"], { stdio: "inherit" });
+  if (built.error || built.status !== 0) return { plain: plain.ms, c: null };
+  const c = time(cBinary, args, undefined);
+  if (!c.stdout.equals(node)) throw new Error(`C reference: ${difference(c.stdout, node)}`);
+  return { plain: plain.ms, c: c.ms };
+}
 const rows: Row[] = [];
 let failed = false;
 for (const k of chosen) {
@@ -118,7 +139,7 @@ for (const k of chosen) {
     buildVisaljs(k.source, binary);
     const v = time(binary, args, stdin);
     if (!v.stdout.equals(node.stdout)) throw new Error(difference(v.stdout, node.stdout));
-    rows.push({ kernel: k.name, visaljs: v.ms, node: node.ms });
+    rows.push({ kernel: k.name, visaljs: v.ms, node: node.ms, ...(k.suite === STATIC_SUITE ? staticVariants(k, args, node.stdout) : {}) });
     if (k.spec.unsupported) process.stderr.write(`${k.name}: works now: drop its "unsupported" from kernels.json\n`);
   } catch (e) {
     const error = (e as Error).message;
@@ -137,18 +158,21 @@ const SUITES: Record<string, string> = {
   "": "Kernels",
   awfy: "[Are We Fast Yet](https://github.com/smarr/are-we-fast-yet)",
   "benchmarks-game": "[The Benchmarks Game](https://benchmarksgame-team.pages.debian.net/benchmarksgame/)",
+  [STATIC_SUITE]: "\"use static\" code",
 };
 for (const suite of [...new Set(chosen.map((k) => k.suite))]) {
   const prefix = suite ? `${suite}/` : "";
   const suiteRows = rows.filter((r) => chosen.find((k) => k.name === r.kernel)!.suite === suite);
+  const variants = suite === STATIC_SUITE;
+  const extra = (r: Row) => (variants ? ` ${r.plain ? ms(r.plain) : "—"} | ${r.c ? ms(r.c) : "—"} |` : "");
   console.log(`\n### ${SUITES[suite] ?? suite}\n`);
-  console.log(`| Kernel | visaljs | Node ${nodeVersion} | visaljs / Node |`);
-  console.log("|---|---:|---:|---:|");
+  console.log(`| Kernel | visaljs | Node ${nodeVersion} | visaljs / Node |${variants ? " plain TS | C |" : ""}`);
+  console.log(`|---|---:|---:|---:|${variants ? "---:|---:|" : ""}`);
   /* the reasons a kernel is unsupported, as notes under the table: one per reason */
   const reasons: string[] = [];
   for (const r of suiteRows) {
     const name = r.kernel.slice(prefix.length);
-    if (r.visaljs !== null) console.log(`| ${name} | ${ms(r.visaljs)} | ${ms(r.node)} | ${ratio(r.visaljs / r.node)} |`);
+    if (r.visaljs !== null) console.log(`| ${name} | ${ms(r.visaljs)} | ${ms(r.node)} | ${ratio(r.visaljs / r.node)} |${extra(r)}`);
     else if (r.unsupported) {
       if (!reasons.includes(r.unsupported)) reasons.push(r.unsupported);
       console.log(`| ${name} | unsupported (${reasons.indexOf(r.unsupported) + 1}) | ${ms(r.node)} | — |`);

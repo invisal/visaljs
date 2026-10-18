@@ -4,6 +4,7 @@ import { normalize, resolve as resolvePath } from "node:path";
 
 import ts from "typescript";
 
+import type { IntKind } from "@visaljs/ir";
 import type * as A from "./ast.ts";
 import { boundNames } from "./ast.ts";
 import { CompileError, type CompileErrorKind } from "./errors.ts";
@@ -64,6 +65,34 @@ export function parseModule(text: string, file: string, map?: SourceMap, entry?:
   return parse(text, file, true, map, entry, hostPrimitives);
 }
 
+/** A static unit ("use static" TypeScript files, already checked by tsc) linked by its caller. */
+export interface StaticUnitSource {
+  /** in dependency order */
+  files: readonly ts.SourceFile[];
+  /** A name's name in the unit, where it differs (a top-level name declared in more than one file). */
+  rename(id: ts.Identifier): string | undefined;
+  /** An import the unit resolves itself (of another of its files): left out. */
+  linked(node: ts.ImportDeclaration): boolean;
+  /** A file's name in locations (as the program's are, relative to the working directory). */
+  fileName(sf: ts.SourceFile): string;
+  /** The integer a type names ("visaljs"'s int or i32, through aliases), if it names one. */
+  intKind(type: ts.TypeNode | undefined): IntKind | undefined;
+}
+
+/** A static unit as one module: its types ignored, its files' top levels one after another.
+ *  Its functions can't be printed (Function.prototype.toString): their source is in many files. */
+export function convertStaticUnit(unit: StaticUnitSource, hostPrimitives: HostPrimitives): A.Program {
+  const programs = unit.files.map((sf) => new Converter(sf, true, undefined, resolvePath(sf.fileName), hostPrimitives, unit).program());
+  return {
+    ...programs[0]!,
+    static: true,
+    body: hoistHostImports(programs.flatMap((p) => p.body)),
+    exportedNames: programs.flatMap((p) => p.exportedNames),
+    source: "",
+    unsupported: programs.flatMap((p) => p.unsupported),
+  };
+}
+
 function parse(text: string, file: string, module: boolean, map?: SourceMap, entry?: string, hostPrimitives: HostPrimitives = {}): A.Program {
   /* the goal symbol is ours to choose: the parser then treats `await` at top level (and
    * import/export) as a module's, or not at all */
@@ -82,10 +111,23 @@ function parse(text: string, file: string, module: boolean, map?: SourceMap, ent
   return new Converter(sf, module, map, resolvePath(entry ?? file), hostPrimitives).program();
 }
 
-function locAt(sf: ts.SourceFile, pos: number, map: SourceMap | undefined): A.Loc {
+function locAt(sf: ts.SourceFile, pos: number, map: SourceMap | undefined, file = normalize(sf.fileName)): A.Loc {
   const { line, character } = sf.getLineAndCharacterOfPosition(pos);
-  const loc = { file: normalize(sf.fileName), line: line + 1, column: character + 1 };  /* TypeScript's / as \ on Windows */
+  const loc = { file, line: line + 1, column: character + 1 };  /* TypeScript's / as \ on Windows */
   return map?.original(loc.line, loc.column) ?? loc;
+}
+
+/** A numeric literal written as a floating-point one (1.0, 1e3): a double to static code, as in C. */
+function isFloatWritten(raw: string): boolean {
+  return /[.eE]/.test(raw) && !/^0[xXbBoO]/.test(raw);
+}
+
+/** `import type …`, or an import of types only (`import { type a }`). */
+function typeOnly(node: ts.ImportDeclaration): boolean {
+  const clause = node.importClause;
+  if (!clause || clause.isTypeOnly) return clause !== undefined;
+  const bindings = clause.namedBindings;
+  return !clause.name && bindings !== undefined && ts.isNamedImports(bindings) && bindings.elements.every((e) => e.isTypeOnly);
 }
 
 /** TypeScript rejects `a?.#x` (still parsed as usual); ES2022 allows it. */
@@ -163,13 +205,16 @@ class Converter {
   private readonly map: SourceMap | undefined;
   private readonly entry: string;
   private readonly hostPrimitives: HostPrimitives;
+  /** Converting a static unit's TypeScript: types are skipped, not errors. */
+  private readonly unit: StaticUnitSource | undefined;
 
-  constructor(sf: ts.SourceFile, module: boolean, map: SourceMap | undefined, entry: string, hostPrimitives: HostPrimitives) {
+  constructor(sf: ts.SourceFile, module: boolean, map: SourceMap | undefined, entry: string, hostPrimitives: HostPrimitives, unit?: StaticUnitSource) {
     this.sf = sf;
     this.module = module;
     this.map = map;
     this.entry = entry;
     this.hostPrimitives = hostPrimitives;
+    this.unit = unit;
   }
 
   /** The absolute path of the original file `node` comes from (for import.meta and import()). */
@@ -179,7 +224,7 @@ class Converter {
   }
 
   private loc(node: ts.Node): A.Loc {
-    return locAt(this.sf, node.getStart(this.sf), this.map);
+    return locAt(this.sf, node.getStart(this.sf), this.map, this.unit?.fileName(this.sf));
   }
 
   private fail(kind: CompileErrorKind, detail: string, node: ts.Node): never {
@@ -205,6 +250,7 @@ class Converter {
 
   /** TypeScript-only syntax the parser accepts in .js files: a JS syntax error. */
   private noTypes(node: ts.Node & { type?: ts.Node | undefined; typeParameters?: unknown; typeArguments?: unknown }) {
+    if (this.unit) return;
     if (node.type) this.fail("SyntaxError", "type annotations are TypeScript, not JavaScript", node.type);
     if (node.typeParameters || node.typeArguments) this.fail("SyntaxError", "type arguments are TypeScript, not JavaScript", node);
   }
@@ -232,7 +278,7 @@ class Converter {
   program(): A.Program {
     return {
       type: "Program",
-      loc: { file: normalize(this.sf.fileName), line: 1, column: 1 },
+      loc: { file: this.unit?.fileName(this.sf) ?? normalize(this.sf.fileName), line: 1, column: 1 },
       body: this.module ? hoistHostImports(this.sf.statements.map((s) => this.moduleItem(s)))
                         : this.sf.statements.map((s) => this.statement(s)),
       strict: this.module || this.hasUseStrict(this.sf.statements),
@@ -255,7 +301,8 @@ class Converter {
 
   private identifier(node: ts.Node): A.Identifier {
     if (!ts.isIdentifier(node)) this.fail("SyntaxError", "identifier expected", node);
-    const id: A.Identifier = { type: "Identifier", loc: this.loc(node), name: node.text };
+    const renamed = this.unit?.rename(node);
+    const id: A.Identifier = { type: "Identifier", loc: this.loc(node), name: renamed ?? node.text, ...(renamed ? { original: node.text } : {}) };
     if (this.map) {
       const { line, character } = this.sf.getLineAndCharacterOfPosition(node.getStart(this.sf));
       const original = this.map.originalName(line + 1, character + 1);
@@ -374,11 +421,12 @@ class Converter {
       kind: flags === ts.NodeFlags.Let ? "let" : flags === ts.NodeFlags.Const ? "const" : "var",
       declarations: list.declarations.map((d) => {
         this.noTypes(d);
-        if (d.exclamationToken) this.fail("SyntaxError", "definite assignment assertions are TypeScript", d);
+        if (d.exclamationToken && !this.unit) this.fail("SyntaxError", "definite assignment assertions are TypeScript", d);
+        const fn = d.initializer && (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer)) ? d.initializer : undefined;
         return {
           type: "VariableDeclarator",
           loc: this.loc(d),
-          id: this.bindingPattern(d.name),
+          id: this.declaredInt(this.bindingPattern(d.name), d.type, fn?.type),
           init: d.initializer ? this.expression(d.initializer) : null,
         };
       }),
@@ -424,9 +472,11 @@ class Converter {
       const loc = this.loc(node);
       if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && node.moduleSpecifier.text === HOST_MODULE)
         return this.hostImport(node);
+      if (this.unit && ts.isImportDeclaration(node) && (this.unit.linked(node) || typeOnly(node))) return { type: "EmptyStatement", loc };
       if (ts.isImportDeclaration(node) || ts.isImportEqualsDeclaration(node))
         this.fail("NotSupported", "import declarations: the bundler resolves them", node);
       if (ts.isExportDeclaration(node)) {
+        if (node.isTypeOnly && this.unit) return { type: "EmptyStatement", loc };
         if (node.isTypeOnly) this.fail("SyntaxError", "type-only exports are TypeScript", node);
         if (node.moduleSpecifier) this.fail("NotSupported", "export … from: the bundler resolves them", node);
         const clause = node.exportClause;
@@ -496,7 +546,8 @@ class Converter {
         return {
           type: "FunctionDeclaration",
           loc,
-          id: f.name ? this.identifier(f.name) : { type: "Identifier", loc, name: "*default*" },
+          id: f.name ? this.declaredInt(this.identifier(f.name), undefined, f.type) : { type: "Identifier", loc, name: "*default*" },
+          ...this.returnsInt(f),
           ...this.parameters(f.parameters),
           source: this.range(f),
           body: this.block(f.body),
@@ -635,6 +686,8 @@ class Converter {
       }
       case ts.SyntaxKind.InterfaceDeclaration:
       case ts.SyntaxKind.TypeAliasDeclaration:
+        if (this.unit) return { type: "EmptyStatement", loc };
+        return this.fail("SyntaxError", "TypeScript declarations are not JavaScript", node);
       case ts.SyntaxKind.EnumDeclaration:
       case ts.SyntaxKind.ModuleDeclaration:
         return this.fail("SyntaxError", "TypeScript declarations are not JavaScript", node);
@@ -690,14 +743,14 @@ class Converter {
     let rest: A.Pattern | null = null;
     list.forEach((p, i) => {
       this.noTypes(p);
-      if (p.questionToken) this.fail("SyntaxError", "optional parameters are TypeScript", p);
+      if (p.questionToken && !this.unit) this.fail("SyntaxError", "optional parameters are TypeScript", p);
       if (p.dotDotDotToken) {
         if (i !== list.length - 1) this.fail("SyntaxError", "A rest parameter must be last in a parameter list", p);
         if (p.initializer) this.fail("SyntaxError", "Rest parameter may not have a default initializer", p);
         rest = this.bindingPattern(p.name);
         return;
       }
-      params.push(this.bindingPattern(p.name));
+      params.push(this.declaredInt(this.bindingPattern(p.name), p.type));
       defaults.push(p.initializer ? this.expression(p.initializer) : null);
     });
     return { params, defaults, rest };
@@ -726,6 +779,7 @@ class Converter {
       type: "FunctionExpression",
       loc: this.loc(f),
       id: !method && !ts.isConstructorDeclaration(f) && f.name && ts.isIdentifier(f.name) ? this.identifier(f.name) : null,
+      ...this.returnsInt(f),
       ...this.parameters(f.parameters),
       source: this.range(cls?.ctor && cls.node ? cls.node : f),  // a class constructor shows its class
       body: this.block(f.body),
@@ -902,6 +956,7 @@ class Converter {
       type: "FunctionExpression",
       loc,
       id: null,
+      ...this.returnsInt(f),
       ...this.parameters(f.parameters),
       source: this.range(f),
       body,
@@ -915,6 +970,21 @@ class Converter {
       initRef: null,
       ...this.asyncFlag(f),
     };
+  }
+
+  /** Static code: the integers a declaration names, on its identifier: its type's, and (a
+   *  function's name, or a const holding a function) its function's return type's. */
+  private declaredInt<P extends A.Pattern>(id: P, type: ts.TypeNode | undefined, returns?: ts.TypeNode): P {
+    if (!this.unit || id.type !== "Identifier") return id;
+    const int = this.unit.intKind(type);
+    const returnsInt = this.unit.intKind(returns);
+    return { ...id, ...(int ? { int } : {}), ...(returnsInt ? { returnsInt } : {}) };
+  }
+
+  /** Static code: the integer a function's declared return type names. */
+  private returnsInt(f: ts.SignatureDeclaration): { returnsInt?: IntKind } {
+    const int = this.unit?.intKind(f.type);
+    return int ? { returnsInt: int } : {};
   }
 
   /** `async`: async functions and async generators. */
@@ -936,6 +1006,7 @@ class Converter {
 
   private chainLink(node: ts.Expression): A.Expression {
     if (!ts.isOptionalChain(node)) return this.expression(node);
+    if (ts.isNonNullExpression(node) && this.unit) return this.chainLink(node.expression);
     if (ts.isNonNullExpression(node)) this.fail("SyntaxError", "non-null assertions are TypeScript, not JavaScript", node);
     const optional = node.questionDotToken ? { optional: true } : {};
     const loc = this.loc(node);
@@ -997,7 +1068,8 @@ class Converter {
       }
       if (ts.isShorthandPropertyAssignment(p)) {
         if (p.objectAssignmentInitializer) this.fail("SyntaxError", "Invalid shorthand property initializer", p);
-        return { type: "Property", kind: "init", loc, key: this.identifier(p.name), computed: false, value: this.identifier(p.name), isProto: false };
+        const key: A.Identifier = { type: "Identifier", loc: this.loc(p.name), name: p.name.text };  /* the property's name, never renamed */
+        return { type: "Property", kind: "init", loc, key, computed: false, value: this.identifier(p.name), isProto: false };
       }
       return this.unsupported(p);
     });
@@ -1011,8 +1083,10 @@ class Converter {
   private expressionInner(node: ts.Expression): A.Expression {
     const loc = this.loc(node);
     switch (node.kind) {
-      case ts.SyntaxKind.NumericLiteral:
-        return { type: "Literal", loc, value: Number((node as ts.NumericLiteral).text) };  // text is normalized: "0x10" → "16"
+      case ts.SyntaxKind.NumericLiteral: {
+        const value = Number((node as ts.NumericLiteral).text);  // text is normalized: "0x10" → "16"
+        return { type: "Literal", loc, value, ...(this.unit && isFloatWritten(node.getText(this.sf)) ? { float: true } : {}) };
+      }
       case ts.SyntaxKind.StringLiteral:
       case ts.SyntaxKind.NoSubstitutionTemplateLiteral:
         return { type: "Literal", loc, value: (node as ts.StringLiteral).text };  // escapes already processed
@@ -1163,6 +1237,7 @@ class Converter {
       case ts.SyntaxKind.SatisfiesExpression:
       case ts.SyntaxKind.NonNullExpression:
       case ts.SyntaxKind.TypeAssertionExpression:
+        if (this.unit) return this.expression((node as ts.AssertionExpression | ts.NonNullExpression | ts.SatisfiesExpression).expression);
         return this.fail("SyntaxError", "type assertions are TypeScript, not JavaScript", node);
       default:
         return this.unsupported(node);

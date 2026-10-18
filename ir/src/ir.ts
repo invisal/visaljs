@@ -7,7 +7,9 @@
 // splitting blocks, so the variable values reaching a handler are exactly
 // those before the throwing instruction (and never its result).
 import type { Loc } from "./loc.ts";
+import { type Dialect, isStatic } from "./static.ts";
 import { isSubtype, Number_, T, type Repr, type Type } from "./types.ts";
+import type { ViewKind } from "./views.ts";
 
 export type Op =
   // values
@@ -46,6 +48,9 @@ export type Op =
   // typed code's `int`: a Number as a C int64_t (truncated toward zero, wrapping; NaN 0); its
   // integer division and remainder (a zero divisor: a RangeError, as BigInt's); an i32's ToInt32
   | "to_i64" | "int_div" | "int_mod" | "to_i32"
+  // typed code's integer arithmetic, C's int64_t (wrapping; shifts mod 64), Instr.target the
+  // operator: + - * & | ^ << >> >>>, and / % by a constant that isn't 0
+  | "i64"
   // comparisons the optimizer's specialize pass proved simpler (Instr.index 1: negated): the same
   // bits; === a string literal (an atom); typeof x === Instr.target, or "nullish" (x == null)
   | "identical" | "strict_eq_atom" | "is_type"
@@ -146,7 +151,7 @@ export const OPS: Record<Op, OpInfo> = {
   char_code_at: { ...pure(2), allocates: true },  // a rope is flattened
   math: pure(1),
   int_add: pure(2), int_sub: pure(2), int_mul: pure(2), to_i64: pure(1), to_i32: pure(1),
-  int_div: { ...pure(2), mayThrow: true }, int_mod: { ...pure(2), mayThrow: true },
+  int_div: { ...pure(2), mayThrow: true }, int_mod: { ...pure(2), mayThrow: true }, i64: pure(2),
   identical: pure(2), strict_eq_atom: pure(2), is_type: pure(1), strict_eq_num: pure(2),
   in: generic(2), instanceof: generic(2), to_property_key: generic(1),
   for_in_start: { ...generic(1), callsUser: false }, for_in_next: { ...generic(1), callsUser: false },
@@ -237,7 +242,10 @@ export type JSConst = number | string | boolean | null | undefined;
 export interface TypedCall {
   direct: string;
   generic: string;
-  params: { type: Type; repr: Repr }[];
+  /** view: a typed array parameter's element type (its type is only Object) */
+  params: { type: Type; repr: Repr; view?: ViewKind }[];
+  /** what the call returns either way (the checked entry throws for anything else): a Number,
+   *  never an Int64, which stays inside typed code */
   returns: Type;
   returnRepr: Repr;
 }
@@ -249,8 +257,8 @@ function accepts(t: Type): Type {
 
 /** Whether a direct call of a typed function ("use static") may take its typed entry: each
  *  declared parameter's argument proven of its type (`type`: the types; inference passes the ones
- *  it is inferring). Otherwise the call goes through the checked entry, whose untyped copy takes
- *  any arguments: tsc lets typed code pass a number to an `int`. */
+ *  it is inferring). Otherwise the call goes through the checked entry, which throws a TypeError
+ *  for an argument that isn't: tsc lets typed code pass a number to an `int`, so a check remains. */
 export function declaredCallFits(i: Instr, callee: FunctionIR, type: (v: Instr) => Type = (v) => v.type): boolean {
   const declared = callee.meta?.declared;
   if (!declared) return true;
@@ -263,10 +271,11 @@ export function declaredCallFits(i: Instr, callee: FunctionIR, type: (v: Instr) 
 }
 
 /** Whether a typed export's call takes its typed entry: as many arguments as it declares, each
- *  proven of its declared type (inference, unboxing and C emission all ask this). */
+ *  proven of its declared type (inference, unboxing and C emission all ask this). A typed array
+ *  never is: the type lattice doesn't tell one from any other object. */
 export function typedCallFits(i: Instr, type: (v: Instr) => Type = (v) => v.type): boolean {
   const tc = i.typedCall;
-  if (!tc || i.operands.length - 2 !== tc.params.length) return false;
+  if (!tc || i.operands.length - 2 !== tc.params.length || tc.params.some((p) => p.view)) return false;
   return i.operands.slice(2).every((o, k) => {
     const t = type(o) & ~T.Empty;
     return t !== T.None && isSubtype(t, accepts(tc.params[k]!.type));
@@ -276,7 +285,7 @@ export function typedCallFits(i: Instr, type: (v: Instr) => Type = (v) => v.type
 /** Whether i reads a Float64Array's element in typed code: a double, past the end undefined as
  *  a number (NaN), as its type, number, says. */
 export function readsDouble(i: Instr): boolean {
-  return i.taView === "f64" && (i.op === "get_index" || i.op === "get_elem") && i.block.fn.meta?.declared !== undefined;
+  return i.taView === "f64" && (i.op === "get_index" || i.op === "get_elem") && isStatic(i.block.fn);
 }
 
 /** A constant property key, as ToPropertyKey makes it: an array index or a string (an atom). */
@@ -309,9 +318,6 @@ export interface Instr {
   name?: string;
   /** const */
   lit?: { value: JSConst };
-  /** const: written as a floating-point literal (`1.0`, `1e3`) in a typed file ("use static"):
-   *  not an integer to C's arithmetic, so 1.0 / n divides as doubles */
-  floatLit?: boolean;
   /** param: index; load_global / store_global: slot; identical, strict_eq_atom, is_type: 1 when negated */
   index?: number;
   /** is_type: the typeof name it tests for, or "nullish"; global_name: the name; call_direct, construct_direct: the callee function's name;
@@ -326,7 +332,7 @@ export interface Instr {
   keyedSite?: boolean;
   /** new of a typed array only indexed (the typed-arrays pass), and its accesses: the element type
    *  of its view, taken once after `new` */
-  taView?: "i8" | "u8" | "i32" | "f64";
+  taView?: ViewKind;
   /** call of a typed unit's export (a "visaljs:host" import the typed unit defines) */
   typedCall?: TypedCall;
   /** call, construct_direct: the fallback of an inlined site (its guard failed): not inlined again */
@@ -388,16 +394,13 @@ export interface FunctionMeta {
   hasRest: boolean;
   /** A "use static" file's function: its parameters' declared types, trusted (as fn.params, the
    *  hidden ones undefined). Typed callers were checked by tsc; every other call comes through
-   *  the generic entry, which checks them. */
+   *  the generic entry, which checks them and throws a TypeError (ERR_INVALID_ARG_TYPE). */
   declared?: (Type | undefined)[];
   /** The declared parameters that are typed arrays: their element types (as `declared`). */
-  declaredViews?: (Instr["taView"] | undefined)[];
+  declaredViews?: (ViewKind | undefined)[];
   /** Called from outside the module (a typed unit's entries): its parameters can't be inferred
    *  from its call sites. */
   external?: boolean;
-  /** A typed function's untyped copy (its name): what its generic entry runs when the arguments
-   *  aren't the declared types, so the call behaves as the plain JS would. */
-  untyped?: string;
   /** The direct entry's hidden leading parameters: the environment it
    *  closes over, the function object (a named expression reading its own name),
    *  and `this` (only when used). */
@@ -417,6 +420,8 @@ export interface FunctionIR {
   name: string;
   /** Absent for the script's top-level code. */
   meta?: FunctionMeta;
+  /** "static": a "use static" file's code (absent: JavaScript's) */
+  dialect?: Dialect;
   params: Instr[];
   /** How the direct entry returns its result: absent, boxed. A function returning
    *  a double or a bool signals a throw by the pending exception alone. */

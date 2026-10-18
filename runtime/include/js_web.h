@@ -13,9 +13,6 @@
 JS_WARN_UNUSED JSValue js_throw_node_error(JSContext *ctx, JSErrorKind kind, const char *code, const char *fmt, ...);
 /* ERR_INVALID_THIS: `Value of "this" must be of type TextDecoder`. */
 JS_WARN_UNUSED JSValue js_throw_invalid_this(JSContext *ctx, const char *type);
-/* ERR_INVALID_ARG_TYPE: `The "dest" argument must be <expected>. Received …` (Node's wording
- * of the value). */
-JS_WARN_UNUSED JSValue js_throw_invalid_arg_type(JSContext *ctx, const char *name, const char *expected, JSValue value);
 /* Node's "Received …" tail for a value: " Received type number (1)", " Received an instance of
  * Array", " Received undefined". */
 void js_node_received(JSContext *ctx, JSValue v, char *buf, size_t cap);

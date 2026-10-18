@@ -91,6 +91,8 @@ export function printFunction(fn: FunctionIR): string {
         return `construct_direct ${i.target}(${args})`;
       case "same_function":
         return `same_function ${args}, ${i.target}`;
+      case "i64":
+        return `i64 ${i.target} ${args}`;
       case "is_type":
         return `${i.index ? "!" : ""}is_type ${args}, ${JSON.stringify(i.target)}`;
       case "identical":

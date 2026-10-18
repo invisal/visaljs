@@ -6,5 +6,7 @@ export * from "./ir.ts";
 export * from "./liveness.ts";
 export type * from "./loc.ts";
 export * from "./print.ts";
+export * from "./static.ts";
 export * from "./types.ts";
 export * from "./verify.ts";
+export * from "./views.ts";

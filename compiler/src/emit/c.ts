@@ -11,7 +11,7 @@
 import type { Loc } from "../frontend/ast.ts";
 import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr, Type, TypedCall } from "@visaljs/ir";
 import type { HostPrimitives } from "../frontend/host.ts";
-import { declaredCallFits, isSubtype, Number_, OPS, readsDouble, successors, T, typedCallFits } from "@visaljs/ir";
+import { declaredCallFits, expectedText, isSubtype, Number_, OPS, readsDouble, successors, T, typedCallFits, VIEWS } from "@visaljs/ir";
 import { liveAfterPauses } from "@visaljs/ir";
 import type { CoreEntry } from "./core.ts";
 import { ATOMS } from "./atoms.ts";
@@ -275,8 +275,6 @@ function keyValue(k: PropKey, strings: Strings): string {
 }
 
 /** C types and initial values of the IR's representations. */
-/** A typed-arrays view's element type: its JSTypedArrayType. */
-const TA_TYPE: Record<NonNullable<Instr["taView"]>, string> = { i8: "JS_TA_INT8", u8: "JS_TA_UINT8", i32: "JS_TA_INT32", f64: "JS_TA_FLOAT64" };
 const C_TYPE: Record<Repr, string> = { boxed: "JSValue", f64: "double", i32: "int32_t", i64: "int64_t", bool: "bool" };
 const C_ZERO: Record<Repr, string> = { boxed: "JS_UNDEFINED", f64: "0", i32: "0", i64: "0", bool: "false" };
 /** What a direct entry returns after a throw: unboxed, any value, the pending
@@ -320,6 +318,22 @@ function cDouble(d: number): string {
   if (Object.is(d, -0)) return "-0.0";
   if (Number.isSafeInteger(d)) return `${d}.0`;
   return hexFloat(d);
+}
+
+/** Static code's integer operator on int64_ts, as C's: wrapping (as unsigned), shifts mod 64,
+ *  INT64_MIN / -1 wrapping too (C leaves it undefined). */
+function int64Op(op: string, x: string, y: string): string {
+  const wrap = (o: string) => `(int64_t)((uint64_t)${x} ${o} (uint64_t)${y})`;
+  switch (op) {
+    case "+": case "-": case "*": return wrap(op);
+    case "/": return `(${y} == -1 ? (int64_t)(0 - (uint64_t)${x}) : ${x} / ${y})`;
+    case "%": return `(${y} == -1 ? INT64_C(0) : ${x} % ${y})`;
+    case "&": case "|": case "^": return `(${x} ${op} ${y})`;
+    case "<<": return `(int64_t)((uint64_t)${x} << (${y} & 63))`;
+    case ">>": return `(${x} >> (${y} & 63))`;
+    case ">>>": return `(int64_t)((uint64_t)${x} >> (${y} & 63))`;
+    default: throw new Error(`i64 ${op}`);
+  }
 }
 
 /** `typeof v === name` (or v == null, name "nullish") as a C condition: js_typeof's cases. */
@@ -433,10 +447,11 @@ function genericEntry(fn: FunctionIR, prefix: string): string {
   const hidden = fn.params.length - declared - Number(meta.hasRest);
   const checks = (meta.declared ?? []).flatMap((t, k) => {
     if (t === undefined) return [];
-    const v = `argc > ${k - hidden} ? argv[${k - hidden}] : JS_UNDEFINED`;
+    const v = `(argc > ${k - hidden} ? argv[${k - hidden}] : JS_UNDEFINED)`;
     const view = meta.declaredViews?.[k];
-    const test = view ? `js_ta_is(ctx, (${v}), ${TA_TYPE[view]})` : typeTest(t, `(${v})`);
-    return [`    if (!(${test})) return ${prefix}jsf_${ident(meta.untyped!)}__generic(ctx, callee, this_val, argc, argv, new_target);  /* the plain JS */`];
+    const test = view ? `js_ta_is(ctx, ${v}, ${VIEWS[view].c})` : typeTest(t, v);
+    const name = cString(fn.params[k]!.name ?? `argument ${k - hidden + 1}`);
+    return [`    if (!(${test})) return js_throw_invalid_arg_type(ctx, ${name}, ${cString(expectedText(t, view))}, ${v});`];
   });
   return [
     `${meta.declared ? "" : "static "}JSValue ${direct}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {`,
@@ -627,31 +642,17 @@ class FunctionEmitter {
    *  (an int32 result is one inference proved can't overflow); bitwise ones through ToInt32. */
   private unboxed(i: Instr, repr: Repr = i.repr): string {
     const isInt = (o: Instr) => isSubtype(o.type, T.Int32);
-    /* a typed file's int: C's int64_t arithmetic, wrapping (as unsigned); compares of two ints */
+    /* compares of two integers, one of them a typed file's int: as int64_ts */
     const isLong = (o: Instr) => isSubtype(o.type, T.Int64 | T.Int32);
-    if (i.operands.every(isLong) && (repr === "i64" || (BOOL_OPS.has(i.op) && i.operands.some((o) => (o.type & T.Int64) !== 0)))) {
+    if (BOOL_OPS.has(i.op) && i.operands.every(isLong) && i.operands.some((o) => (o.type & T.Int64) !== 0)) {
       const [x, y] = i.operands.map((o) => this.as(o, "i64"));
-      const wrap = (op: string) => `(int64_t)((uint64_t)${x} ${op} (uint64_t)${y})`;
       switch (i.op) {
-        case "num_add": return wrap("+");
-        case "num_sub": return wrap("-");
-        case "num_mul": return wrap("*");
-        case "num_neg": return `(int64_t)(0 - (uint64_t)${x})`;
-        case "num_inc": return `(int64_t)((uint64_t)${x} + 1)`;
-        case "num_dec": return `(int64_t)((uint64_t)${x} - 1)`;
         case "num_lt": return `${x} < ${y}`;
         case "num_le": return `${x} <= ${y}`;
         case "num_gt": return `${x} > ${y}`;
         case "num_ge": return `${x} >= ${y}`;
         case "num_eq": return `${x} == ${y}`;
         case "num_ne": return `${x} != ${y}`;
-        case "num_bitand": return `${x} & ${y}`;
-        case "num_bitor": return `${x} | ${y}`;
-        case "num_bitxor": return `${x} ^ ${y}`;
-        case "num_bitnot": return `~${x}`;
-        case "num_shl": return `(int64_t)((uint64_t)${x} << (${y} & 63))`;
-        case "num_sar": return `${x} >> (${y} & 63)`;
-        case "num_shr": return `(int64_t)((uint64_t)${x} >> (${y} & 63))`;
       }
     }
     if (i.operands.every(isInt) && (repr === "i32" || BOOL_OPS.has(i.op))) {
@@ -804,17 +805,21 @@ class FunctionEmitter {
   }
 
   /** A call of a typed unit's export: its typed entry when the arguments are proven of the
-   *  declared types (as many as it declares); else, for arguments C can test (not typed arrays),
-   *  the typed entry when the tests pass; else its checked entry, called directly. */
+   *  declared types (as many as it declares); else, for as many arguments as it declares, the
+   *  typed entry when C's tests of them pass; else its checked entry, called directly. */
   private typedCall(i: Instr, tc: TypedCall, args: string[]) {
     const operands = i.operands.slice(2);
     const fits = typedCallFits(i);
-    if (!fits && (operands.length !== tc.params.length || tc.params.some((p) => p.type & T.Object))) {
+    if (!fits && operands.length !== tc.params.length) {
       this.genericCall(i, tc, args);
       return;
     }
     this.hosts.typed.set(tc.direct, `${C_TYPE[tc.returnRepr]} ${tc.direct}(JSContext *${tc.params.map((p) => `, ${C_TYPE[p.repr]}`).join("")});  /* typed entry */`);
-    const tests = fits ? [] : operands.flatMap((o, k) => isSubtype(o.type & ~T.Empty, tc.params[k]!.type) ? [] : [`(${typeTest(tc.params[k]!.type, args[k + 2]!)})`]);
+    const tests = fits ? [] : operands.flatMap((o, k) => {
+      const { type, view } = tc.params[k]!;
+      if (view) return [`js_ta_is(ctx, ${args[k + 2]!}, ${VIEWS[view].c})`];
+      return isSubtype(o.type & ~T.Empty, type) ? [] : [`(${typeTest(type, args[k + 2]!)})`];
+    });
     const call = `${tc.direct}(ctx${operands.map((o, k) => `, ${tests.length ? convert(args[k + 2]!, "boxed", tc.params[k]!.repr) : this.as(o, tc.params[k]!.repr)}`).join("")})`;
     if (tests.length) this.lines.push(`    if (${tests.join(" && ")}) {`);
     if (tc.returnRepr === "boxed") this.boxedCall(i, call);
@@ -1190,7 +1195,7 @@ class FunctionEmitter {
         expr = `js_construct(ctx, ${args[0]}, ${args.length - 1}, ${argArray(args.slice(1))}, JS_UNDEFINED, ${cString(i.target!)})`;
         if (i.taView && this.hasVar(i)) {  /* a typed array only indexed: its elements, once */
           this.lines.push(`    ${this.name(i)} = ${expr};`, `    if (JS_UNLIKELY(js_is_exception(${this.name(i)}))) { ${this.onException(i.block)} }`,
-            `    ${this.name(i)}_view = js_ta_view(ctx, ${this.name(i)}, ${TA_TYPE[i.taView]});`);
+            `    ${this.name(i)}_view = js_ta_view(ctx, ${this.name(i)}, ${VIEWS[i.taView].c});`);
           return;
         }
         break;
@@ -1206,13 +1211,15 @@ class FunctionEmitter {
         expr = convert(`${f}(${this.as(i.operands[0]!, "f64")})`, "f64", i.repr);
         break;
       }
-      case "int_div": case "int_mod": {  /* an int's: C's, a zero divisor a RangeError (BigInt's), INT64_MIN / -1 wrapping */
+      case "int_div": case "int_mod": {  /* an int's: C's, a zero divisor a RangeError (BigInt's) */
         const [x, y] = i.operands.map((o) => this.as(o, "i64"));
-        if (i.mayThrow) this.lines.push(`    if (JS_UNLIKELY(${y} == 0)) { js_discard(js_throw_range_error(ctx, "Division by zero")); ${this.onException(i.block)} }`);
-        const v = i.op === "int_div" ? `(${y} == -1 ? (int64_t)(0 - (uint64_t)${x}) : ${x} / ${y})` : `(${y} == -1 ? INT64_C(0) : ${x} % ${y})`;
-        if (this.hasVar(i)) this.lines.push(`    ${this.name(i)} = ${convert(v, "i64", i.repr)};`);
+        this.lines.push(`    if (JS_UNLIKELY(${y} == 0)) { js_discard(js_throw_range_error(ctx, "Division by zero")); ${this.onException(i.block)} }`);
+        if (this.hasVar(i)) this.lines.push(`    ${this.name(i)} = ${convert(int64Op(i.op === "int_div" ? "/" : "%", x!, y!), "i64", i.repr)};`);
         return;
       }
+      case "i64":  /* static code's integer arithmetic */
+        expr = convert(int64Op(i.target!, this.as(i.operands[0]!, "i64"), this.as(i.operands[1]!, "i64")), "i64", i.repr);
+        break;
       case "to_i32": {  /* an i32's ToInt32: wrapping */
         const o = i.operands[0]!;
         const from = reprOf(o.type);
@@ -1327,7 +1334,7 @@ class FunctionEmitter {
    *  their slow paths. */
   private retakeViews(i: Instr) {
     if (!OPS[i.op].callsUser || !i.mayThrow || i.taView) return;  /* can't throw: simplify proved it runs no code */
-    for (const p of this.views()) if (p.op === "param") this.lines.push(`    ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${TA_TYPE[p.taView!]});`);
+    for (const p of this.views()) if (p.op === "param") this.lines.push(`    ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${VIEWS[p.taView!].c});`);
   }
 
   private terminator(b: Block) {
@@ -1435,7 +1442,7 @@ class FunctionEmitter {
           if (i.op === "new" && i.taView) locals.push(`    JSTAView ${this.name(i)}_view = { NULL, 0 };`);
         }
     const unusedParams = fn.params.filter((p) => !this.used.has(p)).map((p) => `    (void)${this.name(p)};`);
-    for (const p of this.views().filter((v) => v.op === "param")) locals.push(`    JSTAView ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${TA_TYPE[p.taView!]});`);
+    for (const p of this.views().filter((v) => v.op === "param")) locals.push(`    JSTAView ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${VIEWS[p.taView!].c});`);
     /* non-leaf: anything that can run JS code again (calls, getters, valueOf) checks the stack */
     const calls = fn.blocks.some((b) => b.instrs.some((i) => OPS[i.op].callsUser));
     /* a body that only touches its environment never needs the context */

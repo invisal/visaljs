@@ -1,5 +1,11 @@
 3 [0.75,2] 2
-12 NaN true false false
+true false
+TypeError ERR_INVALID_ARG_TYPE: The "x" argument must be of type number. Received type string ('1')
+TypeError ERR_INVALID_ARG_TYPE: The "y" argument must be of type number. Received undefined
+TypeError ERR_INVALID_ARG_TYPE: The "s" argument must be of type string. Received type number (42)
+TypeError ERR_INVALID_ARG_TYPE: The "v" argument must be an instance of Float64Array. Received an instance of Array
 9592 1 500500
-13 5 5 NaN
-[ 4.5, 6, -0.75 ] NaN 4.5x 5.25
+13 5 NaN
+[ 4.5, 6, -0.75 ] 9.75 5.25
+TypeError ERR_INVALID_ARG_TYPE: The "y" argument must be of type number. Received undefined
+TypeError ERR_INVALID_ARG_TYPE: The "y" argument must be of type number. Received type string ('x')

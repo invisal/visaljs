@@ -6,24 +6,18 @@
 // Each access then checks the index against that length and reads or writes the element
 // (Instr.taView, a JSTAView in C), the generic path covering the rest: an index out of
 // bounds, or a constructor that isn't the built-in any more (the view is empty).
-import { type Instr, type ModuleIR } from "@visaljs/ir";
+import { type Instr, type ModuleIR, viewOf, type ViewKind } from "@visaljs/ir";
 
 import { functionsOf, pauses } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
-type Kind = NonNullable<Instr["taView"]>;
-
-/** The element types with an inline view, by constructor. */
-const KINDS: Record<string, Kind> = {
-  Int8Array: "i8", Uint8Array: "u8", Int32Array: "i32", Float64Array: "f64",
-};
 
 export const typedArrays: Pass = {
   name: "typed-arrays",
   run(m: ModuleIR, count: Count) {
     for (const fn of functionsOf(m)) {
       if (pauses(fn)) continue;  /* a generator's values live across its pauses, not in C locals */
-      const made = new Map<Instr, Kind>();
+      const made = new Map<Instr, ViewKind>();
       /* a typed function's typed array parameters (checked at its entries); the C takes their
          view at the start and again after anything that may run code */
       fn.meta?.declaredViews?.forEach((kind, k) => {
@@ -32,7 +26,8 @@ export const typedArrays: Pass = {
       for (const b of fn.blocks)
         for (const i of b.instrs) {
           const ctor = i.operands[0];
-          if (i.op === "new" && i.operands.length === 2 && ctor?.op === "global_name" && Object.hasOwn(KINDS, ctor.target!)) made.set(i, KINDS[ctor.target!]!);
+          const kind = i.op === "new" && i.operands.length === 2 && ctor?.op === "global_name" ? viewOf(ctor.target!) : undefined;
+          if (kind) made.set(i, kind);
         }
       if (!made.size) continue;
       /* any use but indexing it lets it out */
