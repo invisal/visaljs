@@ -15,7 +15,7 @@ bb1:
 bb2:  ; preds bb0, bb4
   %i1: Int32 (i32) = phi [bb0: %i0], [bb4: %i2]
   %s1: Number (f64) = phi [bb0: %s0], [bb4: %s2]
-  %0: Boolean (bool) = num_lt %i1, %n0
+  %0: Boolean = lt %i1, %n0
   branch %0, bb3, bb1
 bb3:
   %1 = const 0.5

@@ -27,11 +27,11 @@ static JS_MAYBE_UNUSED const JSFunctionInfo jsfi_label = { jsf_label__generic, (
 static JS_MAYBE_UNUSED double jsf_sumTo(JSContext *ctx, JSValue v0_n) {
     int32_t v5_i = 0;
     double v8_s = 0;
-    bool v7 = false;
+    JSValue v7 = JS_UNDEFINED;
     double v10 = 0;
     double v11_s = 0;
     int32_t v13_i = 0;
-    (void)ctx;
+    JS_CHECK_STACK_OR(ctx, 0);
 #line 3 "numbers.js"
 #line 4 "numbers.js"
     { int32_t t0 = 0; double t1 = 0.0; v5_i = t0; v8_s = t1; } goto bb2;
@@ -40,8 +40,8 @@ bb1:;
     return v8_s;
 bb2:;
 #line 4 "numbers.js"
-    v7 = v5_i < js_as_int32_value(v0_n);
-    if (v7) { goto bb3; } else { goto bb1; }
+    v7 = js_lt(ctx, js_int32(v5_i), v0_n);
+    if (js_truthy(v7)) { goto bb3; } else { goto bb1; }
 bb3:;
 #line 4 "numbers.js"
     v10 = (double)(v5_i) * 0x1p-1;

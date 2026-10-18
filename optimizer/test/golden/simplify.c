@@ -29,21 +29,21 @@ static JS_MAYBE_UNUSED const JSFunctionInfo jsfi_always = { jsf_always__generic,
 static JS_MAYBE_UNUSED const JSFunctionInfo jsfi_anonymous = { jsf_anonymous__generic, (const JSString *)&jss_4, 0, JS_FN_STRICT | JS_FN_ARROW, NULL, "simplify.js", 0, 0 };
 
 static JS_MAYBE_UNUSED double jsf_count(JSContext *ctx, JSValue v0_n) {
-    double v15 = 0;
+    JSValue v15 = JS_UNDEFINED;
     int32_t v5_i = 0;
     double v8_c = 0;
     bool v7 = false;
     double v10 = 0;
     double v11_c = 0;
     int32_t v13_i = 0;
-    (void)ctx;
+    JS_CHECK_STACK_OR(ctx, 0);
 #line 3 "simplify.js"
 #line 4 "simplify.js"
     { int32_t t0 = 0; double t1 = 0.0; v5_i = t0; v8_c = t1; } goto bb2;
 bb1:;
 #line 5 "simplify.js"
-    v15 = v8_c + js_as_number(v0_n);
-    return v15;
+    v15 = js_add(ctx, js_number(v8_c), v0_n);
+    return js_as_number(v15);
 bb2:;
 #line 4 "simplify.js"
     v7 = v5_i < 10;

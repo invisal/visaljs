@@ -14,3 +14,6 @@ console.log(tag`x\ty${1}\n${2}`.raw, tag`\unicode bad`.strings);
 const o = { prefix: ">", fmt(strings, ...v) { return this.prefix + strings.join("|") + v.join(","); } };
 console.log(o.fmt`a${1}b${2}c`);
 console.log(`nested ${`inner ${n}`} done`);
+// `${a}${b}` in a function inlined into its only call: the copy left behind still compiles.
+function joined(e, t) { return `${t}${e}`; }
+console.log(joined("/a", "/base"));
