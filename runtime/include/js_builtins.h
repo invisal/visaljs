@@ -222,6 +222,40 @@ static inline double js_string_char_code_at(JSContext *ctx, JSValue s, double i)
     return js_as_number(js_core_string_proto_char_code_at(ctx, JS_UNDEFINED, s, 1, &index, JS_UNDEFINED));
 }
 
+/* Function.prototype.apply and call: generated code tells them by their entry. */
+JSValue js_function_proto_apply(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
+JSValue js_function_proto_call(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
+
+/* f.apply(t, args), `m` the value of f.apply: when m is the built-in and f callable, f is called
+ * without the built-in in between, with a short dense array's elements copied to the stack (its
+ * elements are its own data properties: reading them runs no code; copied, as f may change the
+ * array). Anything else is the call of m. */
+static inline JSValue js_call_apply(JSContext *ctx, JSValue m, JSValue f, JSValue t, JSValue args, const char *site) {
+    if (JS_LIKELY(js_is_function(m) && js_as_function(m)->entry == js_function_proto_apply && js_is_callable(f))) {
+        if (js_is_nullish(args)) return js_call(ctx, f, t, 0, NULL);
+        if (js_is_array(args)) {
+            JSObject *a = js_as_object(args);
+            JSElements *e = a->elements;
+            uint32_t n = js_array_length(a);
+            JSValue copy[8];
+            if (e->kind == JS_ELEMENTS_DENSE && e->length == n && n <= 8) {
+                uint32_t i = 0;
+                while (i < n && !js_is_empty(e->data[i])) copy[i] = e->data[i], i++;
+                if (i == n) return js_call(ctx, f, t, n, copy);
+            }
+        }
+    }
+    return js_call_site(ctx, m, f, 2, (const JSValue[]){ t, args }, site);
+}
+
+/* f.call(t, …), `m` the value of f.call: f called directly when m is the built-in and f callable.
+ * argv: t, then the arguments. */
+static inline JSValue js_call_call(JSContext *ctx, JSValue m, JSValue f, uint32_t argc, const JSValue *argv, const char *site) {
+    if (JS_LIKELY(js_is_function(m) && js_as_function(m)->entry == js_function_proto_call && js_is_callable(f)))
+        return js_call(ctx, f, argc ? argv[0] : JS_UNDEFINED, argc ? argc - 1 : 0, argc ? argv + 1 : NULL);
+    return js_call_site(ctx, m, f, argc, argv, site);
+}
+
 /* String.fromCharCode(c): a unit up to 0xFF is a static one-unit string. */
 static inline JSValue js_call_from_char_code(JSContext *ctx, JSValue f, JSValue this_val, JSValue c, const char *site) {
     if (JS_LIKELY(js_is_function(f) && js_as_function(f)->entry == js_core_string_from_char_code && js_is_int32(c)
