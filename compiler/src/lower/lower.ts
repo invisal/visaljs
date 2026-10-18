@@ -11,7 +11,7 @@ import type * as A from "../frontend/ast.ts";
 import { boundNames } from "../frontend/ast.ts";
 import { CompileError } from "../frontend/errors.ts";
 import { FunctionBuilder, type VarKey } from "@visaljs/ir";
-import { propKey, type Block, type FunctionIR, type GlobalSlot, type Instr, type ModuleIR, type Op, type PropKey } from "@visaljs/ir";
+import { propKey, type Block, type FunctionIR, type GlobalSlot, type Instr, type IntKind, type ModuleIR, type Op, type PropKey } from "@visaljs/ir";
 import { thisOwner, type Binding, type FunctionInfo, type Scope, type SemanticInfo } from "../sema/analyze.ts";
 
 /** Host functions a script can call by name (the test host's). */
@@ -86,7 +86,13 @@ interface ModuleContext {
   classesById: Map<A.Identifier, A.ClassDeclaration | A.ClassExpression>;
   /** The functions that read their own name's binding (a named function expression's). */
   readsOwnName: Set<FunctionInfo>;
+  /** "use static" code: integer arithmetic and conversions where its declarations say so. */
+  static: boolean;
 }
+
+/** Static code's integer operators: an `i64` (+ - * & | ^ << >> >>>; / and % by a constant other
+ *  than 0), or int_div and int_mod. */
+const INT_OPERATORS = new Set<A.BinaryOperator>(["+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>", ">>>"]);
 
 /** A function's `name` from its binding: a module's anonymous default export is "default"
  *  (§16.2.3.7), though its hidden binding is `*default*`. */
@@ -164,7 +170,7 @@ export function lower(program: A.Program, info: SemanticInfo): ModuleIR {
   }
   const m: ModuleContext = {
     info, slots, envs, ids, inferredNames: new Map(), printAssigned, globals, importMetaSlots: new Map(),
-    declaredFunctions, classesById, readsOwnName,
+    declaredFunctions, classesById, readsOwnName, static: program.static === true,
   };
   const main = new FunctionLowering(m, info.program).run();
   const functions: FunctionIR[] = [];
@@ -179,6 +185,7 @@ export function lower(program: A.Program, info: SemanticInfo): ModuleIR {
     const node = nodes[i]!;
     if (node.type === "FunctionExpression" && !node.id) f.meta!.jsName = m.inferredNames.get(node) ?? "";
   });
+  if (m.static) for (const fn of [main, ...functions]) fn.dialect = "static";
   return { main, functions, globals, source: program.source };
 }
 
@@ -779,6 +786,7 @@ class FunctionLowering {
   }
 
   private write(binding: Binding, value: Instr) {
+    if (this.m.static && binding.node.int && value.op !== "empty") value = this.toInt(value, binding.node.int);
     if (this.isGlobalVar(binding)) {
       this.b.emit("set_prop", [this.b.emit("global_this", []), value], { key: propKey(binding.name) });
       return;
@@ -813,6 +821,39 @@ class FunctionLowering {
       v = b.emit("env_load", [env], { index: depth, slot, name: binding.name });
     } else v = b.emit("load_global", [], { index: this.slots.get(binding)!, name: binding.name });
     return ref.tdz ? b.emit("check_tdz", [v], { name: binding.name }) : v;
+  }
+
+  /** Static code: whether `e` is an integer, as C's types say: an int binding, an integer
+   *  literal, a call of a function declared to return one, or integer arithmetic of those. A
+   *  `number` is a double, whatever values it holds. */
+  private isInt(e: A.Expression): boolean {
+    if (!this.m.static) return false;
+    const declared = (id: A.Identifier) => this.info.references.get(id)?.binding?.node;
+    switch (e.type) {
+      case "Literal": return typeof e.value === "number" && Number.isInteger(e.value) && !e.float;
+      case "Identifier": return declared(e)?.int !== undefined;
+      case "UnaryExpression": return (e.operator === "-" || e.operator === "~") && this.isInt(e.argument);
+      case "UpdateExpression": return this.isInt(e.argument as A.Expression);
+      case "BinaryExpression": return INT_OPERATORS.has(e.operator) && this.isInt(e.left) && this.isInt(e.right);
+      case "AssignmentExpression": return e.target.type === "Identifier" && this.isInt(e.target);
+      case "ConditionalExpression": return this.isInt(e.consequent) && this.isInt(e.alternate);
+      case "CallExpression": return e.callee.type === "Identifier" && declared(e.callee)?.returnsInt !== undefined;
+      default: return false;
+    }
+  }
+
+  /** Static code's integer arithmetic, C's: / and % by a constant other than 0 can't throw. */
+  private int64(operator: A.BinaryOperator, left: Instr, right: Instr): Instr {
+    const division = operator === "/" || operator === "%";
+    if (division && !(right.op === "const" && right.lit!.value !== 0)) return this.b.emit(operator === "/" ? "int_div" : "int_mod", [left, right]);
+    return this.b.emit("i64", [left, right], { target: operator });
+  }
+
+  /** Static code: `value` converted to an integer, as C converts what is stored in one. */
+  private toInt(value: Instr, kind: IntKind): Instr {
+    const op = kind === "i32" ? "to_i32" : "to_i64";
+    if (value.op === op || (kind === "i64" && (value.op === "i64" || value.op === "int_div" || value.op === "int_mod"))) return value;
+    return this.b.emit(op, [value]);
   }
 
   /** Assigns to an identifier (not a declaration's initialization). */
@@ -931,6 +972,8 @@ class FunctionLowering {
       case "ReturnStatement": {
         let value = s.argument ? this.expression(s.argument) : b.const(undefined);
         if (s.argument && this.asyncGenerator) value = b.emit("await", [value]);  // §15.5.5: return awaits in async generators
+        const returnsInt = this.fn.node.type === "Program" ? undefined : this.fn.node.returnsInt;
+        if (this.m.static && returnsInt) value = this.toInt(value, returnsInt);
         /* a derived constructor returns an object, or its (initialized) this (§10.2.2 steps 10–12) */
         if (this.derivedCtor)
           value = s.argument ? b.emit("derived_return", [value, this.loadBinding(this.fn.thisBinding!)]) : this.readThis();
@@ -1340,11 +1383,8 @@ class FunctionLowering {
     const b = this.b;
     b.loc = e.loc;
     switch (e.type) {
-      case "Literal": {
-        const c = b.const(e.value);
-        if (e.float) c.floatLit = true;
-        return c;
-      }
+      case "Literal":
+        return b.const(e.value);
       case "BigIntLiteral":
         return b.emit("bigint", [], { bigint: e.value });
       case "RegExpLiteral":
@@ -1357,6 +1397,8 @@ class FunctionLowering {
           ? this.read(this.info.references.get(e.argument)!, e.argument, true)
           : this.expression(e.argument);
         b.loc = e.loc;
+        if ((e.operator === "-" || e.operator === "~") && this.isInt(e.argument))
+          return e.operator === "-" ? this.int64("-", b.const(0), v) : this.int64("^", v, b.const(-1));
         switch (e.operator) {
           case "-": return b.emit("neg", [v]);
           case "+": return b.emit("to_number", [v]);
@@ -1371,6 +1413,11 @@ class FunctionLowering {
         const target = this.targetRef(e.argument, true);
         const old = this.readTarget(target);
         b.loc = e.loc;
+        if (this.isInt(e.argument)) {
+          const updated = this.int64(e.operator === "++" ? "+" : "-", old, b.const(1));
+          this.writeTarget(target, updated);
+          return e.prefix ? updated : old;
+        }
         const num = b.emit("to_numeric", [old]);
         const updated = b.emit(e.operator === "++" ? "inc" : "dec", [num]);
         this.writeTarget(target, updated);
@@ -1385,6 +1432,7 @@ class FunctionLowering {
         const left = this.expression(e.left);
         const right = this.expression(e.right);
         b.loc = e.loc;
+        if (this.isInt(e)) return this.int64(e.operator, left, right);
         return b.emit(BINARY[e.operator], [left, right]);
       }
       case "LogicalExpression":
@@ -1621,7 +1669,9 @@ class FunctionLowering {
     const old = this.readTarget(target);
     const rhs = this.expression(e.value);
     b.loc = e.loc;
-    const value = b.emit(BINARY[e.operator.slice(0, -1) as A.BinaryOperator], [old, rhs]);
+    const operator = e.operator.slice(0, -1) as A.BinaryOperator;
+    const value = INT_OPERATORS.has(operator) && this.isInt(e.target as A.Expression) && this.isInt(e.value)
+      ? this.int64(operator, old, rhs) : b.emit(BINARY[operator], [old, rhs]);
     this.writeTarget(target, value);
     return value;
   }

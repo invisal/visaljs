@@ -33,3 +33,19 @@ export function halves(n: Int): Int {
   const half = (x: Int): Int => x / 2;
   return half(n) + half(7);
 }
+
+/** One name, two types, in one function: each binding its own. */
+export function shadowed(n: number): number {
+  {
+    const x: Int = n;
+    if (x > 100) return x / 3;
+  }
+  const x: number = n / 2;
+  return x;
+}
+
+/** A number holds a character code, an integer, but divides as a double: declared types decide. */
+export function halfCode(s: string): number {
+  const c = s.charCodeAt(0);
+  return c / 2;
+}
