@@ -91,6 +91,11 @@ export function printFunction(fn: FunctionIR): string {
         return `construct_direct ${i.target}(${args})`;
       case "same_function":
         return `same_function ${args}, ${i.target}`;
+      case "is_type":
+        return `${i.index ? "!" : ""}is_type ${args}, ${JSON.stringify(i.target)}`;
+      case "identical":
+      case "strict_eq_atom":
+        return `${i.index ? "!" : ""}${i.op} ${args}`;
       case "new_instance":
         return `new_instance ${args}, ${i.index} slots`;
       case "get_prop":

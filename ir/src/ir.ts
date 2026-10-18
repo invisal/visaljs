@@ -38,6 +38,9 @@ export type Op =
   | "num_lt" | "num_le" | "num_gt" | "num_ge" | "num_eq" | "num_ne"
   | "num_bitand" | "num_bitor" | "num_bitxor" | "num_bitnot" | "num_shl" | "num_sar" | "num_shr"
   | "in" | "instanceof" | "to_property_key"
+  // comparisons the optimizer's specialize pass proved simpler (Instr.index 1: negated): the same
+  // bits; === a string literal (an atom); typeof x === Instr.target, or "nullish" (x == null)
+  | "identical" | "strict_eq_atom" | "is_type"
   // for…in: an iterator over an object's enumerable string keys, and its next key (undefined: done)
   | "for_in_start" | "for_in_next"
   // iterators (for…of): a record from GetIterator, its next value (EMPTY: done), IteratorClose
@@ -130,6 +133,7 @@ export const OPS: Record<Op, OpInfo> = {
   num_bitand: pure(2), num_bitor: pure(2), num_bitxor: pure(2), num_bitnot: pure(1),
   num_shl: pure(2), num_sar: pure(2), num_shr: pure(2),
   typeof: { ...pure(1), allocates: false },
+  identical: pure(2), strict_eq_atom: pure(2), is_type: pure(1),
   in: generic(2), instanceof: generic(2), to_property_key: generic(1),
   for_in_start: { ...generic(1), callsUser: false }, for_in_next: { ...generic(1), callsUser: false },
   iter_start: generic(1), iter_next: generic(1), not_empty: pure(1),
@@ -244,9 +248,9 @@ export interface Instr {
   name?: string;
   /** const */
   lit?: { value: JSConst };
-  /** param: index; load_global / store_global: slot */
+  /** param: index; load_global / store_global: slot; identical, strict_eq_atom, is_type: 1 when negated */
   index?: number;
-  /** global_name: the name; call_direct, construct_direct: the callee function's name;
+  /** is_type: the typeof name it tests for, or "nullish"; global_name: the name; call_direct, construct_direct: the callee function's name;
    *  call_runtime: the runtime function; call / new: the callee's source text, for "x is not a function" */
   target?: string;
   /** construct_direct: the callee's source text, for "x is not a constructor" */
