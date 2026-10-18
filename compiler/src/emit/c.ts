@@ -305,6 +305,22 @@ function cDouble(d: number): string {
   return hexFloat(d);
 }
 
+/** `typeof v === name` (or v == null, name "nullish") as a C condition: js_typeof's cases. */
+function isTypeTest(name: string, v: string): string {
+  switch (name) {
+    case "nullish": return `js_is_nullish(${v})`;
+    case "undefined": return `js_is_undefined(${v})`;
+    case "boolean": return `js_is_bool(${v})`;
+    case "number": return `js_is_number(${v})`;
+    case "string": return `js_is_string(${v})`;
+    case "symbol": return `js_is_symbol(${v})`;
+    case "bigint": return `js_is_bigint(${v})`;
+    case "function": return `js_is_callable(${v})`;
+    case "object": return `(js_is_null(${v}) || (js_is_object(${v}) && !js_is_callable(${v})))`;
+    default: return "false";  /* typeof never gives it */
+  }
+}
+
 /** Inline caches: one per *_prop site with a named key, in mod_ics[]; a keyed site's key, in
  *  mod_keys[] (GC roots). */
 class Caches {
@@ -1114,6 +1130,16 @@ class FunctionEmitter {
       case "char_code_at":
         expr = convert(`js_string_char_code_at(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`, "f64", i.repr);
         break;
+      case "identical":
+      case "strict_eq_atom":
+      case "is_type": {
+        const test = i.op === "identical" ? `js_same_bits(${args[0]}, ${args[1]})`
+          : i.op === "strict_eq_atom" ? `js_strict_eq_atom(ctx, ${args[0]}, ${args[1]})`
+          : isTypeTest(i.target!, args[0]!);
+        const cond = i.index ? `!${test}` : test;
+        expr = i.repr === "bool" ? `(${cond})` : `js_bool(${cond})`;
+        break;
+      }
       case "same_function": {
         const cond = `js_is_function(${args[0]}) && js_as_function(${args[0]})->info == &${infoName(i.target!, this.strings.prefix)} && js_as_function(${args[0]})->realm == ctx`;
         expr = i.repr === "bool" ? `(${cond})` : `js_bool(${cond})`;

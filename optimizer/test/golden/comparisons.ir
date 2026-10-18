@@ -1,0 +1,208 @@
+globals @0 kind
+
+function main() strict
+bb0:
+  %kind0: Object = make_function kind
+  %0 = const undefined
+  %1 = const "a"
+  jump bb2
+bb1:  ; preds bb3, bb5, bb7, bb9, bb11, bb12
+  %2 = const null
+  %3 = const "b"
+  jump bb14
+bb2:
+  %4 = const undefined
+  %5: Boolean (bool) = identical %0, %4
+  branch %5, bb3, bb4
+bb3:
+  jump bb1
+bb4:
+  %6: Boolean (bool) = is_type %0, "nullish"
+  branch %6, bb5, bb6
+bb5:
+  jump bb1
+bb6:
+  %7: Boolean (bool) = is_type %0, "function"
+  branch %7, bb7, bb8
+bb7:
+  jump bb1
+bb8:
+  %8: Boolean (bool) = !is_type %0, "object"
+  branch %8, bb9, bb10
+bb9:
+  jump bb1
+bb10:
+  %9 = const "error"
+  %10: Boolean (bool) = !strict_eq_atom %1, %9
+  branch %10, bb11, bb12
+bb11:
+  jump bb1
+bb12:
+  jump bb1
+bb13:  ; preds bb15, bb17, bb19, bb21, bb23, bb24
+  %11 = const "error"
+  jump bb26
+bb14:
+  %12 = const undefined
+  %13: Boolean (bool) = identical %2, %12
+  branch %13, bb15, bb16
+bb15:
+  jump bb13
+bb16:
+  %14: Boolean (bool) = is_type %2, "nullish"
+  branch %14, bb17, bb18
+bb17:
+  jump bb13
+bb18:
+  %15: Boolean (bool) = is_type %2, "function"
+  branch %15, bb19, bb20
+bb19:
+  jump bb13
+bb20:
+  %16: Boolean (bool) = !is_type %2, "object"
+  branch %16, bb21, bb22
+bb21:
+  jump bb13
+bb22:
+  %17 = const "error"
+  %18: Boolean (bool) = !strict_eq_atom %3, %17
+  branch %18, bb23, bb24
+bb23:
+  jump bb13
+bb24:
+  jump bb13
+bb25:  ; preds bb27, bb29, bb31, bb33, bb35, bb36
+  %19: Object = new_object
+  %20 = const 1
+  jump bb38
+bb26:
+  %21 = const undefined
+  %22: Boolean (bool) = identical %kind0, %21
+  branch %22, bb27, bb28
+bb27:
+  jump bb25
+bb28:
+  %23: Boolean (bool) = is_type %kind0, "nullish"
+  branch %23, bb29, bb30
+bb29:
+  jump bb25
+bb30:
+  %24: Boolean (bool) = is_type %kind0, "function"
+  branch %24, bb31, bb32
+bb31:
+  jump bb25
+bb32:
+  %25: Boolean (bool) = !is_type %kind0, "object"
+  branch %25, bb33, bb34
+bb33:
+  jump bb25
+bb34:
+  %26 = const "error"
+  %27: Boolean (bool) = !strict_eq_atom %11, %26
+  branch %27, bb35, bb36
+bb35:
+  jump bb25
+bb36:
+  jump bb25
+bb37:  ; preds bb39, bb41, bb43, bb45, bb47, bb48
+  %28 = const "s"
+  %29 = const "s"
+  jump bb50
+bb38:
+  %30 = const undefined
+  %31: Boolean (bool) = identical %19, %30
+  branch %31, bb39, bb40
+bb39:
+  jump bb37
+bb40:
+  %32: Boolean (bool) = is_type %19, "nullish"
+  branch %32, bb41, bb42
+bb41:
+  jump bb37
+bb42:
+  %33: Boolean (bool) = is_type %19, "function"
+  branch %33, bb43, bb44
+bb43:
+  jump bb37
+bb44:
+  %34: Boolean (bool) = !is_type %19, "object"
+  branch %34, bb45, bb46
+bb45:
+  jump bb37
+bb46:
+  %35 = const "error"
+  %36: Boolean (bool) = !strict_eq_atom %20, %35
+  branch %36, bb47, bb48
+bb47:
+  jump bb37
+bb48:
+  jump bb37
+bb49:  ; preds bb51, bb53, bb55, bb57, bb59, bb60
+  %37 = const undefined
+  return %37
+bb50:
+  %38 = const undefined
+  %39: Boolean (bool) = strict_eq_atom %38, %28
+  branch %39, bb51, bb52
+bb51:
+  jump bb49
+bb52:
+  %40: Boolean (bool) = is_type %28, "nullish"
+  branch %40, bb53, bb54
+bb53:
+  jump bb49
+bb54:
+  %41: Boolean (bool) = is_type %28, "function"
+  branch %41, bb55, bb56
+bb55:
+  jump bb49
+bb56:
+  %42: Boolean (bool) = !is_type %28, "object"
+  branch %42, bb57, bb58
+bb57:
+  jump bb49
+bb58:
+  %43 = const "error"
+  %44: Boolean (bool) = !strict_eq_atom %29, %43
+  branch %44, bb59, bb60
+bb59:
+  jump bb49
+bb60:
+  jump bb49
+
+function kind(%x0, %t0) strict
+bb0:
+  %0 = const undefined
+  %1: Boolean (bool) = identical %x0, %0
+  branch %1, bb1, bb3
+bb1:
+  %2 = const "undefined"
+  return %2
+bb3:
+  %3: Boolean (bool) = is_type %x0, "nullish"
+  branch %3, bb4, bb6
+bb4:
+  %4 = const "null"
+  return %4
+bb6:
+  %5: Boolean (bool) = is_type %x0, "function"
+  branch %5, bb7, bb9
+bb7:
+  %6 = const "function"
+  return %6
+bb9:
+  %7: Boolean (bool) = !is_type %x0, "object"
+  branch %7, bb10, bb12
+bb10:
+  %8 = const "primitive"
+  return %8
+bb12:
+  %9 = const "error"
+  %10: Boolean (bool) = !strict_eq_atom %t0, %9
+  branch %10, bb13, bb15
+bb13:
+  %11 = const "other"
+  return %11
+bb15:
+  %12: Boolean = strict_eq %x0, %t0
+  return %12

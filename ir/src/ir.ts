@@ -43,6 +43,9 @@ export type Op =
   | "char_code_at" | "math"
   // typed code's `int` arithmetic: C's, wrapping (int32 operands)
   | "int_add" | "int_sub" | "int_mul"
+  // comparisons the optimizer's specialize pass proved simpler (Instr.index 1: negated): the same
+  // bits; === a string literal (an atom); typeof x === Instr.target, or "nullish" (x == null)
+  | "identical" | "strict_eq_atom" | "is_type"
   // for…in: an iterator over an object's enumerable string keys, and its next key (undefined: done)
   | "for_in_start" | "for_in_next"
   // iterators (for…of): a record from GetIterator, its next value (EMPTY: done), IteratorClose
@@ -138,6 +141,7 @@ export const OPS: Record<Op, OpInfo> = {
   char_code_at: { ...pure(2), allocates: true },  // a rope is flattened
   math: pure(1),
   int_add: pure(2), int_sub: pure(2), int_mul: pure(2),
+  identical: pure(2), strict_eq_atom: pure(2), is_type: pure(1),
   in: generic(2), instanceof: generic(2), to_property_key: generic(1),
   for_in_start: { ...generic(1), callsUser: false }, for_in_next: { ...generic(1), callsUser: false },
   iter_start: generic(1), iter_next: generic(1), not_empty: pure(1),
@@ -288,9 +292,9 @@ export interface Instr {
   name?: string;
   /** const */
   lit?: { value: JSConst };
-  /** param: index; load_global / store_global: slot */
+  /** param: index; load_global / store_global: slot; identical, strict_eq_atom, is_type: 1 when negated */
   index?: number;
-  /** global_name: the name; call_direct, construct_direct: the callee function's name;
+  /** is_type: the typeof name it tests for, or "nullish"; global_name: the name; call_direct, construct_direct: the callee function's name;
    *  call_runtime: the runtime function; call / new: the callee's source text, for "x is not a function" */
   target?: string;
   /** construct_direct: the callee's source text, for "x is not a constructor" */

@@ -46,6 +46,11 @@ JS_WARN_UNUSED JSValue js_ge(JSContext *ctx, JSValue a, JSValue b);
 /* ===, !==: never throw (strings compare by content). */
 bool js_strict_equals(JSContext *ctx, JSValue a, JSValue b);
 static inline JSValue js_strict_eq(JSContext *ctx, JSValue a, JSValue b) { return js_bool(js_strict_equals(ctx, a, b)); }
+/* a === s, s a string literal: an atom, so a string with its units is s itself unless it isn't
+ * interned */
+static inline bool js_strict_eq_atom(JSContext *ctx, JSValue a, JSValue s) {
+    return js_same_bits(a, s) || (js_is_string(a) && !js_is_atom(a) && js_string_equals(ctx, a, s));
+}
 static inline JSValue js_strict_ne(JSContext *ctx, JSValue a, JSValue b) { return js_bool(!js_strict_equals(ctx, a, b)); }
 
 /* A switch whose cases are all string literals: the index of the first case `v` is === to, or

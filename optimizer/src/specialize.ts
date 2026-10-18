@@ -17,7 +17,7 @@
 // `String.fromCharCode(c)`. Their C compares the callee with the built-in and, when it is and
 // the argument suits, does its work inline (C's sqrt; reading the unit), else makes the call.
 // Anywhere, not just in loops: a call is big anyway.
-import { Number_, T, isSubtype, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { Number_, T, isSubtype, type FunctionIR, type Instr, type JSConst, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { clearMayThrow, functionsOf, loopDepths, removeInstrs, removeUnreachable, useCounts } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
@@ -80,6 +80,42 @@ function nextId(fn: FunctionIR): number {
   return 1 + Math.max(0, ...fn.params.map((p) => p.id), ...fn.blocks.flatMap((b) => [...b.phis, ...b.instrs].map((i) => i.id)));
 }
 
+/** Kinds of value whose === compares contents, not bits: two Numbers (1 and 1.0 boxed
+ *  differently, NaN), two strings (equal units in two cells), two BigInts. */
+const BY_CONTENT = Number_ | T.String | T.BigInt;
+
+const NONE = Symbol("no literal");
+
+/** A comparison js_strict_equals (js_eq) needn't make: `typeof x === "function"`, `x == null`,
+ *  `x === "literal"`, and === where the operands can't both be Numbers, strings or BigInts
+ *  (`x === undefined`, objects): a C bool test of boxed values. Rewrites `i`; false: kept. */
+function simplerComparison(i: Instr): boolean {
+  const strict = i.op === "strict_eq" || i.op === "strict_ne";
+  if (!strict && i.op !== "eq" && i.op !== "ne") return false;
+  const negated = i.op === "strict_ne" || i.op === "ne" ? 1 : 0;
+  const literal = (v: Instr): JSConst | typeof NONE => (v.op === "const" ? v.lit!.value : NONE);
+  for (const [x, y] of [[i.operands[0]!, i.operands[1]!], [i.operands[1]!, i.operands[0]!]] as const) {
+    const lit = literal(y);
+    if (x.op === "typeof" && typeof lit === "string") {  /* typeof's result is one of its names: either works */
+      Object.assign(i, { op: "is_type", operands: [x.operands[0]!], target: lit, index: negated });
+      return true;
+    }
+    if (!strict && (lit === null || lit === undefined)) {  /* x == null: null or undefined (no document.all here) */
+      Object.assign(i, { op: "is_type", operands: [x], target: "nullish", index: negated });
+      return true;
+    }
+    if (strict && typeof lit === "string") {
+      Object.assign(i, { op: "strict_eq_atom", operands: [x, y], index: negated });
+      return true;
+    }
+  }
+  if (strict && (i.operands[0]!.type & i.operands[1]!.type & BY_CONTENT) === 0) {
+    Object.assign(i, { op: "identical", index: negated });
+    return true;
+  }
+  return false;
+}
+
 /** Element access's form for a Number key. */
 const INDEX_FORM: Partial<Record<Op, Op>> = { get_elem: "get_index", set_elem: "set_index" };
 
@@ -133,7 +169,14 @@ export const specialize: Pass = {
             continue;
           }
           const form = NUMBER_FORM[i.op];
-          if (!form || !i.operands.every((o) => isSubtype(o.type, Number_))) {
+          const numbers = i.operands.every((o) => isSubtype(o.type, Number_));
+          if (!numbers && simplerComparison(i)) {
+            edges ||= i.mayThrow;  /* == can call valueOf; x == null can't */
+            clearMayThrow(i);
+            count("simplified", "comparison");
+            continue;
+          }
+          if (!form || !numbers) {
             if (NUMBER_FIRST.has(i.op) && depth.get(b)! > 0 && i.operands.every((o) => o.type & Number_)) {
               i.numberFirst = true;
               count("added", "number fast path");

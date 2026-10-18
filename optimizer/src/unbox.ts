@@ -33,6 +33,8 @@ const F64 = new Set<Op>([
   "num_bitand", "num_bitor", "num_bitxor", "num_bitnot", "num_shl", "num_sar", "num_shr",
 ]);
 const BOOL = new Set<Op>(["num_lt", "num_le", "num_gt", "num_ge", "num_eq", "num_ne"]);
+/** Boolean tests of boxed operands: their result is a C bool, their operands stay boxed. */
+const TESTS = new Set<Op>(["same_function", "identical", "strict_eq_atom", "is_type"]);
 
 /** How the report names each unboxed repr. */
 const REPR_NOUN: Record<Repr, string> = { boxed: "", f64: "double", i32: "int32", bool: "bool" };
@@ -111,7 +113,7 @@ function unboxModule(m: ModuleIR) {
     for (const b of fn.blocks)
       for (const i of b.instrs) {
         if (F64.has(i.op)) candidates.push(i);
-        else if (BOOL.has(i.op) || i.op === "same_function") i.repr = "bool";  /* an inlining guard: a C condition */
+        else if (BOOL.has(i.op) || TESTS.has(i.op)) i.repr = "bool";  /* an inlining guard, a test: a C condition */
         else if (i.op === "call_direct") {
           const callee = byName.get(i.target!);
           i.repr = callee && declaredCallFits(i, callee) ? callee.returnRepr ?? "boxed" : "boxed";  /* else through the checked entry */
