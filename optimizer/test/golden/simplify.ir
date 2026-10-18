@@ -11,7 +11,7 @@ bb0:
   %i0 = const 0
   jump bb2
 bb1:
-  %0: Number (f64) = num_add %c1, %n0
+  %0: Number = add %c1, %n0
   return %0
 bb2:  ; preds bb0, bb4
   %i1: Int32 (i32) = phi [bb0: %i0], [bb4: %i2]

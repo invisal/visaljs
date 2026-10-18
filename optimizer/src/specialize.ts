@@ -23,7 +23,6 @@ import { int64Arith } from "./infer-types.ts";
 import { clearMayThrow, functionsOf, loopDepths, removeInstrs, removeUnreachable, useCounts } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
-/** Each generic operator's Number form. */
 export const NUMBER_FORM: Partial<Record<Op, Op>> = {
   add: "num_add", sub: "num_sub", mul: "num_mul", div: "num_div", mod: "num_mod",
   neg: "num_neg", inc: "num_inc", dec: "num_dec",
@@ -124,7 +123,6 @@ function simplerComparison(i: Instr): boolean {
   return false;
 }
 
-/** Element access's form for a Number key. */
 const INDEX_FORM: Partial<Record<Op, Op>> = { get_elem: "get_index", set_elem: "set_index" };
 
 export const specialize: Pass = {
@@ -185,7 +183,9 @@ export const specialize: Pass = {
             continue;
           }
           const form = NUMBER_FORM[i.op];
-          const numbers = i.operands.every((o) => isSubtype(o.type, Number_));
+          /* None isn't a Number: a closed function with no calls left (all inlined) has None parameters,
+             and its C must still compile */
+          const numbers = i.operands.every((o) => isSubtype(o.type, Number_) && o.type !== T.None);
           if (!numbers && simplerComparison(i)) {
             edges ||= i.mayThrow;  /* == can call valueOf; x == null can't */
             clearMayThrow(i);

@@ -29,20 +29,20 @@ static JS_MAYBE_UNUSED double jsf_sieve(JSContext *ctx, JSValue v0_n) {
     JSValue v9_composite = JS_UNDEFINED;
     double v13_i = 0;
     double v18_count = 0;
-    bool v15 = false;
+    JSValue v15 = JS_UNDEFINED;
     JSValue v17 = JS_UNDEFINED;
     double v36_count = 0;
     double v33_i = 0;
     double v20_count = 0;
     double v22_j = 0;
     double v23_j = 0;
-    bool v25 = false;
+    JSValue v25 = JS_UNDEFINED;
     double v30_j = 0;
     JS_CHECK_STACK_OR(ctx, 0);
 #line 4 "elements.js"
     v3 = js_global_get(ctx, JS_STATIC_STR(jss_0), "Array");
     if (JS_UNLIKELY(js_is_exception(v3))) { return 0; }
-    v5 = js_number(js_as_number(v0_n) + 1.0);
+    v5 = js_add(ctx, v0_n, js_int32(1));
     v6 = js_construct(ctx, v3, 1, (const JSValue[]){ v5 }, JS_UNDEFINED, "Array");
     if (JS_UNLIKELY(js_is_exception(v6))) { return 0; }
     v7 = js_get_method(ctx, v6, JS_STATIC_STR(jss_1), &mod_ics[0]);
@@ -57,8 +57,8 @@ bb1:;
     return v18_count;
 bb2:;
 #line 6 "elements.js"
-    v15 = v13_i <= js_as_number(v0_n);
-    if (v15) { goto bb3; } else { goto bb1; }
+    v15 = js_le(ctx, js_number(v13_i), v0_n);
+    if (js_truthy(v15)) { goto bb3; } else { goto bb1; }
 bb3:;
 #line 7 "elements.js"
     v17 = js_get_index_ta_f64(ctx, v9_composite, v13_i);
@@ -82,8 +82,8 @@ bb8:;
     v36_count = v20_count; goto bb4;
 bb9:;
 #line 9 "elements.js"
-    v25 = v23_j <= js_as_number(v0_n);
-    if (v25) { goto bb10; } else { goto bb8; }
+    v25 = js_le(ctx, js_number(v23_j), v0_n);
+    if (js_truthy(v25)) { goto bb10; } else { goto bb8; }
 bb10:;
 #line 9 "elements.js"
     if (JS_UNLIKELY(js_set_index_ta_f64(ctx, v9_composite, v23_j, JS_TRUE, true) < 0)) { return 0; }

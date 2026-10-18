@@ -6,3 +6,4 @@ true [ 'a', 'b' ] [ 'a', 'b' ] false false false
 [ 'x\\ty', '\\n', '' ] [ undefined ]
 >a|b|c1,2
 nested inner 3 done
+/base/a
