@@ -320,6 +320,22 @@ function cDouble(d: number): string {
   return hexFloat(d);
 }
 
+/** Static code's integer operator on int64_ts, as C's: wrapping (as unsigned), shifts mod 64,
+ *  INT64_MIN / -1 wrapping too (C leaves it undefined). */
+function int64Op(op: string, x: string, y: string): string {
+  const wrap = (o: string) => `(int64_t)((uint64_t)${x} ${o} (uint64_t)${y})`;
+  switch (op) {
+    case "+": case "-": case "*": return wrap(op);
+    case "/": return `(${y} == -1 ? (int64_t)(0 - (uint64_t)${x}) : ${x} / ${y})`;
+    case "%": return `(${y} == -1 ? INT64_C(0) : ${x} % ${y})`;
+    case "&": case "|": case "^": return `(${x} ${op} ${y})`;
+    case "<<": return `(int64_t)((uint64_t)${x} << (${y} & 63))`;
+    case ">>": return `(${x} >> (${y} & 63))`;
+    case ">>>": return `(int64_t)((uint64_t)${x} >> (${y} & 63))`;
+    default: throw new Error(`i64 ${op}`);
+  }
+}
+
 /** `typeof v === name` (or v == null, name "nullish") as a C condition: js_typeof's cases. */
 function isTypeTest(name: string, v: string): string {
   switch (name) {
@@ -626,31 +642,17 @@ class FunctionEmitter {
    *  (an int32 result is one inference proved can't overflow); bitwise ones through ToInt32. */
   private unboxed(i: Instr, repr: Repr = i.repr): string {
     const isInt = (o: Instr) => isSubtype(o.type, T.Int32);
-    /* a typed file's int: C's int64_t arithmetic, wrapping (as unsigned); compares of two ints */
+    /* compares of two integers, one of them a typed file's int: as int64_ts */
     const isLong = (o: Instr) => isSubtype(o.type, T.Int64 | T.Int32);
-    if (i.operands.every(isLong) && (repr === "i64" || (BOOL_OPS.has(i.op) && i.operands.some((o) => (o.type & T.Int64) !== 0)))) {
+    if (BOOL_OPS.has(i.op) && i.operands.every(isLong) && i.operands.some((o) => (o.type & T.Int64) !== 0)) {
       const [x, y] = i.operands.map((o) => this.as(o, "i64"));
-      const wrap = (op: string) => `(int64_t)((uint64_t)${x} ${op} (uint64_t)${y})`;
       switch (i.op) {
-        case "num_add": return wrap("+");
-        case "num_sub": return wrap("-");
-        case "num_mul": return wrap("*");
-        case "num_neg": return `(int64_t)(0 - (uint64_t)${x})`;
-        case "num_inc": return `(int64_t)((uint64_t)${x} + 1)`;
-        case "num_dec": return `(int64_t)((uint64_t)${x} - 1)`;
         case "num_lt": return `${x} < ${y}`;
         case "num_le": return `${x} <= ${y}`;
         case "num_gt": return `${x} > ${y}`;
         case "num_ge": return `${x} >= ${y}`;
         case "num_eq": return `${x} == ${y}`;
         case "num_ne": return `${x} != ${y}`;
-        case "num_bitand": return `${x} & ${y}`;
-        case "num_bitor": return `${x} | ${y}`;
-        case "num_bitxor": return `${x} ^ ${y}`;
-        case "num_bitnot": return `~${x}`;
-        case "num_shl": return `(int64_t)((uint64_t)${x} << (${y} & 63))`;
-        case "num_sar": return `${x} >> (${y} & 63)`;
-        case "num_shr": return `(int64_t)((uint64_t)${x} >> (${y} & 63))`;
       }
     }
     if (i.operands.every(isInt) && (repr === "i32" || BOOL_OPS.has(i.op))) {
@@ -1209,13 +1211,15 @@ class FunctionEmitter {
         expr = convert(`${f}(${this.as(i.operands[0]!, "f64")})`, "f64", i.repr);
         break;
       }
-      case "int_div": case "int_mod": {  /* an int's: C's, a zero divisor a RangeError (BigInt's), INT64_MIN / -1 wrapping */
+      case "int_div": case "int_mod": {  /* an int's: C's, a zero divisor a RangeError (BigInt's) */
         const [x, y] = i.operands.map((o) => this.as(o, "i64"));
-        if (i.mayThrow) this.lines.push(`    if (JS_UNLIKELY(${y} == 0)) { js_discard(js_throw_range_error(ctx, "Division by zero")); ${this.onException(i.block)} }`);
-        const v = i.op === "int_div" ? `(${y} == -1 ? (int64_t)(0 - (uint64_t)${x}) : ${x} / ${y})` : `(${y} == -1 ? INT64_C(0) : ${x} % ${y})`;
-        if (this.hasVar(i)) this.lines.push(`    ${this.name(i)} = ${convert(v, "i64", i.repr)};`);
+        this.lines.push(`    if (JS_UNLIKELY(${y} == 0)) { js_discard(js_throw_range_error(ctx, "Division by zero")); ${this.onException(i.block)} }`);
+        if (this.hasVar(i)) this.lines.push(`    ${this.name(i)} = ${convert(int64Op(i.op === "int_div" ? "/" : "%", x!, y!), "i64", i.repr)};`);
         return;
       }
+      case "i64":  /* static code's integer arithmetic */
+        expr = convert(int64Op(i.target!, this.as(i.operands[0]!, "i64"), this.as(i.operands[1]!, "i64")), "i64", i.repr);
+        break;
       case "to_i32": {  /* an i32's ToInt32: wrapping */
         const o = i.operands[0]!;
         const from = reprOf(o.type);

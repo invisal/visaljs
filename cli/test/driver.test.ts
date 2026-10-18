@@ -82,6 +82,15 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     expect(await run("build", join(dir, "missing"))).toMatchObject({ code: 1, stderr: expect.stringMatching(/cannot read/) });
   });
 
+  it("checks the program's imports of static code per file, as Node does", async () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, "a.ts"), '"use static";\nexport function f(n: number): number {\n  return n;\n}\n');
+    writeFileSync(join(dir, "b.ts"), '"use static";\nexport function g(n: number): number {\n  return n;\n}\n');
+    writeFileSync(join(dir, "main.js"), 'import { g } from "./a.ts";\nprint(g(1));\n');
+    const r = await run("build", join(dir, "main.js"), "--emit-c", join(dir, "c"));
+    expect(r).toMatchObject({ code: 1, stderr: expect.stringContaining('"g" is not exported by "a.ts?static"') });
+  });
+
   it("refuses a binary that would replace its entry file", async () => {
     const dir = tempDir();
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "tool", bin: { tool: "tool" } }));

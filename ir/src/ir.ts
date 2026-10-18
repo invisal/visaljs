@@ -48,6 +48,9 @@ export type Op =
   // typed code's `int`: a Number as a C int64_t (truncated toward zero, wrapping; NaN 0); its
   // integer division and remainder (a zero divisor: a RangeError, as BigInt's); an i32's ToInt32
   | "to_i64" | "int_div" | "int_mod" | "to_i32"
+  // typed code's integer arithmetic, C's int64_t (wrapping; shifts mod 64), Instr.target the
+  // operator: + - * & | ^ << >> >>>, and / % by a constant that isn't 0
+  | "i64"
   // comparisons the optimizer's specialize pass proved simpler (Instr.index 1: negated): the same
   // bits; === a string literal (an atom); typeof x === Instr.target, or "nullish" (x == null)
   | "identical" | "strict_eq_atom" | "is_type"
@@ -148,7 +151,7 @@ export const OPS: Record<Op, OpInfo> = {
   char_code_at: { ...pure(2), allocates: true },  // a rope is flattened
   math: pure(1),
   int_add: pure(2), int_sub: pure(2), int_mul: pure(2), to_i64: pure(1), to_i32: pure(1),
-  int_div: { ...pure(2), mayThrow: true }, int_mod: { ...pure(2), mayThrow: true },
+  int_div: { ...pure(2), mayThrow: true }, int_mod: { ...pure(2), mayThrow: true }, i64: pure(2),
   identical: pure(2), strict_eq_atom: pure(2), is_type: pure(1), strict_eq_num: pure(2),
   in: generic(2), instanceof: generic(2), to_property_key: generic(1),
   for_in_start: { ...generic(1), callsUser: false }, for_in_next: { ...generic(1), callsUser: false },
@@ -315,9 +318,6 @@ export interface Instr {
   name?: string;
   /** const */
   lit?: { value: JSConst };
-  /** const: written as a floating-point literal (`1.0`, `1e3`) in a typed file ("use static"):
-   *  not an integer to C's arithmetic, so 1.0 / n divides as doubles */
-  floatLit?: boolean;
   /** param: index; load_global / store_global: slot; identical, strict_eq_atom, is_type: 1 when negated */
   index?: number;
   /** is_type: the typeof name it tests for, or "nullish"; global_name: the name; call_direct, construct_direct: the callee function's name;

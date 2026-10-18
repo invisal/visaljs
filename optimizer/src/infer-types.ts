@@ -107,21 +107,6 @@ function numeric(...ops: Type[]): Type {
   return Number_ | bigint(ops);
 }
 
-/** Typed code's 64-bit `int` arithmetic, C's: +, -, *, /, %, ++, --, unary -, and the bitwise
- *  operators of integers: ints and int32s with one of them an int, or in a typed function any
- *  integers (1 / 4 is 0, as in C; a float literal, 1.0, isn't one). Wrapping; / and % integer division. */
-const INT64_OPS = new Set<Instr["op"]>([
-  "add", "sub", "mul", "div", "mod", "neg", "inc", "dec", "bitand", "bitor", "bitxor", "bitnot", "shl", "sar", "shr",
-  "num_add", "num_sub", "num_mul", "num_div", "num_mod", "num_neg", "num_inc", "num_dec",
-  "num_bitand", "num_bitor", "num_bitxor", "num_bitnot", "num_shl", "num_sar", "num_shr", "int_div", "int_mod",
-]);
-export function int64Arith(i: Instr, type: (v: Instr) => Type): boolean {
-  if (!INT64_OPS.has(i.op)) return false;
-  const integral = (o: Instr) => isSubtype(type(o), T.Int64 | T.Int32) && !o.floatLit;
-  const typed = isStatic(i.block.fn);
-  return (typed || i.operands.some((o) => isSubtype(type(o), T.Int64) && type(o) !== T.None)) && i.operands.every(integral)
-    && i.operands.some((o) => type(o) !== T.None);
-}
 
 /** A bitwise operator's result: ToInt32 of a Number is an int32 (never -0). */
 function int32(...ops: Type[]): Type {
@@ -215,7 +200,6 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
   const t = (v: Instr) => type(v) & ~T.Empty;
   if (BOOLEAN.has(i.op)) return T.Boolean;
   if (OBJECT.has(i.op)) return T.Object;
-  if (int64Arith(i, t)) return T.Int64;
   switch (i.op) {
     case "const": return constType(i.lit!.value);
     case "empty": return T.Empty;
@@ -263,7 +247,7 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
       return Number_;
     case "int_add": case "int_sub": case "int_mul":
       return T.Int32;
-    case "to_i64":
+    case "to_i64": case "i64": case "int_div": case "int_mod":
       return T.Int64;
     case "to_i32":
       return T.Int32;
