@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { analyze, emitHarnessScript, HOST_MODULE, type HostPrimitives, lower, parseModule, programNames } from "@visaljs/compiler";
-import { T, type Type } from "@visaljs/ir";
+import { type FunctionIR, type Instr, type ModuleIR, T, type Type, type TypedCall } from "@visaljs/ir";
 import { optimize, type PassReport } from "@visaljs/optimizer";
 import { type Plugin, rolldown } from "rolldown";
 import ts from "typescript";
@@ -54,6 +54,8 @@ export interface TypedUnit {
   atoms: Map<string, string>;
   /** Each export as a host primitive: its generic entry. */
   exports: HostPrimitives;
+  /** Each export as the program calls it: its typed and checked entries. */
+  calls: Record<string, TypedCall>;
   /** The names its code uses: the program installs the built-ins they name too. */
   names: string[];
   report: PassReport[];
@@ -138,6 +140,16 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
 
   const ast = parseModule(code, "typed.js", undefined, undefined, primitives);
   const ir = lower(ast, analyze(ast));
+  /* each function's untyped copy: what a typed function's generic entry runs for arguments that
+     aren't the declared types (lowered again: the same module slots, its own function names) */
+  const copy = lower(ast, analyze(ast));
+  const untypedName = (name: string) => `${name}$untyped`;
+  for (const fn of copy.functions) {
+    fn.name = untypedName(fn.name);
+    for (const b of fn.blocks)
+      for (const i of b.instrs)
+        if (i.target && (i.op === "call_direct" || i.op === "make_function" || i.op === "same_function" || i.op === "construct_direct")) i.target = untypedName(i.target);
+  }
   const byJsName = new Map<string, number>();
   for (const fn of ir.functions) byJsName.set(fn.meta!.jsName, (byJsName.get(fn.meta!.jsName) ?? 0) + 1);
   const exports: Record<string, { c: string; length: number }> = {};
@@ -148,7 +160,12 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
     const hidden = fn.params.length - sig.length;
     if (hidden < 0) continue;
     meta.declared = fn.params.map((_, k) => (k < hidden ? undefined : sig[k - hidden]));
+    meta.external = true;
+    meta.untyped = untypedName(fn.name);
+    const twin = copy.functions.find((f) => f.name === meta.untyped)!;
+    twin.meta!.external = true;
   }
+  ir.functions.push(...copy.functions);
   for (const [name, local] of exported) {
     const fn = ir.functions.find((f) => f.meta!.jsName === local && f.meta!.declared);
     if (!fn) throw new Error(`typed unit: export '${name}' is not a typed function declaration`);
@@ -157,6 +174,56 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
   }
   const report: PassReport[] = [];
   const optimized = optimize(ir, undefined, report);
+  /* how the program calls each export: the typed entry takes the declared parameters only */
+  const calls: Record<string, TypedCall> = {};
+  for (const [name, local] of exported) {
+    const fn = optimized.functions.find((f) => f.meta!.jsName === local && f.meta!.declared)!;
+    const declared = fn.meta!.declared!;
+    if (declared.some((t) => t === undefined)) continue;  /* hidden parameters (this, …): the checked entry only */
+    let returns: Type = T.None;
+    for (const b of fn.blocks) if (b.term?.kind === "return") returns |= b.term.value.type & ~T.Empty;
+    calls[name] = {
+      direct: `${TYPED_PREFIX}jsf_${ident(fn.name)}`,
+      generic: exports[name]!.c,
+      params: fn.params.map((p, k) => ({ type: declared[k]!, repr: p.repr })),
+      returns: returns === T.None ? T.Undefined : returns,
+      returnRepr: fn.returnRepr ?? "boxed",
+    };
+  }
   const unit = emitHarnessScript(optimized, TYPED_PREFIX, new Map(), { hostPrimitives: primitives });
-  return { c: unit.c, atoms: new Map(unit.atoms), exports, report, names: [...programNames(ast)] };
+  return { c: unit.c, atoms: new Map(unit.atoms), exports, calls, report, names: [...programNames(ast)] };
+}
+
+/** The program's calls of typed exports: a call whose callee is the export's host import (the
+ *  host function, or the module binding one store sets to it). Before optimizing. */
+export function annotateTypedCalls(m: ModuleIR, calls: Record<string, TypedCall>): number {
+  const all = [m.main, ...m.functions];
+  const slots = new Map<number, string>();
+  const stores = new Map<number, number>();
+  for (const fn of all)
+    for (const b of fn.blocks)
+      for (const i of b.instrs) {
+        if (i.op !== "store_global" || i.operands[0]!.op === "empty") continue;
+        stores.set(i.index!, (stores.get(i.index!) ?? 0) + 1);
+        const v = i.operands[0]!;
+        if (v.op === "host_function" && Object.hasOwn(calls, v.target!)) slots.set(i.index!, v.target!);
+      }
+  const target = (callee: Instr): string | undefined => {
+    const v = callee.op === "check_tdz" ? callee.operands[0]! : callee;
+    if (v.op === "host_function") return Object.hasOwn(calls, v.target!) ? v.target : undefined;
+    if (v.op === "load_global" && stores.get(v.index!) === 1) return slots.get(v.index!);
+    return undefined;
+  };
+  let n = 0;
+  for (const fn of all as FunctionIR[])
+    for (const b of fn.blocks)
+      for (const i of b.instrs) {
+        if (i.op !== "call") continue;
+        const name = target(i.operands[0]!);
+        if (name) {
+          i.typedCall = calls[name]!;
+          n++;
+        }
+      }
+  return n;
 }

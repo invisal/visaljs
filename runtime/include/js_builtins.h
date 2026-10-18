@@ -211,6 +211,17 @@ static inline JSValue js_call_char_code_at(JSContext *ctx, JSValue f, JSValue s,
     return js_call_site(ctx, f, s, 1, &i, site);
 }
 
+/* s.charCodeAt(i) in typed code ("use visaljs"), which trusts the built-ins to be the standard
+ * ones (char_code_at): s is a string; its unit read inline, else (a rope, an index out of
+ * range) the built-in's answer. */
+static inline double js_string_char_code_at(JSContext *ctx, JSValue s, double i) {
+    JSStrView v;
+    if (JS_LIKELY(i >= 0 && i < 4294967295.0 && js_string_units(s, &v) && (uint32_t)i < v.length && (double)(uint32_t)i == i))
+        return (double)js_view_at(v, (uint32_t)i);
+    JSValue index = js_number(i);
+    return js_as_number(js_core_string_proto_char_code_at(ctx, JS_UNDEFINED, s, 1, &index, JS_UNDEFINED));
+}
+
 /* String.fromCharCode(c): a unit up to 0xFF is a static one-unit string. */
 static inline JSValue js_call_from_char_code(JSContext *ctx, JSValue f, JSValue this_val, JSValue c, const char *site) {
     if (JS_LIKELY(js_is_function(f) && js_as_function(f)->entry == js_core_string_from_char_code && js_is_int32(c)

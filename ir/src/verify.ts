@@ -1,7 +1,7 @@
 // The IR verifier: run after every pass in tests and debug builds.
 // Checks CFG consistency, SSA dominance, phi arity, exception-edge rules and
 // representation consistency (a repr agrees with the type).
-import { isExceptionalEdge, OPS, successors, throwingInstr, type Block, type FunctionIR, type Instr } from "./ir.ts";
+import { isExceptionalEdge, OPS, successors, throwingInstr, typedCallFits, type Block, type FunctionIR, type Instr } from "./ir.ts";
 import { Any, isSubtype, Number_, T, typeName, type Repr, type Type } from "./types.ts";
 
 export class VerifyError extends Error {
@@ -117,7 +117,7 @@ export function verify(fn: FunctionIR): void {
   for (const i of [...fn.params, ...fn.blocks.flatMap((b) => [...b.phis, ...b.instrs])]) {
     if (!reprFits(i.repr, i.type)) bad(`%${i.id} ${i.op} is ${i.repr} but its type is ${typeName(i.type)}`);
     /* a direct call's result is its callee's return repr: a throw then shows as the pending exception */
-    if (i.repr !== "boxed" && ((i.mayThrow && i.op !== "call_direct") || !OPS[i.op].result)) bad(`%${i.id} ${i.op} is ${i.repr} but can throw or has no result`);
+    if (i.repr !== "boxed" && ((i.mayThrow && i.op !== "call_direct" && !typedCallFits(i)) || !OPS[i.op].result)) bad(`%${i.id} ${i.op} is ${i.repr} but can throw or has no result`);
   }
   const ret = fn.returnRepr ?? "boxed";
   for (const b of fn.blocks)

@@ -235,6 +235,18 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
       return i.key && "name" in i.key && i.key.name === "length" && isSubtype(t(a!), T.String) ? T.Int32 : Unknown;
     case "call_direct":
       return sig?.returns.get(i.target!) ?? Unknown;
+    case "char_code_at":  /* a unit, or NaN past the end */
+      return Number_;
+    case "call": {
+      /* typed code trusts the built-ins to be the standard ones, as tsc's types do */
+      const callee = i.operands[0]!;
+      if (i.block.fn.meta?.declared && callee.op === "get_prop" && callee.key && "name" in callee.key && callee.key.name === "charCodeAt"
+          && i.operands[1] === callee.operands[0] && isSubtype(t(i.operands[1]!), T.String)) return Number_;
+      /* a typed unit's export: its declared result, when its typed entry runs */
+      const tc = i.typedCall;
+      const args = i.operands.slice(2);
+      return tc && args.length === tc.params.length && args.every((o, k) => t(o) !== T.None && isSubtype(t(o), tc.params[k]!.type)) ? tc.returns : Unknown;  /* typedCallFits, on the types being inferred */
+    }
     default:
       return Unknown;
   }

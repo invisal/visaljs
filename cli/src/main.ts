@@ -9,7 +9,7 @@ import {
   analyze, type CFile, COMPONENTS, CompileError, emitProgramFiles, firstUnsupported, type HostPrimitives, lower, namedCore, parseModule, parseScript,
   programNames, reachableComponents, SourceMap,
 } from "@visaljs/compiler";
-import { type ModuleIR, printModule } from "@visaljs/ir";
+import { type ModuleIR, printModule, type TypedCall } from "@visaljs/ir";
 import { formatReport, optimize, type PassReport } from "@visaljs/optimizer";
 
 import { BundleError, bundle } from "./bundle.ts";
@@ -17,7 +17,7 @@ import { compileJobs, compileProgram, describeCompiler, findCompilers, gcCheckFl
 import { evalCalls, evalWarning } from "./eval.ts";
 import { licensesText } from "./licenses.ts";
 import { DEFAULT_HOSTS, hostPrimitives } from "./hosts.ts";
-import { buildTypedUnit, TYPED_PREFIX, typedImports, type TypedUnit } from "./typed.ts";
+import { annotateTypedCalls, buildTypedUnit, TYPED_PREFIX, typedImports, type TypedUnit } from "./typed.ts";
 import { EntryError } from "./integrations/project.ts";
 import { IntegrationError } from "./pipeline/errors.ts";
 import { type Pipeline, runPipeline } from "./pipeline/index.ts";
@@ -251,7 +251,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   }
   const dir = emitDir ?? (binary ? scratchDir() : "");
   try {
-    const typedLink = typed ? { atoms: [...typed.atoms], prefix: TYPED_PREFIX, names: typed.names } : undefined;
+    const typedLink = typed ? { atoms: [...typed.atoms], prefix: TYPED_PREFIX, names: typed.names, calls: typed.calls } : undefined;
     const c = await compileInWorker({ source, entry, map, options, primitives, compilers, dir, emitDir, typed: typedLink }, report);
     if ("compileError" in c) {
       io.stderr(`${c.compileError}\n`);
@@ -322,7 +322,7 @@ interface CompileJob {
   compilers: string[] | undefined;
   dir: string;  // where the C files go
   emitDir: string | undefined;  // --emit-c's, made when the first file goes there
-  typed: { atoms: [string, string][]; prefix: string; names: string[] } | undefined;  // PROTOTYPE: the typed unit the program links to
+  typed: { atoms: [string, string][]; prefix: string; names: string[]; calls: Record<string, TypedCall> } | undefined;  // PROTOTYPE: the typed unit the program links to
 }
 
 type CompileResult = { result: string[] | string; compilers: string[] | undefined } | { compileError: string };
@@ -404,7 +404,7 @@ if (!isMainThread && (workerData as Record<string, unknown> | null)?.[WORKER]) a
  *  is toIR, so the syntax tree and then the IR become garbage: a large program's take gigabytes. */
 async function compileToC(source: string, entry: string, map: SourceMap | undefined, options: BuildOptions, report: Reporter,
   primitives: HostPrimitives, compilers: () => string[], typed: CompileJob["typed"], write: (file: CFile) => void): Promise<string[] | string> {
-  const program = await toIR(source, entry, map, options, report, primitives, compilers);
+  const program = await toIR(source, entry, map, options, report, primitives, compilers, typed?.calls);
   if (typeof program === "string") return program;
   const { ir, regexps } = program;
   const names = new Set([...program.names, ...(typed?.names ?? [])]);  /* the typed unit's built-ins too */
@@ -433,7 +433,7 @@ async function compileToC(source: string, entry: string, map: SourceMap | undefi
 }
 
 async function toIR(source: string, entry: string, map: SourceMap | undefined, options: BuildOptions, report: Reporter,
-  primitives: HostPrimitives, compilers: () => string[]): Promise<{ ir: ModuleIR; names: ReturnType<typeof programNames>; regexps: Map<string, Uint8Array> } | string> {
+  primitives: HostPrimitives, compilers: () => string[], typedCalls?: Record<string, TypedCall>): Promise<{ ir: ModuleIR; names: ReturnType<typeof programNames>; regexps: Map<string, Uint8Array> } | string> {
   /* bundled: locations point at the original files (where the bundler generated code, at bundle.js) */
   const ast = await report.step("🌳", "Parsing the JavaScript",
     () => (options.script ? parseScript(source, entry) : parseModule(source, map ? "bundle.js" : entry, map, resolve(entry), primitives)),
@@ -450,7 +450,11 @@ async function toIR(source: string, entry: string, map: SourceMap | undefined, o
   const unsupported = firstUnsupported(ast);
   if (unsupported) throw unsupported;
   const passes: PassReport[] = [];
-  const ir = await report.step("🔧", "Converting to IR and optimizing", () => optimize(lower(ast, info), options["no-optimize"] ? [] : undefined, passes),  /* the optimizer verifies its input and output */
+  const ir = await report.step("🔧", "Converting to IR and optimizing", () => {
+    const lowered = lower(ast, info);
+    if (typedCalls) annotateTypedCalls(lowered, typedCalls);  /* PROTOTYPE: calls of the typed unit's exports */
+    return optimize(lowered, options["no-optimize"] ? [] : undefined, passes);  /* the optimizer verifies its input and output */
+  },
     (ir) => [`Converted ${count(ir.functions.length + 1, "function")} to IR and optimized them`,
       ...formatReport(passes).map((line) => `      • ${line}`)].join("\n"));
   if (options["dump-ir"]) return printModule(ir);

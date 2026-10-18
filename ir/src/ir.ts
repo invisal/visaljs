@@ -7,7 +7,7 @@
 // splitting blocks, so the variable values reaching a handler are exactly
 // those before the throwing instruction (and never its result).
 import type { Loc } from "./loc.ts";
-import type { Repr, Type } from "./types.ts";
+import { isSubtype, T, type Repr, type Type } from "./types.ts";
 
 export type Op =
   // values
@@ -38,6 +38,8 @@ export type Op =
   | "num_lt" | "num_le" | "num_gt" | "num_ge" | "num_eq" | "num_ne"
   | "num_bitand" | "num_bitor" | "num_bitxor" | "num_bitnot" | "num_shl" | "num_sar" | "num_shr"
   | "in" | "instanceof" | "to_property_key"
+  // typed code ("use visaljs"), which trusts the built-ins: s.charCodeAt(i) of a string s, a Number
+  | "char_code_at"
   // for…in: an iterator over an object's enumerable string keys, and its next key (undefined: done)
   | "for_in_start" | "for_in_next"
   // iterators (for…of): a record from GetIterator, its next value (EMPTY: done), IteratorClose
@@ -130,6 +132,7 @@ export const OPS: Record<Op, OpInfo> = {
   num_bitand: pure(2), num_bitor: pure(2), num_bitxor: pure(2), num_bitnot: pure(1),
   num_shl: pure(2), num_sar: pure(2), num_shr: pure(2),
   typeof: { ...pure(1), allocates: false },
+  char_code_at: { ...pure(2), allocates: true },  // a rope is flattened
   in: generic(2), instanceof: generic(2), to_property_key: generic(1),
   for_in_start: { ...generic(1), callsUser: false }, for_in_next: { ...generic(1), callsUser: false },
   iter_start: generic(1), iter_next: generic(1), not_empty: pure(1),
@@ -214,6 +217,27 @@ export const OPS: Record<Op, OpInfo> = {
 
 export type JSConst = number | string | boolean | null | undefined;
 
+/** A typed unit's export, as a calling module sees it: its typed entry (raw C parameters, no
+ *  checks), for arguments of the declared types, and its checked (generic) entry otherwise. */
+export interface TypedCall {
+  direct: string;
+  generic: string;
+  params: { type: Type; repr: Repr }[];
+  returns: Type;
+  returnRepr: Repr;
+}
+
+/** Whether a typed export's call takes its typed entry: as many arguments as it declares, each
+ *  proven of its declared type (inference, unboxing and C emission all ask this). */
+export function typedCallFits(i: Instr): boolean {
+  const tc = i.typedCall;
+  if (!tc || i.operands.length - 2 !== tc.params.length) return false;
+  return i.operands.slice(2).every((o, k) => {
+    const t = o.type & ~T.Empty;
+    return t !== T.None && isSubtype(t, tc.params[k]!.type);
+  });
+}
+
 /** A constant property key, as ToPropertyKey makes it: an array index or a string (an atom). */
 export type PropKey = { index: number } | { name: string };
 
@@ -256,6 +280,8 @@ export interface Instr {
   /** get_elem, set_elem: the key is most likely the same at every run (a module binding stored
    *  once): the site caches the key it sees, and is a named access while the key stays it */
   keyedSite?: boolean;
+  /** call of a typed unit's export (a "visaljs:host" import the typed unit defines) */
+  typedCall?: TypedCall;
   /** call, construct_direct: the fallback of an inlined site (its guard failed): not inlined again */
   slowPath?: boolean;
   /** *_prop, define_prop */
@@ -317,6 +343,12 @@ export interface FunctionMeta {
    *  hidden ones undefined). Typed callers were checked by tsc; every other call comes through
    *  the generic entry, which checks them. */
   declared?: (Type | undefined)[];
+  /** Called from outside the module (a typed unit's entries): its parameters can't be inferred
+   *  from its call sites. */
+  external?: boolean;
+  /** A typed function's untyped copy (its name): what its generic entry runs when the arguments
+   *  aren't the declared types, so the call behaves as the plain JS would. */
+  untyped?: string;
   /** The direct entry's hidden leading parameters: the environment it
    *  closes over, the function object (a named expression reading its own name),
    *  and `this` (only when used). */

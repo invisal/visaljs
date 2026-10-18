@@ -9,9 +9,9 @@
 //   the block's handler (after that edge's phi copies) or returns JS_EXCEPTION.
 // - #line directives map back to the JS source (gdb, error locations).
 import type { Loc } from "../frontend/ast.ts";
-import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr, Type } from "@visaljs/ir";
+import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr, Type, TypedCall } from "@visaljs/ir";
 import type { HostPrimitives } from "../frontend/host.ts";
-import { isSubtype, Number_, OPS, successors, T, typeName } from "@visaljs/ir";
+import { isSubtype, Number_, OPS, successors, T, typedCallFits } from "@visaljs/ir";
 import { liveAfterPauses } from "@visaljs/ir";
 import type { CoreEntry } from "./core.ts";
 import { ATOMS } from "./atoms.ts";
@@ -399,7 +399,7 @@ function genericEntry(fn: FunctionIR, prefix: string): string {
   const checks = (meta.declared ?? []).flatMap((t, k) => {
     if (t === undefined) return [];
     const v = `argc > ${k - hidden} ? argv[${k - hidden}] : JS_UNDEFINED`;
-    return [`    if (!(${typeTest(t, `(${v})`)})) return js_throw_type_error(ctx, ${cString(`${meta.jsName}: argument ${k - hidden + 1} must be ${typeName(t)}`)});`];
+    return [`    if (!(${typeTest(t, `(${v})`)})) return ${prefix}jsf_${ident(meta.untyped!)}__generic(ctx, callee, this_val, argc, argv, new_target);  /* the plain JS */`];
   });
   return [
     `${meta.declared ? "" : "static "}JSValue ${direct}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {`,
@@ -461,6 +461,8 @@ interface GeneratorPlan {
 class Hosts {
   readonly table: HostPrimitives;
   readonly used = new Set<string>();
+  /** Typed entries of a typed unit this module calls: their prototypes. */
+  readonly typed = new Map<string, string>();
   constructor(table: HostPrimitives) {
     this.table = table;
   }
@@ -471,7 +473,10 @@ class Hosts {
     return host;
   }
   decls(): string[] {
-    return [...this.used].sort().map((c) => `JSValue ${c}(JSContext *, JSValue, JSValue, uint32_t, const JSValue *, JSValue);  /* host primitive */`);
+    return [
+      ...[...this.used].sort().map((c) => `JSValue ${c}(JSContext *, JSValue, JSValue, uint32_t, const JSValue *, JSValue);  /* host primitive */`),
+      ...[...this.typed.values()].sort(),
+    ];
   }
 }
 
@@ -696,6 +701,27 @@ class FunctionEmitter {
       ...(out ? [`        ${result}r;`] : ["        js_discard(r);"]),
       "    } }",
     );
+  }
+
+  /** A call of a typed unit's export: its typed entry when the arguments are proven of the
+   *  declared types (as many as it declares), its checked entry, called directly, otherwise. */
+  private typedCall(i: Instr, tc: TypedCall, args: string[]) {
+    const passed = i.operands.slice(2);
+    const fail = this.onException(i.block);
+    const out = this.hasVar(i) ? this.name(i) : null;
+    if (typedCallFits(i)) {
+      this.hosts.typed.set(tc.direct, `${C_TYPE[tc.returnRepr]} ${tc.direct}(JSContext *${tc.params.map((p) => `, ${C_TYPE[p.repr]}`).join("")});  /* typed entry */`);
+      const call = `${tc.direct}(ctx${passed.map((o, k) => `, ${this.as(o, tc.params[k]!.repr)}`).join("")})`;
+      if (tc.returnRepr === "boxed") {
+        this.lines.push(`    { JSValue r = ${call};`, `    if (JS_UNLIKELY(js_is_exception(r))) { ${fail} }`, ...(out ? [`    ${out} = ${convert("r", "boxed", i.repr)}; }`] : ["    js_discard(r); }"]));
+      } else {
+        this.lines.push(`    { ${C_TYPE[tc.returnRepr]} r = ${call};`, `    if (JS_UNLIKELY(js_has_exception(ctx))) { ${fail} }`, ...(out ? [`    ${out} = ${convert("r", tc.returnRepr, i.repr)}; }`] : ["    (void)r; }"]));
+      }
+      return;
+    }
+    this.hosts.used.add(tc.generic);
+    const call = `${tc.generic}(ctx, JS_UNDEFINED, ${args[1]}, ${args.length - 2}, ${argArray(args.slice(2))}, JS_UNDEFINED)`;
+    this.lines.push(`    { JSValue r = ${call};`, `    if (JS_UNLIKELY(js_is_exception(r))) { ${fail} }`, ...(out ? [`    ${out} = ${convert("r", "boxed", i.repr)}; }`] : ["    js_discard(r); }"]));
   }
 
   /** The values this function calls, or checks as an inlined call's callee. */
@@ -1015,6 +1041,10 @@ class FunctionEmitter {
         expr = `js_construct_spread(ctx, ${args[0]}, ${args[1]}, ${cString(i.target!)})`;
         break;
       case "call":
+        if (i.typedCall) {
+          this.typedCall(i, i.typedCall, args);
+          return;
+        }
         if (i.builtin) {
           expr = `js_call_${i.builtin}(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${cString(i.target!)})`;
           break;
@@ -1031,6 +1061,9 @@ class FunctionEmitter {
         this.constructDirect(i, args);
         return;
       }
+      case "char_code_at":
+        expr = convert(`js_string_char_code_at(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`, "f64", i.repr);
+        break;
       case "same_function": {
         const cond = `js_is_function(${args[0]}) && js_as_function(${args[0]})->info == &${infoName(i.target!, this.strings.prefix)} && js_as_function(${args[0]})->realm == ctx`;
         expr = i.repr === "bool" ? `(${cond})` : `js_bool(${cond})`;
@@ -1213,7 +1246,7 @@ class FunctionEmitter {
   }
 
   private linkage(): string {
-    return this.shared ? "JS_MAYBE_UNUSED " : "static JS_MAYBE_UNUSED ";
+    return this.shared || this.fn.meta?.declared ? "JS_MAYBE_UNUSED " : "static JS_MAYBE_UNUSED ";  /* declared: a typed unit's, called from the program */
   }
 
   /** The entry's prototype: in program.h when it's shared, else in the function's own file. */

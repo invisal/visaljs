@@ -17,9 +17,9 @@
 // `String.fromCharCode(c)`. Their C compares the callee with the built-in and, when it is and
 // the argument suits, does its work inline (C's sqrt; reading the unit), else makes the call.
 // Anywhere, not just in loops: a call is big anyway.
-import { Number_, isSubtype, type Instr, type ModuleIR, type Op } from "@visaljs/ir";
+import { Number_, T, isSubtype, type Instr, type ModuleIR, type Op } from "@visaljs/ir";
 
-import { clearMayThrow, functionsOf, loopDepths, removeUnreachable } from "./cfg.ts";
+import { clearMayThrow, functionsOf, loopDepths, removeInstrs, removeUnreachable, useCounts } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
 /** Each generic operator's Number form. */
@@ -63,8 +63,22 @@ export const specialize: Pass = {
     for (const fn of functionsOf(m)) {
       let edges = false;
       const depth = loopDepths(fn);
+      const uses = useCounts(fn);
+      const unread = new Set<Instr>();
       for (const b of fn.blocks)
         for (const i of b.instrs) {
+          /* typed code trusts the built-ins: s.charCodeAt(i), a string's unit (the method read is dead) */
+          if (fn.meta?.declared && inlineBuiltin(i) === "char_code_at" && isSubtype(i.operands[1]!.type, T.String)) {
+            edges ||= i.mayThrow;
+            clearMayThrow(i);
+            const method = i.operands[0]!;  /* String.prototype.charCodeAt: reading it does nothing else */
+            if (method.mayThrow) edges = true;
+            if (uses.get(method) === 1) unread.add(method);
+            i.op = "char_code_at";
+            i.operands = [i.operands[1]!, i.operands[2]!];
+            count("inlined", "built-in call");
+            continue;
+          }
           const builtin = inlineBuiltin(i);
           if (builtin) {
             i.builtin = builtin;
@@ -90,6 +104,10 @@ export const specialize: Pass = {
           i.op = form;
           count("inlined", "number operator");
         }
+      if (unread.size) {
+        for (const v of unread) clearMayThrow(v);
+        removeInstrs(fn, unread);
+      }
       if (edges) removeUnreachable(fn);
     }
     return m;

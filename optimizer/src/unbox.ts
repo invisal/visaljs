@@ -22,12 +22,13 @@
 // boxed or not.
 //
 // Generator and async functions stay boxed: their frames save JSValues across pauses.
-import { isSubtype, Number_, T, type Block, type Instr, type ModuleIR, type Op, type Repr, type Type } from "@visaljs/ir";
+import { isSubtype, Number_, T, typedCallFits, type Block, type Instr, type ModuleIR, type Op, type Repr, type Type } from "@visaljs/ir";
 
 import { closedFunctions, functionsOf, loopDepths, pauses } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
 const F64 = new Set<Op>([
+  "char_code_at",
   "num_add", "num_sub", "num_mul", "num_div", "num_mod", "num_neg", "num_inc", "num_dec",
   "num_bitand", "num_bitor", "num_bitxor", "num_bitnot", "num_shl", "num_sar", "num_shr",
 ]);
@@ -112,6 +113,7 @@ function unboxModule(m: ModuleIR) {
         if (F64.has(i.op)) candidates.push(i);
         else if (BOOL.has(i.op) || i.op === "same_function") i.repr = "bool";  /* an inlining guard: a C condition */
         else if (i.op === "call_direct") i.repr = byName.get(i.target!)?.returnRepr ?? "boxed";
+        else if (typedCallFits(i)) i.repr = i.typedCall!.returnRepr;  /* a typed unit's typed entry */
       }
   }
   /* an int32 in an int32_t, any other Number in a double */
@@ -127,6 +129,7 @@ function unboxModule(m: ModuleIR) {
       const callee = byName.get(u.user.target!);
       return callee && closed.has(callee) ? callee.params[u.index]!.repr : "boxed";
     }
+    if (u.index >= 2 && typedCallFits(u.user)) return u.user.typedCall!.params[u.index - 2]!.repr;
     return "boxed";
   };
   for (let changed = true; changed; ) {
