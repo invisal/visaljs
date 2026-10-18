@@ -65,7 +65,10 @@ export function trustedBuiltin(i: Instr, type: (v: Instr) => Type): string | nul
   return null;
 }
 
-/** Typed code's `int` arithmetic (`(a + b) | 0` of int32s), by the Number operator. */
+/** The bitwise operators: ToInt32 (ToUint32) of their operands first. */
+const TRUNCATING = new Set<Op>(["num_bitor", "num_bitand", "num_bitxor", "num_shl", "num_sar", "num_shr"]);
+
+/** Wrapping int32 arithmetic (`(a + b) | 0` of int32s), by the Number operator. */
 const INT_FORM: Partial<Record<Op, Op>> = { num_add: "int_add", num_sub: "int_sub", num_mul: "int_mul", num_inc: "int_add", num_dec: "int_sub" };
 
 /** A constant 1 before `i`, for x++ as x + 1. */
@@ -106,6 +109,10 @@ function simplerComparison(i: Instr): boolean {
     }
     if (strict && typeof lit === "string") {
       Object.assign(i, { op: "strict_eq_atom", operands: [x, y], index: negated });
+      return true;
+    }
+    if (strict && typeof lit === "number" && !Number.isNaN(lit) && !(x.op === "const" && typeof x.lit!.value === "number")) {
+      Object.assign(i, { op: "strict_eq_num", operands: [x, y], index: negated });
       return true;
     }
   }
@@ -187,14 +194,15 @@ export const specialize: Pass = {
           clearMayThrow(i);
           i.op = form;
           count("inlined", "number operator");
-          /* (a + b) | 0 of int32s, an `int` in typed code: C's wrapping arithmetic, not a double's ToInt32 */
-          const x = i.operands[0]!;
-          const zero = i.operands[1]!;
-          if (form === "num_bitor" && zero.op === "const" && zero.lit!.value === 0 && INT_FORM[x.op] && uses.get(x) === 1 && x.operands.every((o) => isSubtype(o.type, T.Int32))) {
-            i.op = INT_FORM[x.op]!;
-            i.operands = x.op === "num_inc" || x.op === "num_dec" ? [x.operands[0]!, one(i)] : [...x.operands];
-            count("wrapped", "int operation");
-          }
+          /* (a + b) | 0, (a * b) & 255 … of int32s (typed code's sized integers): the bitwise operator
+             truncates its operands to 32 bits, so a + b wrapping in an int32 gives it the same bits */
+          if (TRUNCATING.has(form))
+            for (const x of i.operands)
+              if (INT_FORM[x.op] && uses.get(x) === 1 && x.operands.every((o) => isSubtype(o.type, T.Int32))) {
+                if (x.op === "num_inc" || x.op === "num_dec") x.operands = [x.operands[0]!, one(x)];
+                x.op = INT_FORM[x.op]!;
+                count("wrapped", "int operation");
+              }
         }
       if (unread.size) {
         for (const v of unread) clearMayThrow(v);

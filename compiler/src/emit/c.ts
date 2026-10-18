@@ -1132,8 +1132,10 @@ class FunctionEmitter {
         break;
       case "identical":
       case "strict_eq_atom":
+      case "strict_eq_num":
       case "is_type": {
         const test = i.op === "identical" ? `js_same_bits(${args[0]}, ${args[1]})`
+          : i.op === "strict_eq_num" ? `js_strict_eq_num(${this.v(i.operands[0]!)}, ${cDouble(i.operands[1]!.lit!.value as number)})`
           : i.op === "strict_eq_atom" ? `js_strict_eq_atom(ctx, ${args[0]}, ${args[1]})`
           : isTypeTest(i.target!, args[0]!);
         const cond = i.index ? `!${test}` : test;

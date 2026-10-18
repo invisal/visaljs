@@ -34,7 +34,7 @@ const F64 = new Set<Op>([
 ]);
 const BOOL = new Set<Op>(["num_lt", "num_le", "num_gt", "num_ge", "num_eq", "num_ne"]);
 /** Boolean tests of boxed operands: their result is a C bool, their operands stay boxed. */
-const TESTS = new Set<Op>(["same_function", "identical", "strict_eq_atom", "is_type"]);
+const TESTS = new Set<Op>(["same_function", "identical", "strict_eq_atom", "is_type", "strict_eq_num"]);
 
 /** How the report names each unboxed repr. */
 const REPR_NOUN: Record<Repr, string> = { boxed: "", f64: "double", i32: "int32", bool: "bool" };

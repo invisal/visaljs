@@ -46,6 +46,12 @@ JS_WARN_UNUSED JSValue js_ge(JSContext *ctx, JSValue a, JSValue b);
 /* ===, !==: never throw (strings compare by content). */
 bool js_strict_equals(JSContext *ctx, JSValue a, JSValue b);
 static inline JSValue js_strict_eq(JSContext *ctx, JSValue a, JSValue b) { return js_bool(js_strict_equals(ctx, a, b)); }
+/* v === d, d a number literal (not NaN): v is a Number of that value (0 and -0 alike). */
+static inline bool js_strict_eq_num(JSValue v, double d) {
+    if (js_is_int32(v)) return (double)js_as_int32(v) == d;
+    return js_is_number(v) && js_as_number(v) == d;
+}
+
 /* a === s, s a string literal: an atom, so a string with its units is s itself unless it isn't
  * interned */
 static inline bool js_strict_eq_atom(JSContext *ctx, JSValue a, JSValue s) {

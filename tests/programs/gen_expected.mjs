@@ -4,6 +4,8 @@
 // its first line is `// visaljs-flags: --script`, which makes it a classic script. Programs run
 // in the Europe/Lisbon time zone, so Date's local times don't depend on the machine. The programs
 // in <process.platform>/ (win32/) are generated too, on that OS only; or name the programs to generate.
+// A program whose first line is `// visaljs-expected: by hand` is skipped: its output isn't
+// Node's by design (a "use visaljs" file's C semantics), and its .expected is written by hand.
 //
 //   node tests/programs/gen_expected.mjs [win32/require-json-paths.js ...]
 import { spawnSync } from "node:child_process";
@@ -21,6 +23,7 @@ const programs = process.argv.length > 2 ? process.argv.slice(2) : [
 ];
 for (const f of programs) {
   const source = readFileSync(join(dir, f), "utf8");
+  if (source.startsWith("// visaljs-expected: by hand")) continue;
   const script = /^\/\/ visaljs-flags: .*--script/.test(source);
   const args = script ? ["-e", shim + source] : ["--import", `data:text/javascript,${encodeURIComponent(shim)}`, join(dir, f)];
   const cwd = mkdtempSync(join(tmpdir(), "visaljs-expected-"));  /* programs may write files */

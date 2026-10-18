@@ -117,7 +117,7 @@ function int32(...ops: Type[]): Type {
 const BOOLEAN = new Set<Instr["op"]>([
   "not", "to_boolean", "is_nullish", "not_empty", "strict_eq", "strict_ne", "eq", "ne",
   "lt", "le", "gt", "ge", "in", "instanceof", "delete_prop", "delete_elem", "private_in", "same_function",
-  "identical", "strict_eq_atom", "is_type",
+  "identical", "strict_eq_atom", "is_type", "strict_eq_num",
 ]);
 const OBJECT = new Set<Instr["op"]>([
   "new_object", "new_array", "make_function", "make_arguments", "host_function", "regexp",

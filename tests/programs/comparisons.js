@@ -1,9 +1,9 @@
 // Comparisons the optimizer turns into C tests (specialize): === against undefined, null and
 // string literals, == null, typeof x === "…", and === where the operands can't both be
-// compared by content. Each against values that would tell a wrong shortcut.
+// compared by content, and === a number literal. Each against values that would tell a wrong shortcut.
 "use strict";
 const values = [
-  undefined, null, true, false, 0, -0, 1, 1.5, NaN, "", "error", "err" + "or".repeat(1), 1n, 10n ** 20n,
+  undefined, null, true, false, 0, -0, 1, 1.5, NaN, "", "error", "err" + "or".repeat(1), "0", 1e20, 1n, 10n ** 20n,
   Symbol.for("s"), {}, [], () => 1, class {}, new Proxy(function () {}, {}), new Proxy({}, {}),
   { valueOf() { throw new Error("valueOf called"); } },
 ];
@@ -16,6 +16,7 @@ for (const v of values) {
     v === "error", v !== "error", "error" === v,
     typeof v === "function", typeof v === "object", typeof v !== "string", typeof v == "number",
     typeof v === "bigint", typeof v === "symbol", typeof v === "boolean", typeof v === "undefined", typeof v === "nope",
+    v === 0, v === -0, v !== 1.5, 1 === v, v === 10 ** 20,
   ].map((x) => (x === true ? 1 : x === false ? 0 : x)).join(""));
 }
 console.log(rows.join("\n"));

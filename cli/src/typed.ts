@@ -62,28 +62,38 @@ export interface TypedUnit {
 }
 
 /** The declared parameter types of the top-level functions of the typed files, by name. */
-/** A function's `int` declarations: its locals' names and whether it returns one. */
+/** The sized integers ("visaljs"'s types, or aliases of the same names: tsc erases them, so by name). */
+type IntType = "i8" | "u8" | "i16" | "u16" | "i32";
+const INT_TYPES: Record<string, IntType> = { i8: "i8", u8: "u8", i16: "i16", u16: "u16", i32: "i32", int: "i32" };
+
+/** A function's sized integer declarations: its locals', its parameters' (by index), its return's. */
 interface Ints {
-  locals: Set<string>;
-  returns: boolean;
+  locals: Map<string, IntType>;
+  params: Map<number, IntType>;
+  returns: IntType | undefined;
 }
 
-/** `int` (from "visaljs", or a `type int = number` alias: erased by tsc, so by its name). */
-const isInt = (node: ts.TypeNode | undefined, sf: ts.SourceFile) => node?.getText(sf) === "int";
+const intType = (node: ts.TypeNode | undefined, sf: ts.SourceFile): IntType | undefined => (node ? INT_TYPES[node.getText(sf)] : undefined);
+const isInt = (node: ts.TypeNode | undefined, sf: ts.SourceFile) => intType(node, sf) !== undefined;
 
 /** Each top-level function's `int` locals and return. */
 function intDeclarations(sf: ts.SourceFile): Map<string, Ints> {
   const out = new Map<string, Ints>();
   for (const st of sf.statements) {
     if (!ts.isFunctionDeclaration(st) || !st.name || !st.body) continue;
-    const ints: Ints = { locals: new Set(), returns: isInt(st.type, sf) };
+    const ints: Ints = { locals: new Map(), params: new Map(), returns: intType(st.type, sf) };
+    st.parameters.forEach((p, k) => {
+      const t = intType(p.type, sf);
+      if (t) ints.params.set(k, t);
+    });
     const visit = (n: ts.Node): void => {
       if (ts.isFunctionLike(n) && n !== st) return;  /* a nested function's are its own */
-      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && isInt(n.type, sf)) ints.locals.add(n.name.text);
+      const t = ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) ? intType(n.type, sf) : undefined;
+      if (t) ints.locals.set((n as ts.VariableDeclaration).name.getText(sf), t);
       ts.forEachChild(n, visit);
     };
     ts.forEachChild(st.body, visit);
-    if (ints.locals.size || ints.returns) out.set(st.name.text, ints);
+    if (ints.locals.size || ints.params.size || ints.returns) out.set(st.name.text, ints);
   }
   return out;
 }
@@ -139,34 +149,79 @@ function irType(checker: ts.TypeChecker, t: ts.Type): Type | null {
   return null;
 }
 
-/** C semantics for `int`: what a function stores in an `int` local or returns as one is
- *  truncated to 32 bits (`x | 0`, which specialize makes C's wrapping arithmetic). */
+/** `v` truncated to a sized integer, before position `at` of block `b`. */
+function truncateValue(fn: FunctionIR, b: FunctionIR["blocks"][number], v: Instr, at: number, type: IntType): Instr {
+  return truncator(fn)(b, v, at, type);
+}
+
+/** C semantics for the sized integers: what a function stores in one (a local, a parameter on
+ *  entry, a return value) is truncated to its width (`x | 0`, `x & 255`, `(x << 24) >> 24` …;
+ *  specialize makes the arithmetic feeding them C's wrapping int32 operations). */
 function truncateInts(fn: FunctionIR, ints: Ints) {
-  let next = 1 + Math.max(0, ...fn.params.map((p) => p.id), ...fn.blocks.flatMap((b) => [...b.phis, ...b.instrs].map((i) => i.id)));
-  const make = (b: FunctionIR["blocks"][number], op: Instr["op"], operands: Instr[], extra: Partial<Instr> = {}): Instr =>
-    ({ id: next++, op, operands, type: T.None, repr: "boxed", mayThrow: op === "bitor", block: b, loc: null, ...extra });
-  const truncate = (b: FunctionIR["blocks"][number], v: Instr, at: number): Instr => {
-    const zero = make(b, "const", [], { lit: { value: 0 } });
-    const w = make(b, "bitor", [v, zero], v.name ? { name: v.name } : {});
-    b.instrs.splice(at, 0, zero, w);
-    return w;
-  };
+  const first = nextId(fn);
+  const truncate = truncator(fn);
   const replaced = new Map<Instr, Instr>();
+  truncateInto(fn, ints, truncate, replaced, first);
+}
+
+function nextId(fn: FunctionIR): number {
+  return 1 + Math.max(0, ...fn.params.map((p) => p.id), ...fn.blocks.flatMap((b) => [...b.phis, ...b.instrs].map((i) => i.id)));
+}
+
+/** Makes truncations in fn: before position `at` of a block, v as a sized integer. */
+function truncator(fn: FunctionIR) {
+  let next = nextId(fn);
+  const make = (b: FunctionIR["blocks"][number], op: Instr["op"], operands: Instr[], extra: Partial<Instr> = {}): Instr =>
+    ({ id: next++, op, operands, type: T.None, repr: "boxed", mayThrow: op !== "const", block: b, loc: null, ...extra });
+  return (b: FunctionIR["blocks"][number], v: Instr, at: number, type: IntType): Instr => {
+    const name = v.name ? { name: v.name } : {};
+    const k = (value: number) => make(b, "const", [], { lit: { value } });
+    let added: Instr[];
+    if (type === "i32") {
+      const zero = k(0);
+      added = [zero, make(b, "bitor", [v, zero], name)];
+    } else if (type === "u8" || type === "u16") {
+      const mask = k(type === "u8" ? 255 : 65535);
+      added = [mask, make(b, "bitand", [v, mask], name)];
+    } else {
+      const bits = k(type === "i8" ? 24 : 16);
+      const up = make(b, "shl", [v, bits]);
+      added = [bits, up, make(b, "sar", [up, bits], name)];
+    }
+    b.instrs.splice(at, 0, ...added);
+    return added.at(-1)!;
+  };
+}
+
+function truncateInto(fn: FunctionIR, ints: Ints, truncate: ReturnType<typeof truncator>, replaced: Map<Instr, Instr>, first: number) {
   for (const b of fn.blocks)
     for (const i of [...b.instrs]) {
-      if (!i.name || !ints.locals.has(i.name) || i.op === "param" || i.op === "empty" || !OPS_RESULT(i)) continue;  /* empty: a `let` before its declaration */
+      const type = i.name ? ints.locals.get(i.name) : undefined;
+      if (!type || i.op === "param" || i.op === "empty" || !OPS_RESULT(i)) continue;  /* empty: a `let` before its declaration */
       const at = b.instrs.indexOf(i);
       if (b.handler && i.mayThrow && at === b.instrs.length - 1) continue;  /* it ends a protected block: left as it is */
-      replaced.set(i, truncate(b, i, at + 1));
+      replaced.set(i, truncate(b, i, at + 1, type));
     }
+  /* a parameter narrower than 32 bits, on entry (an i32's is checked: an int32 already) */
+  const hidden = fn.params.length - (fn.meta!.declared?.filter((t) => t !== undefined).length ?? 0);
+  const entry = fn.blocks[0]!;
+  let at = entry.instrs.findIndex((i) => i.op !== "param");
+  for (const [k, type] of ints.params) {
+    const p = fn.params[hidden + k];
+    if (!p || type === "i32") continue;
+    const w = truncate(entry, p, at < 0 ? entry.instrs.length : at, type);
+    replaced.set(p, w);
+    at = entry.instrs.indexOf(w) + 1;
+  }
   if (ints.returns)
     for (const b of fn.blocks)
-      if (b.term?.kind === "return") b.term.value = truncate(b, b.term.value, b.instrs.length);
-  /* every use of a truncated value takes the truncated one */
+      if (b.term?.kind === "return") b.term.value = truncate(b, b.term.value, b.instrs.length, ints.returns);
+  /* every use of a truncated value takes the truncated one (but the truncation itself) */
   const swap = (v: Instr) => replaced.get(v) ?? v;
+  const truncations = new Set(fn.blocks.flatMap((b) => b.instrs).filter((i) => i.id >= first));
   for (const b of fn.blocks) {
     for (const phi of b.phis) for (const inc of phi.incoming!) inc.value = swap(inc.value);
-    for (const i of b.instrs) if (!(i.op === "bitor" && replaced.get(i.operands[0]!) === i)) i.operands = i.operands.map(swap);
+    for (const i of b.instrs) if (!truncations.has(i)) i.operands = i.operands.map(swap);
     const term = b.term;
     if (term?.kind === "branch") term.cond = swap(term.cond);
     else if (term?.kind === "return" || term?.kind === "throw") term.value = swap(term.value);
@@ -238,6 +293,23 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
     meta.untyped = untypedName(fn.name);
     const twin = copy.functions.find((f) => f.name === meta.untyped)!;
     twin.meta!.external = true;
+  }
+  /* a typed function's call of another: C's implicit conversion of each argument to a sized
+     integer parameter's type, so that (n - 1) passes as an int32 and the call takes the typed entry */
+  const byName = new Map(ir.functions.map((f) => [f.name, f]));
+  for (const fn of ir.functions) {
+    if (!fn.meta?.declared) continue;
+    for (const b of fn.blocks)
+      for (const i of [...b.instrs]) {
+        const callee = i.op === "call_direct" ? byName.get(i.target!) : undefined;
+        const calleeInts = callee?.meta?.declared ? ints.get(callee.meta.jsName) : undefined;
+        if (!callee || !calleeInts?.params.size) continue;
+        const hidden = callee.params.length - callee.meta!.declared!.filter((t) => t !== undefined).length;
+        for (const [k, type] of calleeInts.params) {
+          const arg = i.operands[hidden + k];
+          if (arg) i.operands[hidden + k] = truncateValue(fn, b, arg, b.instrs.indexOf(i), type);
+        }
+      }
   }
   ir.functions.push(...copy.functions);
   for (const [name, local] of exported) {

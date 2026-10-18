@@ -46,6 +46,8 @@ export type Op =
   // comparisons the optimizer's specialize pass proved simpler (Instr.index 1: negated): the same
   // bits; === a string literal (an atom); typeof x === Instr.target, or "nullish" (x == null)
   | "identical" | "strict_eq_atom" | "is_type"
+  // x === a number literal (not NaN): x is a Number of that value (Instr.index 1: negated)
+  | "strict_eq_num"
   // for…in: an iterator over an object's enumerable string keys, and its next key (undefined: done)
   | "for_in_start" | "for_in_next"
   // iterators (for…of): a record from GetIterator, its next value (EMPTY: done), IteratorClose
@@ -141,7 +143,7 @@ export const OPS: Record<Op, OpInfo> = {
   char_code_at: { ...pure(2), allocates: true },  // a rope is flattened
   math: pure(1),
   int_add: pure(2), int_sub: pure(2), int_mul: pure(2),
-  identical: pure(2), strict_eq_atom: pure(2), is_type: pure(1),
+  identical: pure(2), strict_eq_atom: pure(2), is_type: pure(1), strict_eq_num: pure(2),
   in: generic(2), instanceof: generic(2), to_property_key: generic(1),
   for_in_start: { ...generic(1), callsUser: false }, for_in_next: { ...generic(1), callsUser: false },
   iter_start: generic(1), iter_next: generic(1), not_empty: pure(1),
