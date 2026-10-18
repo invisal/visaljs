@@ -1,0 +1,78 @@
+globals @0 kState, @1 changing, @2 read, @3 write, @4 literal, @5 o
+
+function main() strict
+bb0:
+  %0 = empty
+  store_global @0, %0
+  %1 = empty
+  store_global @1, %1
+  %2 = global_name "Symbol"  !mayThrow
+  %3 = const undefined
+  %4 = const "kState"
+  %5 = call %2, %3, %4  !mayThrow
+  store_global @0, %5
+  %6 = global_name "Symbol"  !mayThrow
+  %7 = const undefined
+  %8 = const "a"
+  %9 = call %6, %7, %8  !mayThrow
+  store_global @1, %9
+  %10 = global_name "Symbol"  !mayThrow
+  %11 = const undefined
+  %12 = const "b"
+  %13 = call %10, %11, %12  !mayThrow
+  store_global @1, %13
+  %14: Object = new_object
+  %15 = const 1
+  jump bb2
+bb1:
+  jump bb4
+bb2:
+  %kState0 = load_global @0
+  %kState1 = check_tdz %kState0  !mayThrow
+  set_elem %14, %kState1, %15  ?keyed  !mayThrow
+  jump bb1
+bb3:
+  jump bb6
+bb4:
+  %16 = get_prop %14, ."first"  !mayThrow
+  set_prop %14, %16, ."name"  !mayThrow
+  %17 = get_prop %14, [0]  !mayThrow
+  jump bb3
+bb5:
+  %18 = const undefined
+  return %18
+bb6:
+  %kState2 = load_global @0
+  %kState3 = check_tdz %kState2  !mayThrow
+  %19 = get_elem %14, %kState3  ?keyed  !mayThrow
+  %changing0 = load_global @1
+  %changing1 = check_tdz %changing0  !mayThrow
+  %20 = get_elem %14, %changing1  !mayThrow
+  %21: Number|String|BigInt = add %19, %20  !mayThrow
+  jump bb5
+
+function read(%o0) strict
+bb0:
+  %kState0 = load_global @0
+  %kState1 = check_tdz %kState0  !mayThrow
+  %0 = get_elem %o0, %kState1  ?keyed  !mayThrow
+  %changing0 = load_global @1
+  %changing1 = check_tdz %changing0  !mayThrow
+  %1 = get_elem %o0, %changing1  !mayThrow
+  %2: Number|String|BigInt = add %0, %1  !mayThrow
+  return %2
+
+function write(%o0, %v0) strict
+bb0:
+  %kState0 = load_global @0
+  %kState1 = check_tdz %kState0  !mayThrow
+  set_elem %o0, %kState1, %v0  ?keyed  !mayThrow
+  %0 = const undefined
+  return %0
+
+function literal(%o0) strict
+bb0:
+  %0 = get_prop %o0, ."first"  !mayThrow
+  set_prop %o0, %0, ."name"  !mayThrow
+  %1 = get_prop %o0, [0]  !mayThrow
+  return %1

@@ -37,7 +37,7 @@ export function printFunction(fn: FunctionIR): string {
     for (const phi of b.phis) lines.push(`  ${def(phi)}phi ${phi.incoming!.map((i) => `[${bb(i.block)}: ${name(i.value)}]`).join(", ")}`);
     for (const i of b.instrs) {
       if (i.op === "param") continue;
-      lines.push(`  ${def(i)}${instr(i)}${i.numberFirst ? "  ?number" : ""}${i.builtin ? `  ?${i.builtin}` : ""}${i.mayThrow ? "  !mayThrow" : ""}`);
+      lines.push(`  ${def(i)}${instr(i)}${i.numberFirst ? "  ?number" : ""}${i.builtin ? `  ?${i.builtin}` : ""}${i.keyedSite ? "  ?keyed" : ""}${i.mayThrow ? "  !mayThrow" : ""}`);
     }
     if (b.term) lines.push(`  ${term(b.term)}`);
   }

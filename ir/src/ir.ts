@@ -253,6 +253,9 @@ export interface Instr {
   text?: string;
   /** set_prop: `this.key = v` copied from a constructor's body (inlining): most likely an addition */
   addsProp?: boolean;
+  /** get_elem, set_elem: the key is most likely the same at every run (a module binding stored
+   *  once): the site caches the key it sees, and is a named access while the key stays it */
+  keyedSite?: boolean;
   /** call, construct_direct: the fallback of an inlined site (its guard failed): not inlined again */
   slowPath?: boolean;
   /** *_prop, define_prop */

@@ -7,6 +7,7 @@
 // (`visaljs build` prints the counts under its optimizing step).
 import { type ModuleIR, verify } from "@visaljs/ir";
 
+import { constantKeys } from "./constant-keys.ts";
 import { dce } from "./dce.ts";
 import { elideArguments } from "./elide-arguments.ts";
 import { inferTypes } from "./infer-types.ts";
@@ -49,7 +50,7 @@ export interface PassReport {
 }
 
 /** The passes `optimize` runs by default, in order. */
-export const DEFAULT_PASSES: readonly Pass[] = [promoteGlobals, inline, dce, inferTypes, simplify, specialize, elideArguments, dce, unbox];
+export const DEFAULT_PASSES: readonly Pass[] = [promoteGlobals, inline, dce, constantKeys, inferTypes, simplify, specialize, elideArguments, dce, unbox];
 
 function verifyModule(m: ModuleIR, after: string) {
   try {
