@@ -373,6 +373,22 @@ static inline int js_set_prop(JSContext *ctx, JSValue obj, JSValue key, JSValue 
     return js_set_prop_slow(ctx, obj, key, v, strict, ic);
 }
 
+/* obj[key] and obj[key] = v at a site whose key is most likely always the same symbol or string
+ * (the optimizer's guess: a module binding stored once, as Node's kState). `site` holds the key
+ * the site's cache is for (EMPTY: none yet): while the key is that one, the access is a named
+ * access's, inline cache and all. Another key the slow path makes the site's, or, when it isn't
+ * a property key already (an index, a string not interned), accesses generically. */
+JS_WARN_UNUSED JSValue js_get_keyed_slow(JSContext *ctx, JSValue obj, JSValue key, JSValue *site, JSPropCache *ic);
+JS_WARN_UNUSED int js_set_keyed_slow(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool strict, JSValue *site, JSPropCache *ic);
+static inline JSValue js_get_keyed(JSContext *ctx, JSValue obj, JSValue key, JSValue *site, JSPropCache *ic) {
+    if (JS_LIKELY(js_same_bits(key, *site))) return js_get_prop(ctx, obj, key, ic);
+    return js_get_keyed_slow(ctx, obj, key, site, ic);
+}
+static inline int js_set_keyed(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool strict, JSValue *site, JSPropCache *ic) {
+    if (JS_LIKELY(js_same_bits(key, *site))) return js_set_prop(ctx, obj, key, v, strict, ic);
+    return js_set_keyed_slow(ctx, obj, key, v, strict, site, ic);
+}
+
 /* An object's new shape. When the object is a prototype, caches that checked the chain it's on
  * may be stale: the runtime's proto_epoch moves on. */
 static JS_FAST_PATH void js_object_set_shape(JSContext *ctx, JSObject *o, JSShape *s) {

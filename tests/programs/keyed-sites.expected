@@ -1,0 +1,11 @@
+1 undefined n
+5 plain 1 7 1 7 5 built 14 (symbol)
+from getter 0 set 5,get
+symbol trap 9
+TypeError
+undefined inherited
+TypeError true
+TypeError
+TypeError true
+TypeError
+0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38

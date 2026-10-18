@@ -1098,6 +1098,27 @@ int js_set_prop_slow(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool s
 
 /* ---- Generated code: computed keys, delete, literals --------------------------------- */
 
+/* Whether `key` can be a keyed site's: a property key as it is (a symbol, an interned string
+ * that isn't an index), so that the same bits mean the same key. Makes the site its. */
+static bool take_site_key(JSContext *ctx, JSValue key, JSValue *site, JSPropCache *ic) {
+    if (!js_is_symbol(key) && !(js_is_string(key) && js_is_atom(key))) return false;
+    JSValue k = js_to_property_key(ctx, key);  /* a primitive: no user code */
+    if (!js_same_bits(k, key) || js_key_is_index(k)) return false;
+    memset(ic, 0, sizeof *ic);  /* its entries were for the old key */
+    *site = key;
+    return true;
+}
+
+JSValue js_get_keyed_slow(JSContext *ctx, JSValue obj, JSValue key, JSValue *site, JSPropCache *ic) {
+    if (take_site_key(ctx, key, site, ic)) return js_get_prop(ctx, obj, key, ic);
+    return js_get_elem(ctx, obj, key);
+}
+
+int js_set_keyed_slow(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool strict, JSValue *site, JSPropCache *ic) {
+    if (take_site_key(ctx, key, site, ic)) return js_set_prop(ctx, obj, key, v, strict, ic);
+    return js_set_elem(ctx, obj, key, v, strict);
+}
+
 JSValue js_get_elem(JSContext *ctx, JSValue obj, JSValue key) {
     JS_ASSERT_NOT_EXC(obj);
     JS_ASSERT_NOT_EXC(key);

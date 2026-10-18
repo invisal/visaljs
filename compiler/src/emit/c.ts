@@ -303,9 +303,11 @@ function cDouble(d: number): string {
   return hexFloat(d);
 }
 
-/** Inline caches: one per *_prop site with a named key, in mod_ics[]. */
+/** Inline caches: one per *_prop site with a named key, in mod_ics[]; a keyed site's key, in
+ *  mod_keys[] (GC roots). */
 class Caches {
   count = 0;
+  keys = 0;
 }
 
 function constant(v: JSConst, strings: Strings): string {
@@ -692,6 +694,10 @@ class FunctionEmitter {
     return keyValue(i.key!, this.strings);
   }
 
+  private keyedCache(): string {
+    return `&${this.strings.prefix}mod_keys[${this.caches.keys++}], ${this.cache()}`;
+  }
+
   private cache(): string {
     return `&${this.strings.prefix}mod_ics[${this.caches.count++}]`;
   }
@@ -857,7 +863,7 @@ class FunctionEmitter {
         break;
       }
       case "get_elem":
-        expr = `js_get_elem(ctx, ${args[0]}, ${args[1]})`;
+        expr = i.keyedSite ? `js_get_keyed(ctx, ${args[0]}, ${args[1]}, ${this.keyedCache()})` : `js_get_elem(ctx, ${args[0]}, ${args[1]})`;
         break;
       case "get_index":  /* a double key: the variant that takes it unboxed */
         expr = i.operands[1]!.repr === "f64"
@@ -870,7 +876,9 @@ class FunctionEmitter {
           : `js_set_value(ctx, ${args[0]}, ${this.key(i)}, ${args[1]}, ${strict})`;
         break;
       case "set_elem":
-        status = `js_set_elem(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
+        status = i.keyedSite
+          ? `js_set_keyed(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict}, ${this.keyedCache()})`
+          : `js_set_elem(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
         break;
       case "set_index":
         status = i.operands[1]!.repr === "f64"
@@ -1285,6 +1293,7 @@ export function emitHarnessScript(m: ModuleIR, prefix: string, atoms: ReadonlyMa
     `void ${prefix}register(JSRuntime *rt) {`,
     ...(cells.length ? [`    js_register_static_atoms(rt, ${prefix}mod_atoms, ${cells.length});`] : []),
     ...(e.caches.count ? [`    js_register_prop_caches(rt, ${prefix}mod_ics, ${e.caches.count});`] : []),
+    ...(e.caches.keys ? [`    js_register_roots(rt, ${prefix}mod_keys, ${e.caches.keys});  /* zeroed: EMPTY, no key yet */`] : []),
     `    for (size_t i = 0; i < ${nGlobals}; i++) ${prefix}mod_globals[i] = JS_UNDEFINED;`,
     `    js_register_roots(rt, ${prefix}mod_globals, ${nGlobals});`,
     "}",
@@ -1335,6 +1344,7 @@ function dataLines(m: ModuleIR, p: string, entry: string | null, options: EmitOp
     ...(e.embedSource ? [sourceCell(m.source, p).define(storage)] : []),
     ...(atoms.length ? [`static const JSString *const ${p}mod_atoms[] = { ${atoms.map((a) => `(const JSString *)&${a}`).join(", ")} };`] : []),
     ...(e.caches.count ? [`${storage}JSPropCache ${p}mod_ics[${e.caches.count}];`] : []),
+    ...(e.caches.keys ? [`${storage}JSValue ${p}mod_keys[${e.caches.keys}];`] : []),
     ...(options.components?.length && !entry ? [`static const JSComponent *const ${p}mod_components[] = { ${options.components.map((c) => `&${c}`).join(", ")} };`] : []),
     ...(options.core && !entry ? [`static const JSCoreEntry ${p}mod_core[] = {`, ...options.core.map((c) => `    ${c.c},`), "};"] : []),
   ];
@@ -1350,6 +1360,7 @@ function mainLines(m: ModuleIR, p: string, entry: string | null, options: EmitOp
     /* before the realm interns its own names, so they resolve to these cells */
     ...(atoms.length ? [`    js_register_static_atoms(rt, ${p}mod_atoms, ${atoms.length});`] : []),
     ...(e.caches.count ? [`    js_register_prop_caches(rt, ${p}mod_ics, ${e.caches.count});`] : []),
+    ...(e.caches.keys ? [`    js_register_roots(rt, ${p}mod_keys, ${e.caches.keys});  /* zeroed: EMPTY, no key yet */`] : []),
     ...(options.harness?.scripts.length
       ? [`    void ${options.harness.register}(JSRuntime *rt);`, `    ${options.harness.register}(rt);  /* the harness's tables */`]
       : []),
@@ -1501,6 +1512,7 @@ export function* emitProgramFiles(m: ModuleIR, options: EmitOptions = {}): Gener
     "#ifndef VISALJS_PROGRAM_DATA  /* program.c has the definitions */",
     `extern JSValue mod_globals[${Math.max(1, m.globals.length)}];`,
     ...(e.caches.count ? [`extern JSPropCache mod_ics[${e.caches.count}];`] : []),
+    ...(e.caches.keys ? [`extern JSValue mod_keys[${e.caches.keys}];`] : []),
     ...e.strings.decls.map((d) => d.declare),
     ...(e.embedSource ? [sourceCell(m.source, "").declare] : []),
     "#endif",
