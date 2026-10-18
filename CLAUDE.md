@@ -12,5 +12,19 @@ An ahead-of-time JavaScript compiler: JavaScript → IR → C → a native binar
   `--accept-regressions`, run on the full suite.
 - Pull requests use the template for their kind of change:
   `gh pr create --template <name>.md` (`.github/PULL_REQUEST_TEMPLATE/`).
-- Run `/deslop` when a pull request is final: before `gh pr create` or `gh pr ready`, not on
-  drafts.
+
+## Comments
+
+Comment only what the code can't say, in a line or two:
+
+- why it's done this way, when the obvious way is wrong;
+- a constraint from outside the code: Node's or a package's behavior, a platform quirk, a
+  measured cost;
+- an invariant a change could break;
+- the contract of a public export (a file a `package.json` `exports` names) or of an interface
+  other modules implement (the hooks in `cli/src/pipeline/types.ts`).
+
+No comments that label or narrate the lines below them, repeat a function's name and types, or
+tell history ("used to…", "now…"). When code needs a comment to be followed, change the code
+instead: a better name, a named constant, a smaller function. Keep license and attribution
+headers and directives (`eslint-disable`, `@ts-expect-error`, `/* fallthrough */`).
