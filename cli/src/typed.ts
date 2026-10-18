@@ -178,14 +178,7 @@ function truncator(fn: FunctionIR) {
     ({ id: next++, op, operands, type: T.None, repr: "boxed", mayThrow: op !== "const", block: b, loc: null, ...extra });
   return (b: FunctionIR["blocks"][number], v: Instr, at: number, type: IntType): Instr => {
     const name = v.name ? { name: v.name } : {};
-    const k = (value: number) => make(b, "const", [], { lit: { value } });
-    let added: Instr[];
-    if (type === "i32") {
-      const zero = k(0);
-      added = [zero, make(b, "bitor", [v, zero], name)];
-    } else {
-      added = [make(b, "to_i64", [v], { ...name, mayThrow: false })];
-    }
+    const added = [make(b, type === "i32" ? "to_i32" : "to_i64", [v], { ...name, mayThrow: false })];
     b.instrs.splice(at, 0, ...added);
     return added.at(-1)!;
   };
@@ -235,6 +228,62 @@ function ident(name: string): string {
   return out;
 }
 
+/** Numeric literals through bundling: the bundler folds constant expressions with JS's
+ *  arithmetic (1 / 4 * 4 to 1, where C's integer division gives 0) and writes 1.0 as 1. Each
+ *  literal in an expression is marked, unfoldable, and the marks become the constants again after
+ *  lowering (floatLiterals): a float-written one with an integer value (1.0, 1e3) flagged. */
+const FLOAT_MARK = "__visaljs_f64";
+const NUMBER_MARK = "__visaljs_num";
+
+function markFloatLiterals(code: string): string {
+  const sf = ts.createSourceFile("typed.ts", code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const marks: { start: number; end: number; text: string }[] = [];
+  const visit = (n: ts.Node): void => {
+    if (ts.isTypeNode(n) || ts.isPropertyName(n) && ts.isPropertyAssignment(n.parent) && n.parent.name === n) return;  /* types, keys */
+    if (ts.isNumericLiteral(n)) {
+      const text = n.getText(sf);
+      const float = /[.eE]/.test(text) && !/^0[xXbBoO]/.test(text) && Number.isInteger(Number(text.replaceAll("_", "")));
+      marks.push({ start: n.getStart(sf), end: n.getEnd(), text: `${float ? FLOAT_MARK : NUMBER_MARK}(${text})` });
+      return;
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  let out = "";
+  let last = 0;
+  for (const m of marks) {
+    out += code.slice(last, m.start) + m.text;
+    last = m.end;
+  }
+  return out + code.slice(last);
+}
+
+/** The float literal marks as their constants, flagged (floatLit). */
+function floatLiterals(m: ModuleIR) {
+  for (const fn of [m.main, ...m.functions]) {
+    const replaced = new Map<Instr, Instr>();
+    const dead = new Set<Instr>();
+    for (const b of fn.blocks)
+      for (const i of b.instrs) {
+        const callee = i.operands[0];
+        const value = i.operands[2];
+        if (i.op !== "call" || callee?.op !== "global_name" || (callee.target !== FLOAT_MARK && callee.target !== NUMBER_MARK) || value?.op !== "const") continue;
+        if (callee.target === FLOAT_MARK) value.floatLit = true;
+        replaced.set(i, value);
+        dead.add(i).add(callee);
+      }
+    if (!dead.size) continue;
+    for (const b of fn.blocks) {
+      b.instrs = b.instrs.filter((i) => !dead.has(i));
+      for (const phi of b.phis) for (const inc of phi.incoming!) inc.value = replaced.get(inc.value) ?? inc.value;
+      for (const i of b.instrs) i.operands = i.operands.map((o) => replaced.get(o) ?? o);
+      const term = b.term;
+      if (term?.kind === "branch") term.cond = replaced.get(term.cond) ?? term.cond;
+      else if (term?.kind === "return" || term?.kind === "throw") term.value = replaced.get(term.value) ?? term.value;
+    }
+  }
+}
+
 /** Compiles the typed files as one unit. */
 export async function buildTypedUnit(files: readonly string[], primitives: HostPrimitives): Promise<TypedUnit> {
   const ints = new Map<string, Ints>();
@@ -247,6 +296,7 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
       name: "visaljs-typed-entry",
       resolveId: (s) => (s === ENTRY ? s : null),
       load: (id) => (id === ENTRY ? files.map((f) => `export * from ${JSON.stringify(resolve(f))};`).join("\n") : null),
+      transform: (code, id) => (files.includes(id) ? markFloatLiterals(code) : null),
     }],
     logLevel: "silent",
   });
@@ -264,9 +314,11 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
 
   const ast = parseModule(code, "typed.js", undefined, undefined, primitives);
   const ir = lower(ast, analyze(ast));
+  floatLiterals(ir);
   /* each function's untyped copy: what a typed function's generic entry runs for arguments that
      aren't the declared types (lowered again: the same module slots, its own function names) */
   const copy = lower(ast, analyze(ast));
+  floatLiterals(copy);
   const untypedName = (name: string) => `${name}$untyped`;
   for (const fn of copy.functions) {
     fn.name = untypedName(fn.name);

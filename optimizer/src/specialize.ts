@@ -19,6 +19,7 @@
 // Anywhere, not just in loops: a call is big anyway.
 import { Number_, T, isSubtype, type FunctionIR, type Instr, type JSConst, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
+import { int64Arith } from "./infer-types.ts";
 import { clearMayThrow, functionsOf, loopDepths, removeInstrs, removeUnreachable, useCounts } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
@@ -136,6 +137,14 @@ export const specialize: Pass = {
       const unread = new Set<Instr>();
       for (const b of fn.blocks)
         for (const i of b.instrs) {
+          /* an i32's conversion: the int32 arithmetic feeding it wraps, as C's */
+          if (i.op === "to_i32")
+            for (const x of i.operands)
+              if (INT_FORM[x.op] && uses.get(x) === 1 && x.operands.every((o) => isSubtype(o.type, T.Int32))) {
+                if (x.op === "num_inc" || x.op === "num_dec") x.operands = [x.operands[0]!, one(x)];
+                x.op = INT_FORM[x.op]!;
+                count("wrapped", "int operation");
+              }
           /* typed code trusts the built-ins: s.charCodeAt(i), a string's unit; Math.sqrt(x), C's.
              Reading the method (and Math) does nothing else: it goes when nothing else reads it. */
           const trusted = trustedBuiltin(i, (v) => v.type);
@@ -194,9 +203,17 @@ export const specialize: Pass = {
           clearMayThrow(i);
           i.op = form;
           count("inlined", "number operator");
+          /* an int's / and %: C's integer division; a zero divisor throws (a constant one can't) */
+          if ((form === "num_div" || form === "num_mod") && int64Arith(i, (v) => v.type)) {
+            i.op = form === "num_div" ? "int_div" : "int_mod";
+            const d = i.operands[1]!;
+            i.mayThrow = !(d.op === "const" && d.lit!.value !== 0);
+            count("inlined", "integer division", 1, "integer divisions");
+            continue;
+          }
           /* (a + b) | 0, (a * b) & 255 … of int32s (typed code's sized integers): the bitwise operator
              truncates its operands to 32 bits, so a + b wrapping in an int32 gives it the same bits */
-          if (TRUNCATING.has(form))
+          if (TRUNCATING.has(form) && !int64Arith(i, (v) => v.type))
             for (const x of i.operands)
               if (INT_FORM[x.op] && uses.get(x) === 1 && x.operands.every((o) => isSubtype(o.type, T.Int32))) {
                 if (x.op === "num_inc" || x.op === "num_dec") x.operands = [x.operands[0]!, one(x)];

@@ -15,7 +15,7 @@ const REMOVABLE = new Set<Op>([
   "phi", "const", "empty", "bigint", "load_global", "global_this", "env_load", "sloppy_this",
   "strict_eq", "strict_ne", "switch_string", "not", "to_boolean", "is_nullish", "typeof", "not_empty",
   "new_object", "new_array", "make_function", "make_arguments", "host_function",
-  "same_function", "function_env", "construct_result", "char_code_at", "math", "int_add", "int_sub", "int_mul", "to_i64",
+  "same_function", "function_env", "construct_result", "char_code_at", "math", "int_add", "int_sub", "int_mul", "to_i64", "to_i32",
 ]);
 
 export const dce: Pass = {

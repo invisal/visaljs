@@ -109,18 +109,20 @@ function numeric(...ops: Type[]): Type {
   return Number_ | bigint(ops);
 }
 
-/** Typed code's 64-bit `int` arithmetic (C's, wrapping): +, -, *, ++, --, unary - of ints and
- *  int32s, one of them an int; % by a nonzero constant. Other operators (/, bitwise) are JS's. */
-const INT64_OPS = new Set<Instr["op"]>(["add", "sub", "mul", "neg", "inc", "dec", "num_add", "num_sub", "num_mul", "num_neg", "num_inc", "num_dec"]);
+/** Typed code's 64-bit `int` arithmetic, C's: +, -, *, /, %, ++, --, unary -, and the bitwise
+ *  operators of integers: ints and int32s with one of them an int, or in a typed function any
+ *  integers (1 / 4 is 0, as in C; a float literal, 1.0, isn't one). Wrapping; / and % integer division. */
+const INT64_OPS = new Set<Instr["op"]>([
+  "add", "sub", "mul", "div", "mod", "neg", "inc", "dec", "bitand", "bitor", "bitxor", "bitnot", "shl", "sar", "shr",
+  "num_add", "num_sub", "num_mul", "num_div", "num_mod", "num_neg", "num_inc", "num_dec",
+  "num_bitand", "num_bitor", "num_bitxor", "num_bitnot", "num_shl", "num_sar", "num_shr", "int_div", "int_mod",
+]);
 export function int64Arith(i: Instr, type: (v: Instr) => Type): boolean {
-  const integral = (o: Instr) => isSubtype(type(o), T.Int64 | T.Int32);
-  const wide = i.operands.some((o) => isSubtype(type(o), T.Int64) && type(o) !== T.None);
-  if (INT64_OPS.has(i.op)) return wide && i.operands.every(integral);
-  if (i.op === "mod" || i.op === "num_mod") {
-    const d = i.operands[1]!;
-    return wide && integral(i.operands[0]!) && d.op === "const" && typeof d.lit!.value === "number" && Number.isInteger(d.lit!.value) && d.lit!.value !== 0;
-  }
-  return false;
+  if (!INT64_OPS.has(i.op)) return false;
+  const integral = (o: Instr) => isSubtype(type(o), T.Int64 | T.Int32) && !o.floatLit;
+  const typed = i.block.fn.meta?.declared !== undefined;
+  return (typed || i.operands.some((o) => isSubtype(type(o), T.Int64) && type(o) !== T.None)) && i.operands.every(integral)
+    && i.operands.some((o) => type(o) !== T.None);
 }
 
 /** A bitwise operator's result: ToInt32 of a Number is an int32 (never -0). */
@@ -267,6 +269,8 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
       return T.Int32;
     case "to_i64":
       return T.Int64;
+    case "to_i32":
+      return T.Int32;
     case "call": {
       /* typed code trusts the built-ins to be the standard ones, as tsc's types do */
       if (trustedBuiltin(i, t)) return Number_;
