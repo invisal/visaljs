@@ -326,6 +326,8 @@ typedef struct JSPropCache {
 /* A module's caches, once at startup (the GC resets them weakly). */
 void js_register_prop_caches(JSRuntime *rt, JSPropCache *ics, size_t n);
 
+/* The slow paths of a named access: `ic` is the site's cache, or NULL for a computed key's access
+ * (the runtime's shared caches only). */
 JS_WARN_UNUSED JSValue js_get_prop_slow(JSContext *ctx, JSValue obj, JSValue key, JSPropCache *ic);
 JS_WARN_UNUSED int js_set_prop_slow(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool strict, JSPropCache *ic);
 

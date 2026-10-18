@@ -260,6 +260,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   fetchFormDataHooks: { c: "js_host_fetch_form_data_hooks", length: 2 }, // (serialize, parse): FormData's (prelude/internal/form_data.js)
   ttyIsatty: { c: "js_host_tty_isatty", length: 1 },          // (fd) → boolean
   timerUnref: { c: "js_host_timer_unref", length: 2 },        // (fn, ms) → id: a timer that doesn't keep the program alive
+  loopNow: { c: "js_host_loop_now", length: 0 },             // () → libuv's time in ms as of the last poll (Node's getLibuvNow)
   /* node:timers' Timeouts and Immediates (the runtime's timers, runtime/src/jobs.c) */
   timerStart: { c: "js_host_timer_start", length: 4 },        // (fn, ms (< 0: an immediate), ref, id (0: new; else restart it)) → id
   timerRef: { c: "js_host_timer_ref", length: 2 },            // (id, ref)
