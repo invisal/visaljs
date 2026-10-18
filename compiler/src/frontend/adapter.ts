@@ -4,6 +4,7 @@ import { normalize, resolve as resolvePath } from "node:path";
 
 import ts from "typescript";
 
+import type { IntKind } from "@visaljs/ir";
 import type * as A from "./ast.ts";
 import { boundNames } from "./ast.ts";
 import { CompileError, type CompileErrorKind } from "./errors.ts";
@@ -74,6 +75,8 @@ export interface StaticUnitSource {
   linked(node: ts.ImportDeclaration): boolean;
   /** A file's name in locations (as the program's are, relative to the working directory). */
   fileName(sf: ts.SourceFile): string;
+  /** The integer a type names ("visaljs"'s int or i32, through aliases), if it names one. */
+  intKind(type: ts.TypeNode | undefined): IntKind | undefined;
 }
 
 /** A static unit as one module: its types ignored, its files' top levels one after another.
@@ -82,6 +85,7 @@ export function convertStaticUnit(unit: StaticUnitSource, hostPrimitives: HostPr
   const programs = unit.files.map((sf) => new Converter(sf, true, undefined, resolvePath(sf.fileName), hostPrimitives, unit).program());
   return {
     ...programs[0]!,
+    static: true,
     body: hoistHostImports(programs.flatMap((p) => p.body)),
     exportedNames: programs.flatMap((p) => p.exportedNames),
     source: "",
@@ -418,10 +422,11 @@ class Converter {
       declarations: list.declarations.map((d) => {
         this.noTypes(d);
         if (d.exclamationToken && !this.unit) this.fail("SyntaxError", "definite assignment assertions are TypeScript", d);
+        const fn = d.initializer && (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer)) ? d.initializer : undefined;
         return {
           type: "VariableDeclarator",
           loc: this.loc(d),
-          id: this.bindingPattern(d.name),
+          id: this.declaredInt(this.bindingPattern(d.name), d.type, fn?.type),
           init: d.initializer ? this.expression(d.initializer) : null,
         };
       }),
@@ -541,7 +546,8 @@ class Converter {
         return {
           type: "FunctionDeclaration",
           loc,
-          id: f.name ? this.identifier(f.name) : { type: "Identifier", loc, name: "*default*" },
+          id: f.name ? this.declaredInt(this.identifier(f.name), undefined, f.type) : { type: "Identifier", loc, name: "*default*" },
+          ...this.returnsInt(f),
           ...this.parameters(f.parameters),
           source: this.range(f),
           body: this.block(f.body),
@@ -744,7 +750,7 @@ class Converter {
         rest = this.bindingPattern(p.name);
         return;
       }
-      params.push(this.bindingPattern(p.name));
+      params.push(this.declaredInt(this.bindingPattern(p.name), p.type));
       defaults.push(p.initializer ? this.expression(p.initializer) : null);
     });
     return { params, defaults, rest };
@@ -773,6 +779,7 @@ class Converter {
       type: "FunctionExpression",
       loc: this.loc(f),
       id: !method && !ts.isConstructorDeclaration(f) && f.name && ts.isIdentifier(f.name) ? this.identifier(f.name) : null,
+      ...this.returnsInt(f),
       ...this.parameters(f.parameters),
       source: this.range(cls?.ctor && cls.node ? cls.node : f),  // a class constructor shows its class
       body: this.block(f.body),
@@ -949,6 +956,7 @@ class Converter {
       type: "FunctionExpression",
       loc,
       id: null,
+      ...this.returnsInt(f),
       ...this.parameters(f.parameters),
       source: this.range(f),
       body,
@@ -962,6 +970,21 @@ class Converter {
       initRef: null,
       ...this.asyncFlag(f),
     };
+  }
+
+  /** Static code: the integers a declaration names, on its identifier: its type's, and (a
+   *  function's name, or a const holding a function) its function's return type's. */
+  private declaredInt<P extends A.Pattern>(id: P, type: ts.TypeNode | undefined, returns?: ts.TypeNode): P {
+    if (!this.unit || id.type !== "Identifier") return id;
+    const int = this.unit.intKind(type);
+    const returnsInt = this.unit.intKind(returns);
+    return { ...id, ...(int ? { int } : {}), ...(returnsInt ? { returnsInt } : {}) };
+  }
+
+  /** Static code: the integer a function's declared return type names. */
+  private returnsInt(f: ts.SignatureDeclaration): { returnsInt?: IntKind } {
+    const int = this.unit?.intKind(f.type);
+    return int ? { returnsInt: int } : {};
   }
 
   /** `async`: async functions and async generators. */

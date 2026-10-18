@@ -20,7 +20,6 @@
 // same way: f called directly when the method is the built-in (every emit and once wrapper).
 import { Number_, T, isStatic, isSubtype, type FunctionIR, type Instr, type JSConst, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
-import { int64Arith } from "./infer-types.ts";
 import { clearMayThrow, functionsOf, loopDepths, removeInstrs, removeUnreachable, useCounts } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
@@ -73,7 +72,7 @@ export function trustedBuiltin(i: Instr, type: (v: Instr) => Type): string | nul
 /** The bitwise operators: ToInt32 (ToUint32) of their operands first. */
 const TRUNCATING = new Set<Op>(["num_bitor", "num_bitand", "num_bitxor", "num_shl", "num_sar", "num_shr"]);
 
-/** Wrapping int32 arithmetic (`(a + b) | 0` of int32s, an i32's to_i32), by the Number operator. */
+/** Wrapping int32 arithmetic (`(a + b) | 0` of int32s), by the Number operator. */
 const INT_FORM: Partial<Record<Op, Op>> = { num_add: "int_add", num_sub: "int_sub", num_mul: "int_mul", num_inc: "int_add", num_dec: "int_sub" };
 
 /** A constant 1 before `i`, for x++ as x + 1. */
@@ -140,14 +139,6 @@ export const specialize: Pass = {
       const unread = new Set<Instr>();
       for (const b of fn.blocks)
         for (const i of b.instrs) {
-          /* an i32's conversion: the int32 arithmetic feeding it wraps, as C's */
-          if (i.op === "to_i32")
-            for (const x of i.operands)
-              if (INT_FORM[x.op] && uses.get(x) === 1 && x.operands.every((o) => isSubtype(o.type, T.Int32))) {
-                if (x.op === "num_inc" || x.op === "num_dec") x.operands = [x.operands[0]!, one(x)];
-                x.op = INT_FORM[x.op]!;
-                count("wrapped", "int operation");
-              }
           /* typed code trusts the built-ins: s.charCodeAt(i), a string's unit; Math.sqrt(x), C's.
              Reading the method (and Math) does nothing else: it goes when nothing else reads it. */
           const trusted = trustedBuiltin(i, (v) => v.type);
@@ -208,17 +199,9 @@ export const specialize: Pass = {
           clearMayThrow(i);
           i.op = form;
           count("inlined", "number operator");
-          /* an int's / and %: C's integer division; a zero divisor throws (a constant one can't) */
-          if ((form === "num_div" || form === "num_mod") && int64Arith(i, (v) => v.type)) {
-            i.op = form === "num_div" ? "int_div" : "int_mod";
-            const d = i.operands[1]!;
-            i.mayThrow = !(d.op === "const" && d.lit!.value !== 0);
-            count("inlined", "integer division", 1, "integer divisions");
-            continue;
-          }
           /* (a + b) | 0 of int32s: the bitwise operator truncates its operands to 32 bits, so a + b
              wrapping in an int32 gives it the same bits */
-          if (TRUNCATING.has(form) && !int64Arith(i, (v) => v.type))
+          if (TRUNCATING.has(form))
             for (const x of i.operands)
               if (INT_FORM[x.op] && uses.get(x) === 1 && x.operands.every((o) => isSubtype(o.type, T.Int32))) {
                 if (x.op === "num_inc" || x.op === "num_dec") x.operands = [x.operands[0]!, one(x)];
