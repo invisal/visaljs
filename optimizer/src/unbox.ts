@@ -29,7 +29,7 @@ import { closedFunctions, functionsOf, loopDepths, pauses } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
 const F64 = new Set<Op>([
-  "char_code_at", "math", "int_add", "int_sub", "int_mul", "to_i64", "to_i32", "int_div", "int_mod",
+  "char_code_at", "math", "int_add", "int_sub", "int_mul", "to_i64", "to_i32", "int_div", "int_mod", "i64",
   "num_add", "num_sub", "num_mul", "num_div", "num_mod", "num_neg", "num_inc", "num_dec",
   "num_bitand", "num_bitor", "num_bitxor", "num_bitnot", "num_shl", "num_sar", "num_shr",
 ]);

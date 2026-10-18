@@ -32,6 +32,6 @@ export function buildBun(entry: string, binary: string) {
   execFileSync("bun", ["build", "--compile", entry, "--outfile", binary], { stdio: "ignore" });
 }
 
-export function buildVisaljs(entry: string, binary: string) {
-  execFileSync(process.execPath, [`--max-old-space-size=${NEXTJS_BUILD_HEAP_MB}`, join(import.meta.dirname, "..", "..", "cli", "src", "cli.ts"), "build", entry, "-o", binary, "--quiet"], { stdio: "inherit" });
+export function buildVisaljs(entry: string, binary: string, flags: string[] = []) {
+  execFileSync(process.execPath, [`--max-old-space-size=${NEXTJS_BUILD_HEAP_MB}`, join(import.meta.dirname, "..", "..", "cli", "src", "cli.ts"), "build", entry, "-o", binary, "--quiet", ...flags], { stdio: "inherit" });
 }
