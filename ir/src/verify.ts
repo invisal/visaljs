@@ -111,8 +111,8 @@ export function verify(fn: FunctionIR): void {
   };
 
   /* representation follows type: a double holds only Numbers, an int32_t only Int32s, a bool only Booleans (C emission
-     converts between reprs where a value is used) */
-  const REPR_TYPE: Record<Repr, Type> = { boxed: Any | T.Empty, f64: Number_, i32: T.Int32, bool: T.Boolean };
+     converts between reprs where a value is used); an int64_t only ints and Int32s */
+  const REPR_TYPE: Record<Repr, Type> = { boxed: Any | T.Empty, f64: Number_, i32: T.Int32, i64: T.Int64 | T.Int32, bool: T.Boolean };
   const reprFits = (repr: Repr, t: Type) => isSubtype(t, REPR_TYPE[repr]);
   for (const i of [...fn.params, ...fn.blocks.flatMap((b) => [...b.phis, ...b.instrs])]) {
     if (!reprFits(i.repr, i.type)) bad(`%${i.id} ${i.op} is ${i.repr} but its type is ${typeName(i.type)}`);

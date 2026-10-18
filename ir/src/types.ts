@@ -20,9 +20,10 @@ export const T = {
   BigInt: 1 << 7,
   Object: 1 << 8,
   Empty: 1 << 9,      // internal: an uninitialized binding (TDZ), never JS-visible
+  Int64: 1 << 10,     // a typed file's ("use visaljs") `int`: a Number held as a C int64_t (C semantics)
 } as const;
 
-export const Number_: Type = T.Int32 | T.Double;
+export const Number_: Type = T.Int32 | T.Double | T.Int64;
 export const Primitive: Type = T.Undefined | T.Null | T.Boolean | Number_ | T.String | T.Symbol | T.BigInt;
 export const Any: Type = Primitive | T.Object;
 /** Nothing known: any JS value, or EMPTY (what an uninitialized binding reads). */
@@ -40,7 +41,7 @@ const NAMED: [Type, string][] = [
 ];
 const BITS: [Type, string][] = [
   [T.Undefined, "Undefined"], [T.Null, "Null"], [T.Boolean, "Boolean"], [T.Int32, "Int32"], [T.Double, "Double"],
-  [T.String, "String"], [T.Symbol, "Symbol"], [T.BigInt, "BigInt"], [T.Object, "Object"], [T.Empty, "Empty"],
+  [T.String, "String"], [T.Symbol, "Symbol"], [T.BigInt, "BigInt"], [T.Object, "Object"], [T.Empty, "Empty"], [T.Int64, "Int64"],
 ];
 
 export function typeName(t: Type): string {
@@ -57,4 +58,4 @@ export function typeName(t: Type): string {
 }
 
 /** C representation. */
-export type Repr = "boxed" | "f64" | "i32" | "bool";
+export type Repr = "boxed" | "f64" | "i32" | "i64" | "bool";

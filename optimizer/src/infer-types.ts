@@ -3,7 +3,7 @@
 // to a fixpoint (the lattice is a bitset of 10 kinds, so that's quick). A phi is the union of its
 // inputs; an operation's type comes from its operands' (`transfer`). Operations it knows nothing
 // about are Unknown: any JS value, or EMPTY.
-import { declaredCallFits, dominators, isSubtype, Number_, OPS, Primitive, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { declaredCallFits, dominators, typedCallFits, isSubtype, Number_, OPS, Primitive, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { callers, closedFunctions, functionsOf, pauses, reversePostorder } from "./cfg.ts";
 import { trustedBuiltin } from "./specialize.ts";
@@ -109,6 +109,20 @@ function numeric(...ops: Type[]): Type {
   return Number_ | bigint(ops);
 }
 
+/** Typed code's 64-bit `int` arithmetic (C's, wrapping): +, -, *, ++, --, unary - of ints and
+ *  int32s, one of them an int; % by a nonzero constant. Other operators (/, bitwise) are JS's. */
+const INT64_OPS = new Set<Instr["op"]>(["add", "sub", "mul", "neg", "inc", "dec", "num_add", "num_sub", "num_mul", "num_neg", "num_inc", "num_dec"]);
+export function int64Arith(i: Instr, type: (v: Instr) => Type): boolean {
+  const integral = (o: Instr) => isSubtype(type(o), T.Int64 | T.Int32);
+  const wide = i.operands.some((o) => isSubtype(type(o), T.Int64) && type(o) !== T.None);
+  if (INT64_OPS.has(i.op)) return wide && i.operands.every(integral);
+  if (i.op === "mod" || i.op === "num_mod") {
+    const d = i.operands[1]!;
+    return wide && integral(i.operands[0]!) && d.op === "const" && typeof d.lit!.value === "number" && Number.isInteger(d.lit!.value) && d.lit!.value !== 0;
+  }
+  return false;
+}
+
 /** A bitwise operator's result: ToInt32 of a Number is an int32 (never -0). */
 function int32(...ops: Type[]): Type {
   return T.Int32 | bigint(ops);
@@ -201,6 +215,7 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
   const t = (v: Instr) => type(v) & ~T.Empty;
   if (BOOLEAN.has(i.op)) return T.Boolean;
   if (OBJECT.has(i.op)) return T.Object;
+  if (int64Arith(i, t)) return T.Int64;
   switch (i.op) {
     case "const": return constType(i.lit!.value);
     case "empty": return T.Empty;
@@ -210,7 +225,7 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
     case "bigint": return T.BigInt;
     case "switch_string": return T.Int32;
     case "to_number": return Number_;
-    case "to_numeric": return numeric(t(a!));
+    case "to_numeric": return isSubtype(t(a!), Number_) && t(a!) !== T.None ? t(a!) : numeric(t(a!));  /* a Number as it is (an int stays one) */
     case "add": {
       const ta = t(a!), tb = t(b!);
       if (ta === T.String || tb === T.String) return T.String;
@@ -250,13 +265,13 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
       return Number_;
     case "int_add": case "int_sub": case "int_mul":
       return T.Int32;
+    case "to_i64":
+      return T.Int64;
     case "call": {
       /* typed code trusts the built-ins to be the standard ones, as tsc's types do */
       if (trustedBuiltin(i, t)) return Number_;
       /* a typed unit's export: its declared result, when its typed entry runs */
-      const tc = i.typedCall;
-      const args = i.operands.slice(2);
-      return tc && args.length === tc.params.length && args.every((o, k) => t(o) !== T.None && isSubtype(t(o), tc.params[k]!.type)) ? tc.returns : Unknown;  /* typedCallFits, on the types being inferred */
+      return i.typedCall && typedCallFits(i, t) ? i.typedCall.returns : Unknown;
     }
     default:
       return Unknown;

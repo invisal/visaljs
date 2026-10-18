@@ -28,7 +28,7 @@ import { closedFunctions, functionsOf, loopDepths, pauses } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
 const F64 = new Set<Op>([
-  "char_code_at", "math", "int_add", "int_sub", "int_mul",
+  "char_code_at", "math", "int_add", "int_sub", "int_mul", "to_i64",
   "num_add", "num_sub", "num_mul", "num_div", "num_mod", "num_neg", "num_inc", "num_dec",
   "num_bitand", "num_bitor", "num_bitxor", "num_bitnot", "num_shl", "num_sar", "num_shr",
 ]);
@@ -37,7 +37,7 @@ const BOOL = new Set<Op>(["num_lt", "num_le", "num_gt", "num_ge", "num_eq", "num
 const TESTS = new Set<Op>(["same_function", "identical", "strict_eq_atom", "is_type", "strict_eq_num"]);
 
 /** How the report names each unboxed repr. */
-const REPR_NOUN: Record<Repr, string> = { boxed: "", f64: "double", i32: "int32", bool: "bool" };
+const REPR_NOUN: Record<Repr, string> = { boxed: "", f64: "double", i32: "int32", i64: "int64", bool: "bool" };
 
 /** Boxing a double for a use, against unboxing a JSValue (per use, before loop weights). */
 const BOX_COST = 2;
@@ -68,6 +68,7 @@ interface Use {
 function unboxedRepr(t: Type): Repr | null {
   if (t === T.None) return null;
   if (isSubtype(t, T.Int32)) return "i32";
+  if (isSubtype(t, T.Int64 | T.Int32)) return "i64";
   if (isSubtype(t, Number_)) return "f64";
   if (isSubtype(t, T.Boolean)) return "bool";
   return null;
@@ -122,13 +123,13 @@ function unboxModule(m: ModuleIR) {
       }
   }
   /* an int32 in an int32_t, any other Number in a double */
-  for (const c of candidates) c.repr = isSubtype(c.type, T.Int32) ? "i32" : "f64";
+  for (const c of candidates) c.repr = isSubtype(c.type, T.Int32) ? "i32" : isSubtype(c.type, T.Int64 | T.Int32) ? "i64" : "f64";
 
   /* the repr a use wants its value in */
   const wants = (u: Use): Repr => {
     if (!u.user) return u.index === 1 ? (u.block.fn.returnRepr ?? "boxed") : "boxed";  // a branch on a Number tests it boxed (js_truthy)
     if (u.user.op === "phi") return u.user.repr;
-    if (F64.has(u.user.op) || BOOL.has(u.user.op)) return u.user.repr === "boxed" ? "boxed" : "f64";
+    if (F64.has(u.user.op) || BOOL.has(u.user.op)) return "f64";  /* computed unboxed whatever its result's repr (C emission boxes that once) */
     if ((u.user.op === "get_index" || u.user.op === "set_index") && u.index === 1) return "f64";  // a double key: js_get_index_f64
     if (u.user.op === "call_direct") {
       const callee = byName.get(u.user.target!);

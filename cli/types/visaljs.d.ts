@@ -1,12 +1,9 @@
-// The types a "use visaljs" file can import: `import type { i32, u8 } from "visaljs"`. Integers
-// with C semantics: what is stored in one (a local, a parameter, a return value) is truncated to
-// its width, and their arithmetic wraps.
+// The types a "use visaljs" file can import: `import type { int } from "visaljs"`. Integers with
+// C semantics: what is stored in one (a local, a parameter, a return value, an argument) is
+// converted to it (truncated toward zero, wrapped), and +, -, *, % by a constant wrap.
 declare module "visaljs" {
-  export type i8 = number;
-  export type u8 = number;
-  export type i16 = number;
-  export type u16 = number;
-  export type i32 = number;
-  /** i32 */
+  /** A 64-bit integer (an int64_t). A JS Number when it leaves typed code: exact up to 2^53. */
   export type int = number;
+  /** A 32-bit integer (an int32_t), for code that wraps at 32 bits (hashes, C ports). */
+  export type i32 = number;
 }

@@ -62,9 +62,10 @@ export interface TypedUnit {
 }
 
 /** The declared parameter types of the top-level functions of the typed files, by name. */
-/** The sized integers ("visaljs"'s types, or aliases of the same names: tsc erases them, so by name). */
-type IntType = "i8" | "u8" | "i16" | "u16" | "i32";
-const INT_TYPES: Record<string, IntType> = { i8: "i8", u8: "u8", i16: "i16", u16: "u16", i32: "i32", int: "i32" };
+/** The integers ("visaljs"'s types, or aliases of the same names: tsc erases them, so by name):
+ *  `int` 64-bit, `i32` 32-bit, C semantics both. */
+type IntType = "i32" | "i64";
+const INT_TYPES: Record<string, IntType> = { int: "i64", i32: "i32" };
 
 /** A function's sized integer declarations: its locals', its parameters' (by index), its return's. */
 interface Ints {
@@ -74,7 +75,6 @@ interface Ints {
 }
 
 const intType = (node: ts.TypeNode | undefined, sf: ts.SourceFile): IntType | undefined => (node ? INT_TYPES[node.getText(sf)] : undefined);
-const isInt = (node: ts.TypeNode | undefined, sf: ts.SourceFile) => intType(node, sf) !== undefined;
 
 /** Each top-level function's `int` locals and return. */
 function intDeclarations(sf: ts.SourceFile): Map<string, Ints> {
@@ -117,7 +117,10 @@ function declaredSignatures(files: readonly string[], ints: Map<string, Ints>): 
       /* a parameter of another type (an array, an object): the function stays untyped; an export
          of one is an error (buildTypedUnit) */
       /* `int` (a `type int = number` alias, erased by tsc): a 32-bit integer */
-      const types = st.parameters.map((p) => (isInt(p.type, sf) ? T.Int32 : irType(checker, checker.getTypeAtLocation(p))));
+      const types = st.parameters.map((p) => {
+        const int = intType(p.type, sf);
+        return int ? (int === "i64" ? T.Int64 : T.Int32) : irType(checker, checker.getTypeAtLocation(p));
+      });
       const views = st.parameters.map((p) => VIEW_KINDS[checker.getTypeAtLocation(p).getSymbol()?.name ?? ""]);
       if (types.every((t) => t !== null)) out.set(st.name.text, { types: types as Type[], views });
     }
@@ -180,13 +183,8 @@ function truncator(fn: FunctionIR) {
     if (type === "i32") {
       const zero = k(0);
       added = [zero, make(b, "bitor", [v, zero], name)];
-    } else if (type === "u8" || type === "u16") {
-      const mask = k(type === "u8" ? 255 : 65535);
-      added = [mask, make(b, "bitand", [v, mask], name)];
     } else {
-      const bits = k(type === "i8" ? 24 : 16);
-      const up = make(b, "shl", [v, bits]);
-      added = [bits, up, make(b, "sar", [up, bits], name)];
+      added = [make(b, "to_i64", [v], { ...name, mayThrow: false })];
     }
     b.instrs.splice(at, 0, ...added);
     return added.at(-1)!;
@@ -202,7 +200,7 @@ function truncateInto(fn: FunctionIR, ints: Ints, truncate: ReturnType<typeof tr
       if (b.handler && i.mayThrow && at === b.instrs.length - 1) continue;  /* it ends a protected block: left as it is */
       replaced.set(i, truncate(b, i, at + 1, type));
     }
-  /* a parameter narrower than 32 bits, on entry (an i32's is checked: an int32 already) */
+  /* an int parameter, on entry: whoever called (any Number is taken; an i32's is checked) */
   const hidden = fn.params.length - (fn.meta!.declared?.filter((t) => t !== undefined).length ?? 0);
   const entry = fn.blocks[0]!;
   let at = entry.instrs.findIndex((i) => i.op !== "param");

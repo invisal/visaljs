@@ -42,7 +42,7 @@ static JS_MAYBE_UNUSED double jsf_sieve(JSContext *ctx, JSValue v0_n) {
 #line 4 "elements.js"
     v3 = js_global_get(ctx, JS_STATIC_STR(jss_0), "Array");
     if (JS_UNLIKELY(js_is_exception(v3))) { return 0; }
-    v5 = js_num_add(v0_n, js_int32(1));
+    v5 = js_number(js_as_number(v0_n) + 1.0);
     v6 = js_construct(ctx, v3, 1, (const JSValue[]){ v5 }, JS_UNDEFINED, "Array");
     if (JS_UNLIKELY(js_is_exception(v6))) { return 0; }
     v7 = js_get_method(ctx, v6, JS_STATIC_STR(jss_1), &mod_ics[0]);

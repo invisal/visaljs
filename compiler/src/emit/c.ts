@@ -277,21 +277,31 @@ function keyValue(k: PropKey, strings: Strings): string {
 /** C types and initial values of the IR's representations. */
 /** A typed-arrays view's element type: its JSTypedArrayType. */
 const TA_TYPE: Record<NonNullable<Instr["taView"]>, string> = { i8: "JS_TA_INT8", u8: "JS_TA_UINT8", i32: "JS_TA_INT32", f64: "JS_TA_FLOAT64" };
-const C_TYPE: Record<Repr, string> = { boxed: "JSValue", f64: "double", i32: "int32_t", bool: "bool" };
-const C_ZERO: Record<Repr, string> = { boxed: "JS_UNDEFINED", f64: "0", i32: "0", bool: "false" };
+const C_TYPE: Record<Repr, string> = { boxed: "JSValue", f64: "double", i32: "int32_t", i64: "int64_t", bool: "bool" };
+const C_ZERO: Record<Repr, string> = { boxed: "JS_UNDEFINED", f64: "0", i32: "0", i64: "0", bool: "false" };
 /** What a direct entry returns after a throw: unboxed, any value, the pending
  *  exception is the signal. */
-const C_FAIL: Record<Repr, string> = { boxed: "JS_EXCEPTION", f64: "0", i32: "0", bool: "false" };
+const C_FAIL: Record<Repr, string> = { boxed: "JS_EXCEPTION", f64: "0", i32: "0", i64: "0", bool: "false" };
 
 /** A C expression of repr `from` as repr `to`, when the type allows it (an int32_t only ever
  *  holds int32s, so converting to one can't lose anything). */
 function convert(expr: string, from: Repr, to: Repr): string {
   if (from === to) return expr;
+  /* a typed file's int: a JS Number when it leaves (exact up to 2^53); C's conversion when it comes */
+  if (from === "i64") return to === "boxed" ? `js_number((double)(${expr}))` : to === "f64" ? `(double)(${expr})` : to === "i32" ? `(int32_t)(${expr})` : `((${expr}) != 0)`;
+  if (to === "i64") return from === "i32" ? `(int64_t)(${expr})` : from === "f64" ? `js_f64_to_i64(${expr})` : from === "bool" ? `(int64_t)(${expr})` : `js_value_to_i64(${expr})`;
   if (from === "i32") return to === "boxed" ? `js_int32(${expr})` : `(double)(${expr})`;
   if (to === "boxed") return from === "bool" ? `js_bool(${expr})` : `js_number(${expr})`;
   if (to === "i32") return from === "f64" ? `(int32_t)(${expr})` : `js_as_int32_value(${expr})`;
   return to === "bool" ? `js_as_bool(${expr})` : `js_as_number(${expr})`;
 }
+
+/** The operators on proven Numbers (specialize's num_* forms): their C is unboxed() either way. */
+const NUM_OPS = new Set<Op>([
+  "num_add", "num_sub", "num_mul", "num_div", "num_mod", "num_neg", "num_inc", "num_dec",
+  "num_lt", "num_le", "num_gt", "num_ge", "num_eq", "num_ne",
+  "num_bitand", "num_bitor", "num_bitxor", "num_bitnot", "num_shl", "num_sar", "num_shr",
+]);
 
 /** Number comparisons: a C bool from doubles or int32s. */
 const BOOL_OPS = new Set<Op>(["num_lt", "num_le", "num_gt", "num_ge", "num_eq", "num_ne"]);
@@ -379,7 +389,7 @@ function typeTest(t: Type, v: string): string {
   if (t & T.Undefined) tests.push(`js_is_undefined(${v})`);
   if (t & T.Null) tests.push(`js_is_null(${v})`);
   if (t & T.Boolean) tests.push(`js_is_bool(${v})`);
-  if ((t & Number_) === Number_) tests.push(`js_is_number(${v})`);
+  if ((t & Number_) === Number_ || t & (T.Double | T.Int64)) tests.push(`js_is_number(${v})`);  /* an int: any Number, converted */
   else if (t & T.Int32) tests.push(`js_is_int32(${v})`);
   if (t & T.String) tests.push(`js_is_string(${v})`);
   if (t & T.Symbol) tests.push(`js_is_symbol(${v})`);
@@ -597,6 +607,7 @@ class FunctionEmitter {
       const value = i.lit!.value;
       if (repr === "f64") return cDouble(value as number);
       if (repr === "i32") return value === -2147483648 ? "INT32_MIN" : `${value as number}`;
+      if (repr === "i64") return Number.isSafeInteger(value) ? `INT64_C(${value as number})` : `js_f64_to_i64(${cDouble(value as number)})`;
       if (repr === "bool") return value ? "true" : "false";
       return constant(value, this.strings);
     }
@@ -607,9 +618,30 @@ class FunctionEmitter {
 
   /** A num_* operator on unboxed operands: plain C. Doubles; int32s where both operands are
    *  (an int32 result is one inference proved can't overflow); bitwise ones through ToInt32. */
-  private unboxed(i: Instr): string {
+  private unboxed(i: Instr, repr: Repr = i.repr): string {
     const isInt = (o: Instr) => isSubtype(o.type, T.Int32);
-    if (i.operands.every(isInt) && (i.repr === "i32" || BOOL_OPS.has(i.op))) {
+    /* a typed file's int: C's int64_t arithmetic, wrapping (as unsigned); compares of two ints */
+    const isLong = (o: Instr) => isSubtype(o.type, T.Int64 | T.Int32);
+    if (i.operands.every(isLong) && i.operands.some((o) => o.type !== T.None && isSubtype(o.type, T.Int64)) && (repr === "i64" || BOOL_OPS.has(i.op))) {
+      const [x, y] = i.operands.map((o) => this.as(o, "i64"));
+      const wrap = (op: string) => `(int64_t)((uint64_t)${x} ${op} (uint64_t)${y})`;
+      switch (i.op) {
+        case "num_add": return wrap("+");
+        case "num_sub": return wrap("-");
+        case "num_mul": return wrap("*");
+        case "num_mod": return `${x} % ${y}`;  /* a nonzero constant (int64Arith); C's sign, JS's too */
+        case "num_neg": return `(int64_t)(0 - (uint64_t)${x})`;
+        case "num_inc": return `(int64_t)((uint64_t)${x} + 1)`;
+        case "num_dec": return `(int64_t)((uint64_t)${x} - 1)`;
+        case "num_lt": return `${x} < ${y}`;
+        case "num_le": return `${x} <= ${y}`;
+        case "num_gt": return `${x} > ${y}`;
+        case "num_ge": return `${x} >= ${y}`;
+        case "num_eq": return `${x} == ${y}`;
+        case "num_ne": return `${x} != ${y}`;
+      }
+    }
+    if (i.operands.every(isInt) && (repr === "i32" || BOOL_OPS.has(i.op))) {
       const [x, y] = i.operands.map((o) => this.as(o, "i32"));
       switch (i.op) {
         case "num_add": return `${x} + ${y}`;
@@ -627,7 +659,7 @@ class FunctionEmitter {
     const [a, b] = i.operands.map((o) => this.as(o, "f64"));
     /* ToInt32: an int32 operand as it is */
     const [ia, ib] = i.operands.map((o) => (isInt(o) ? this.as(o, "i32") : `js_f64_to_int32(${this.as(o, "f64")})`));
-    const bits = (expr: string) => (i.repr === "i32" ? expr : `(double)(${expr})`);
+    const bits = (expr: string) => (repr === "i32" ? expr : `(double)(${expr})`);
     switch (i.op) {
       case "num_add": return `${a} + ${b}`;
       case "num_sub": return `${a} - ${b}`;
@@ -947,14 +979,16 @@ class FunctionEmitter {
         break;
       case "get_index":  /* a double key: the variant that takes it unboxed */
         if (i.taView) {
-          expr = i.operands[1]!.repr === "i32"
+          expr = i.operands[1]!.repr === "i64"
+            ? `js_tav_get_${i.taView}_l(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "i64")})`
+            : i.operands[1]!.repr === "i32"
             ? `js_tav_get_${i.taView}_i(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "i32")})`
             : i.operands[1]!.repr === "f64"
             ? `js_tav_get_${i.taView}_d(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`
             : `js_tav_get_${i.taView}(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${args[1]})`;
           break;
         }
-        expr = i.operands[1]!.repr === "f64"
+        expr = i.operands[1]!.repr === "f64" || i.operands[1]!.repr === "i64"
           ? `js_get_index_ta_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`
           : `js_get_index_ta(ctx, ${args[0]}, ${args[1]})`;
         break;
@@ -974,14 +1008,16 @@ class FunctionEmitter {
         break;
       case "set_index":
         if (i.taView) {
-          status = i.operands[1]!.repr === "i32"
+          status = i.operands[1]!.repr === "i64"
+            ? `js_tav_set_${i.taView}_l(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "i64")}, ${args[2]}, ${strict})`
+            : i.operands[1]!.repr === "i32"
             ? `js_tav_set_${i.taView}_i(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "i32")}, ${args[2]}, ${strict})`
             : i.operands[1]!.repr === "f64"
             ? `js_tav_set_${i.taView}_d(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "f64")}, ${args[2]}, ${strict})`
             : `js_tav_set_${i.taView}(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
           break;
         }
-        status = i.operands[1]!.repr === "f64"
+        status = i.operands[1]!.repr === "f64" || i.operands[1]!.repr === "i64"
           ? `js_set_index_ta_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")}, ${args[2]}, ${strict})`
           : `js_set_index_ta(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
         break;
@@ -1122,7 +1158,13 @@ class FunctionEmitter {
         expr = convert(`${f}(${this.as(i.operands[0]!, "f64")})`, "f64", i.repr);
         break;
       }
-      case "int_add": case "int_sub": case "int_mul": {  /* typed code's int: C's arithmetic, wrapping */
+      case "to_i64": {  /* the operand in the narrowest repr its type allows, then C's conversion */
+        const o = i.operands[0]!;
+        const from: Repr = isSubtype(o.type, T.Int32) ? "i32" : isSubtype(o.type, T.Int64 | T.Int32) ? "i64" : isSubtype(o.type, Number_) ? "f64" : "boxed";
+        expr = convert(convert(this.as(o, from), from, "i64"), "i64", i.repr);
+        break;
+      }
+      case "int_add": case "int_sub": case "int_mul": {  /* typed code's i32: C's arithmetic, wrapping */
         const [x, y] = i.operands.map((o) => `(uint32_t)${this.as(o, "i32")}`);
         expr = convert(`(int32_t)(${x} ${i.op === "int_add" ? "+" : i.op === "int_sub" ? "-" : "*"} ${y})`, "i32", i.repr);
         break;
@@ -1190,6 +1232,12 @@ class FunctionEmitter {
       default: {
         if (i.repr !== "boxed") {
           expr = this.unboxed(i);
+          break;
+        }
+        /* a Number operator with a boxed result: on its operands unboxed, the result boxed once */
+        if (NUM_OPS.has(i.op)) {
+          const raw: Repr = BOOL_OPS.has(i.op) ? "bool" : isSubtype(i.type, T.Int32) ? "i32" : isSubtype(i.type, T.Int64 | T.Int32) ? "i64" : "f64";
+          expr = convert(this.unboxed(i, raw), raw, "boxed");
           break;
         }
         const [fn, withCtx] = CALLS[i.op]!;

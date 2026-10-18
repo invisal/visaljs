@@ -55,7 +55,7 @@ bb4:;
 
 static JS_MAYBE_UNUSED int32_t jsf_hash(JSContext *ctx, JSValue v0_s) {
     int32_t v5_i = 0;
-    JSValue v9_h = JS_UNDEFINED;
+    int32_t v9_h = 0;
     JSValue v7 = JS_UNDEFINED;
     bool v8 = false;
     JSValue v11 = JS_UNDEFINED;
@@ -67,10 +67,10 @@ static JS_MAYBE_UNUSED int32_t jsf_hash(JSContext *ctx, JSValue v0_s) {
     JS_CHECK_STACK_OR(ctx, 0);
 #line 9 "numbers.js"
 #line 10 "numbers.js"
-    { int32_t t0 = 0; JSValue t1 = js_int32(0); v5_i = t0; v9_h = t1; } goto bb2;
+    { int32_t t0 = 0; int32_t t1 = 0; v5_i = t0; v9_h = t1; } goto bb2;
 bb1:;
 #line 11 "numbers.js"
-    return js_as_int32_value(v9_h);
+    return v9_h;
 bb2:;
 #line 10 "numbers.js"
     v7 = js_get_length(ctx, v0_s, JS_ATOM(length), &mod_ics[0]);
@@ -79,7 +79,7 @@ bb2:;
     if (v8) { goto bb3; } else { goto bb1; }
 bb3:;
 #line 10 "numbers.js"
-    v11 = js_num_mul(v9_h, js_int32(31));
+    v11 = js_number((double)(v9_h) * 31.0);
     v12 = js_get_method(ctx, v0_s, JS_STATIC_STR(jss_0), &mod_ics[1]);
     if (JS_UNLIKELY(js_is_exception(v12))) { return 0; }
     v13 = js_call_char_code_at(ctx, v12, v0_s, js_int32(v5_i), "s.charCodeAt");
@@ -92,7 +92,7 @@ bb3:;
 bb4:;
 #line 10 "numbers.js"
     v18_i = v5_i + 1;
-    { int32_t t0 = v18_i; JSValue t1 = v16_h; v5_i = t0; v9_h = t1; } goto bb2;
+    { int32_t t0 = v18_i; int32_t t1 = js_as_int32_value(v16_h); v5_i = t0; v9_h = t1; } goto bb2;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_label(JSContext *ctx, JSValue v0_x) {

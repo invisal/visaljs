@@ -199,6 +199,18 @@ static JS_FAST_PATH bool js_tav_index_d(const JSTAView *v, double key, size_t *i
         *v = js_ta_view(ctx, obj, v->type);                                                              \
         return r;                                                                                        \
     }                                                                                                    \
+    static JS_FAST_PATH JSValue js_tav_get_##name##_l(JSContext *ctx, JSTAView *v, JSValue obj, int64_t key) { \
+        if (JS_LIKELY((uint64_t)key < v->length)) { ctype x; memcpy(&x, v->base + (size_t)key * sizeof x, sizeof x); return box(x); } \
+        JSValue r = js_get_elem(ctx, obj, js_number((double)key));                                       \
+        *v = js_ta_view(ctx, obj, v->type);                                                              \
+        return r;                                                                                        \
+    }                                                                                                    \
+    static JS_FAST_PATH int js_tav_set_##name##_l(JSContext *ctx, JSTAView *v, JSValue obj, int64_t key, JSValue val, bool strict) { \
+        if (JS_LIKELY(js_is_number(val) && (uint64_t)key < v->length)) { ctype x = unbox(val); memcpy(v->base + (size_t)key * sizeof x, &x, sizeof x); return 1; } \
+        int r = js_set_elem(ctx, obj, js_number((double)key), val, strict);                              \
+        *v = js_ta_view(ctx, obj, v->type);                                                              \
+        return r;                                                                                        \
+    }                                                                                                    \
     static JS_FAST_PATH int js_tav_set_##name(JSContext *ctx, JSTAView *v, JSValue obj, JSValue key, JSValue val, bool strict) { \
         size_t i;                                                                                        \
         if (JS_LIKELY(js_is_number(val) && js_tav_index(v, key, &i))) { ctype x = unbox(val); memcpy(v->base + i * sizeof x, &x, sizeof x); return 1; } \

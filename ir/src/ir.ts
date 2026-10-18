@@ -43,6 +43,8 @@ export type Op =
   | "char_code_at" | "math"
   // typed code's `int` arithmetic: C's, wrapping (int32 operands)
   | "int_add" | "int_sub" | "int_mul"
+  // typed code's `int`: a Number as a C int64_t (truncated toward zero, wrapping; NaN 0)
+  | "to_i64"
   // comparisons the optimizer's specialize pass proved simpler (Instr.index 1: negated): the same
   // bits; === a string literal (an atom); typeof x === Instr.target, or "nullish" (x == null)
   | "identical" | "strict_eq_atom" | "is_type"
@@ -142,7 +144,7 @@ export const OPS: Record<Op, OpInfo> = {
   typeof: { ...pure(1), allocates: false },
   char_code_at: { ...pure(2), allocates: true },  // a rope is flattened
   math: pure(1),
-  int_add: pure(2), int_sub: pure(2), int_mul: pure(2),
+  int_add: pure(2), int_sub: pure(2), int_mul: pure(2), to_i64: pure(1),
   identical: pure(2), strict_eq_atom: pure(2), is_type: pure(1), strict_eq_num: pure(2),
   in: generic(2), instanceof: generic(2), to_property_key: generic(1),
   for_in_start: { ...generic(1), callsUser: false }, for_in_next: { ...generic(1), callsUser: false },
@@ -238,6 +240,11 @@ export interface TypedCall {
   returnRepr: Repr;
 }
 
+/** What a typed parameter of type `t` takes: an int any Number (the function converts it, as C). */
+function accepts(t: Type): Type {
+  return isSubtype(t, T.Int64) ? (T.Int32 | T.Double | T.Int64) : t;
+}
+
 /** Whether a direct call of a typed function ("use visaljs") may take its typed entry: each
  *  declared parameter's argument proven of its type (`type`: the types; inference passes the ones
  *  it is inferring). Otherwise the call goes through the checked entry, whose untyped copy takes
@@ -249,18 +256,18 @@ export function declaredCallFits(i: Instr, callee: FunctionIR, type: (v: Instr) 
     if (t === undefined) return true;
     const o = i.operands[k];
     const a = o ? type(o) & ~T.Empty : T.Undefined;
-    return a !== T.None && isSubtype(a, t);
+    return a !== T.None && isSubtype(a, accepts(t));
   });
 }
 
 /** Whether a typed export's call takes its typed entry: as many arguments as it declares, each
  *  proven of its declared type (inference, unboxing and C emission all ask this). */
-export function typedCallFits(i: Instr): boolean {
+export function typedCallFits(i: Instr, type: (v: Instr) => Type = (v) => v.type): boolean {
   const tc = i.typedCall;
   if (!tc || i.operands.length - 2 !== tc.params.length) return false;
   return i.operands.slice(2).every((o, k) => {
-    const t = o.type & ~T.Empty;
-    return t !== T.None && isSubtype(t, tc.params[k]!.type);
+    const t = type(o) & ~T.Empty;
+    return t !== T.None && isSubtype(t, accepts(tc.params[k]!.type));
   });
 }
 
