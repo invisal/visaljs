@@ -299,7 +299,7 @@ JS_WARN_UNUSED JSValue js_own_keys(JSContext *ctx, JSObject *o);
 #define JS_IC_ADD    3  /* set: adding the key takes the receiver from `shape` to `next` */
 #define JS_IC_GETTER 4  /* get: an accessor of `holder` (NULL: the receiver), `depth` prototypes up */
 #define JS_IC_ABSENT 5  /* get: no such property on the receiver or its `depth` prototypes (the last's proto is null) */
-#define JS_IC_MAX_DEPTH 4
+#define JS_IC_MAX_DEPTH 8  /* prototypes a cache can check: Node's sockets are 6 deep (Socket, Duplex, Readable, Stream, EventEmitter, Object) */
 
 /* One per property access site with a constant named key; a site is either a get or a
  * set. Monomorphic: a miss refills it. Never caches dictionary shapes (their layout
