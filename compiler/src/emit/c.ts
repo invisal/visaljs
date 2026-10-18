@@ -320,6 +320,9 @@ function cDouble(d: number): string {
   return hexFloat(d);
 }
 
+/** A charCodeAt whose index inference proved in the string: its result an int32. */
+const inString = (i: Instr) => isSubtype(i.type, T.Int32) && i.type !== T.None;
+
 /** Static code's integer operator on int64_ts, as C's: wrapping (as unsigned), shifts mod 64,
  *  INT64_MIN / -1 wrapping too (C leaves it undefined). */
 function int64Op(op: string, x: string, y: string): string {
@@ -797,6 +800,16 @@ class FunctionEmitter {
     this.lines.push(`    { JSValue r = ${call};`, `    if (JS_UNLIKELY(js_is_exception(r))) { ${this.onException(i.block)} }`, ...(out ? [`    ${out} = ${convert("r", "boxed", i.repr)}; }`] : ["    js_discard(r); }"]));
   }
 
+  /** The string parameters whose units this function reads at indices inference proved in them:
+   *  their units taken once, on entry (strings don't change, and the GC doesn't move cells; a
+   *  rope not yet flattened has none, and each read takes the slow path). */
+  private stringViewList: Set<Instr> | null = null;
+  private stringViews(): Set<Instr> {
+    this.stringViewList ??= new Set(this.fn.blocks.flatMap((b) => b.instrs)
+      .filter((i) => i.op === "char_code_at" && inString(i) && i.operands[0]!.op === "param").map((i) => i.operands[0]!));
+    return this.stringViewList;
+  }
+
   /** The typed arrays this function holds views of (the typed-arrays pass). */
   private viewList: Instr[] | null = null;
   private views(): Instr[] {
@@ -1016,7 +1029,7 @@ class FunctionEmitter {
         const length = "name" in i.key! && i.key.name === "length";
         const str = i.operands[0]!.type !== T.None && isSubtype(i.operands[0]!.type, T.String);
         if (str && length) {
-          expr = `js_int32((int32_t)js_string_length(${args[0]}))`;
+          expr = convert(`(int32_t)js_string_length(${this.as(i.operands[0]!, "boxed")})`, "i32", i.repr);
           break;
         }
         /* a string's other named properties are String.prototype's; an array's length inline; a
@@ -1238,9 +1251,19 @@ class FunctionEmitter {
         expr = convert(`(int32_t)(${x} ${i.op === "int_add" ? "+" : i.op === "int_sub" ? "-" : "*"} ${y})`, "i32", i.repr);
         break;
       }
-      case "char_code_at":
-        expr = convert(`js_string_char_code_at(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`, "f64", i.repr);
+      case "char_code_at": {  /* an index inference proved in the string: an int32 unit */
+        if (!inString(i)) {
+          expr = convert(`js_string_char_code_at(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`, "f64", i.repr);
+          break;
+        }
+        const s = i.operands[0]!;
+        const k = `(uint32_t)${this.as(i.operands[1]!, "i32")}`;
+        const unit = this.stringViews().has(s)
+          ? `(${this.name(s)}_units.length ? (int32_t)js_view_at(${this.name(s)}_units, ${k}) : js_string_unit_at(ctx, ${args[0]}, ${k}))`
+          : `js_string_unit_at(ctx, ${args[0]}, ${k})`;
+        expr = convert(unit, "i32", i.repr);
         break;
+      }
       case "identical":
       case "strict_eq_atom":
       case "strict_eq_num":
@@ -1289,6 +1312,12 @@ class FunctionEmitter {
         this.lines.push(this.hasVar(i) ? `    ${this.name(i)} = ${convert(call, ret, i.repr)};` : `    (void)${call};`, "    JS_NO_TAIL_CALL();");
         if (i.mayThrow) this.lines.push(`    if (JS_UNLIKELY(js_has_exception(ctx))) { ${this.onException(i.block)} }`);
         return;
+      }
+      case "not": {  /* a C bool: a Boolean's own, or any value's truthiness */
+        const o = i.operands[0]!;
+        const bool = o.type !== T.None && isSubtype(o.type, T.Boolean);
+        expr = i.repr === "boxed" && !bool ? `js_not(${args[0]})` : convert(`!(${bool ? this.as(o, "bool") : `js_truthy(${args[0]})`})`, "bool", i.repr);
+        break;
       }
       case "call_runtime": {
         const r = RUNTIME[i.target!];
@@ -1443,6 +1472,8 @@ class FunctionEmitter {
         }
     const unusedParams = fn.params.filter((p) => !this.used.has(p)).map((p) => `    (void)${this.name(p)};`);
     for (const p of this.views().filter((v) => v.op === "param")) locals.push(`    JSTAView ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${VIEWS[p.taView!].c});`);
+    for (const p of this.stringViews())
+      locals.push(`    JSStrView ${this.name(p)}_units = { NULL, 0, true }; (void)js_string_units(${this.name(p)}, &${this.name(p)}_units);`);
     /* non-leaf: anything that can run JS code again (calls, getters, valueOf) checks the stack */
     const calls = fn.blocks.some((b) => b.instrs.some((i) => OPS[i.op].callsUser));
     /* a body that only touches its environment never needs the context */

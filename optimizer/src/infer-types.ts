@@ -130,6 +130,9 @@ interface Bound {
   (x: Instr, at: Block, dir: "up" | "down"): boolean;
   /** The value without conversions that don't change a Number (`i++` is to_numeric, then inc). */
   root(v: Instr): Instr;
+  /** Whether x is an index into string s at `at`: an int32 from 0 up (constants and increments)
+   *  that a branch proved below s.length. */
+  inString(s: Instr, x: Instr, at: Block): boolean;
 }
 
 const RELATION: Partial<Record<Op, "<" | ">" | "<=" | ">=">> = {
@@ -148,9 +151,9 @@ function bounds(fn: FunctionIR, type: (v: Instr) => Type): Bound {
     while ((v.op === "to_numeric" || v.op === "to_number" || v.op === "check_tdz") && isSubtype(type(v), Number_)) v = v.operands[0]!;
     return v;
   };
-  const bound = (x: Instr, at: Block, dir: "up" | "down"): boolean => {
+  /* whether a branch on the way to `at` proved x <rel> some value that `holds` accepts */
+  const proves = (x: Instr, at: Block, holds: (rel: "<" | ">" | "<=" | ">=", other: Instr) => boolean): boolean => {
     idom ??= dominators(fn);
-    if (!int32(x)) return false;
     for (let a = at; ; ) {
       const p = a.preds.length === 1 ? a.preds[0]! : null;
       const term = p?.term;
@@ -160,12 +163,7 @@ function bounds(fn: FunctionIR, type: (v: Instr) => Type): Bound {
         if (rel && (l === x || r === x)) {
           if (term.else === a) rel = NEGATED[rel];
           if (r === x) rel = FLIPPED[rel];
-          const other = l === x ? r! : l!;
-          const lit = other.op === "const" && typeof other.lit!.value === "number" ? other.lit!.value : null;
-          if (int32(other)) {
-            if (dir === "up" && (rel === "<" || (rel === "<=" && lit !== null && lit < 2147483647))) return true;
-            if (dir === "down" && (rel === ">" || (rel === ">=" && lit !== null && lit > -2147483648))) return true;
-          }
+          if (holds(rel, l === x ? r! : l!)) return true;
         }
       }
       const up = idom.get(a);
@@ -173,7 +171,29 @@ function bounds(fn: FunctionIR, type: (v: Instr) => Type): Bound {
       a = up;
     }
   };
-  return Object.assign(bound, { root });
+  const bound = (x: Instr, at: Block, dir: "up" | "down"): boolean => int32(x) && proves(x, at, (rel, other) => {
+    const lit = other.op === "const" && typeof other.lit!.value === "number" ? other.lit!.value : null;
+    if (!int32(other)) return false;
+    if (dir === "up") return rel === "<" || (rel === "<=" && lit !== null && lit < 2147483647);
+    return rel === ">" || (rel === ">=" && lit !== null && lit > -2147483648);
+  });
+  /* 0 or more: constants, and phis of them and their own increments (a loop counter from 0) */
+  const nonNegative = (x: Instr, seen = new Set<Instr>()): boolean => {
+    x = root(x);
+    if (seen.has(x)) return true;  /* around a loop: as its other inputs say */
+    if (x.op === "const") return typeof x.lit!.value === "number" && x.lit!.value >= 0;
+    if (x.op === "phi") return seen.add(x) && x.incoming!.every((inc) => nonNegative(inc.value, seen));
+    if (x.op === "inc" || x.op === "num_inc") return nonNegative(x.operands[0]!, seen);
+    return false;
+  };
+  const lengthOf = (v: Instr): Instr | undefined => {
+    v = root(v);
+    const s = v.operands[0];
+    return v.op === "get_prop" && v.key && "name" in v.key && v.key.name === "length" && s && isSubtype(type(s) & ~T.Empty, T.String) && type(s) !== T.None ? root(s) : undefined;
+  };
+  const inString = (s: Instr, x: Instr, at: Block): boolean =>
+    int32(x) && nonNegative(x) && proves(root(x), at, (rel, other) => rel === "<" && lengthOf(other) === root(s));
+  return Object.assign(bound, { root, inString });
 }
 
 /** x + 1 or x - 1 (`i++`, `i += 1`, `i--`) of an int32 x the branches bound: an int32. */
@@ -252,8 +272,11 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
     case "to_i32":
       return T.Int32;
     case "call": {
-      /* typed code trusts the built-ins to be the standard ones, as tsc's types do */
-      if (trustedBuiltin(i, t)) return Number_;
+      /* typed code trusts the built-ins to be the standard ones, as tsc's types do: s.charCodeAt(i)
+         of an index in s is a unit, else NaN past the end */
+      const trusted = trustedBuiltin(i, t);
+      if (trusted === "char_code_at" && bound?.inString(b!, i.operands[2]!, i.block)) return T.Int32;
+      if (trusted) return Number_;
       /* a typed unit's export: its declared result, whichever entry runs (the checked one throws
          for arguments of other types) */
       return i.typedCall ? i.typedCall.returns : Unknown;
