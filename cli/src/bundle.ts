@@ -109,8 +109,10 @@ async function rollupOnce(entry: string, hosts: readonly HostPackage[], implicit
       cwd: dirname(resolve(entry)),     // names in messages and the source map are relative to the entry
       platform: "node",                 // conditions node, import, default; node:* built-ins stay external
       logLevel: "warn",
-      /* EVAL: the driver warns about eval itself, only where it can throw (eval.ts) */
-      onLog: (_level, log) => log.code !== "EVAL" && warn(logText(log), logWhere(log)),
+      /* EVAL: the driver warns about eval itself, only where it can throw (eval.ts); "use static"
+       * reaches the bundle only under --no-static, which drops it on purpose */
+      onLog: (_level, log) => log.code !== "EVAL" && !(log.code === "MODULE_LEVEL_DIRECTIVE" && log.message.includes('"use static"'))
+        && warn(logText(log), logWhere(log)),
       /* a constant NODE_ENV: `if (process.env.NODE_ENV === "production")` folds, and tree-shaking
        * drops the other branch (React's development build, half of the bundle) */
       ...(extras.nodeEnv === undefined ? {} : { transform: { define: { "process.env.NODE_ENV": JSON.stringify(extras.nodeEnv) } } }),

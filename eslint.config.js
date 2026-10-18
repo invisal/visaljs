@@ -24,6 +24,11 @@ export default tseslint.config(
     languageOptions: { globals: { console: "readonly", Buffer: "readonly" } },
   },
   {
+    /* the static kernels take their size as an argument */
+    files: ["bench/kernels/static/*.js"],
+    languageOptions: { globals: { process: "readonly" } },
+  },
+  {
     /* the GC server benchmark's server, run by visaljs and Node */
     files: ["bench/gc-server/**/*.js"],
     languageOptions: { globals: { Buffer: "readonly", process: "readonly" } },

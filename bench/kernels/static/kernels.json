@@ -1,0 +1,7 @@
+{
+  "sieve": { "args": ["10000000"] },
+  "collatz": { "args": ["1000000"] },
+  "spectral-norm": { "args": ["2000"] },
+  "fib": { "args": ["35"] },
+  "http-token": { "args": ["2000000"] }
+}

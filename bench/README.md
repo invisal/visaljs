@@ -77,7 +77,7 @@ loop, object allocation or string building. It runs for a fraction of a second a
 thing intensively. Kernels measure the code the compiler and [optimizer](../optimizer) generate,
 without a server or a network in the way.
 
-There are three sets. Two of them are established suites, used to compare language
+There are four sets. Two of them are established suites, used to compare language
 implementations, and are kept unchanged from their sources:
 
 - **[Are We Fast Yet](https://github.com/smarr/are-we-fast-yet)** (Marr, Daloze and Mössenböck,
@@ -94,6 +94,11 @@ implementations, and are kept unchanged from their sources:
   regex-redux and reverse-complement read fasta's output, which the runner makes once with Node
   and gives them as stdin.
 - **Ours**, [`kernels/*.js`](kernels): one language feature each.
+- **`"use static"` code**, [`kernels/static/`](kernels/static): typed TypeScript kernels (sieve,
+  collatz, spectral-norm, fib, an HTTP token check), each with a C reference of the same
+  algorithm. Their table adds two columns: the same files built as plain TypeScript
+  (`--no-static`), and the C reference built with `cc -O2`. Every build's output must equal
+  Node's, so the kernels stay where C's integers and JavaScript's numbers agree.
 
 | Kernel | Exercises |
 |---|---|
