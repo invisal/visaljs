@@ -222,10 +222,38 @@ JSValue js_get_prototype_from_constructor(JSContext *ctx, JSValue new_target, JS
     return realm ? realm->intrinsics[fallback] : JS_EXCEPTION;
 }
 
+/* The root shape of the objects `new f` makes, with at least `slots` inline slots: kept on f, and
+ * grown by learn_instance_slots to what its instances end up holding. */
+static JSShape *instance_root(JSContext *ctx, JSFunction *f, JSValue proto, uint16_t slots) {
+    JSShape *s = f->instance_shape;
+    if (JS_UNLIKELY(!s || !js_same_bits(s->proto, proto) || s->inline_cap < slots)) {
+        s = js_shape_root(ctx, &js_class_object, proto, slots);
+        js_store_ptr(ctx, &f->obj.cell, &f->instance_shape, s);
+    }
+    return s;
+}
+
+/* Slack tracking: when the constructors (a class's and its bases') left `v` with more properties
+ * than its root shape has inline slots, the next instances get room for them all. A derived
+ * class's `this` is made by its base, which can't count its subclasses' properties; the rest
+ * would sit out of line, where an inline cache's hit isn't inlined. */
+static void learn_instance_slots(JSContext *ctx, JSFunction *f, JSValue v) {
+    JSShape *root = f->instance_shape;
+    if (!root || !js_is_object(v)) return;
+    JSShape *s = js_as_object(v)->shape;
+    if (JS_LIKELY(s->prop_count <= root->inline_cap || root->inline_cap >= JS_MAX_INLINE_SLOTS)) return;
+    JSShape *r = s;
+    while (r->parent) r = r->parent;
+    if (r != root) return;  /* not made from it: an object the constructor returned, or a dictionary */
+    JSShape *grown = js_shape_root(ctx, &js_class_object, root->proto, (uint16_t)(s->prop_count < JS_MAX_INLINE_SLOTS ? s->prop_count : JS_MAX_INLINE_SLOTS));
+    js_store_ptr(ctx, &f->obj.cell, &f->instance_shape, grown);
+}
+
 JSValue js_create_from_constructor(JSContext *ctx, JSValue new_target, JSIntrinsic fallback) {
     JSValue proto = js_get_prototype_from_constructor(ctx, new_target, fallback);
     if (js_is_exception(proto)) return JS_EXCEPTION;
-    return js_new_object_proto(ctx, proto, JS_DEFAULT_INLINE_SLOTS);
+    if (!js_is_function(new_target)) return js_new_object_proto(ctx, proto, JS_DEFAULT_INLINE_SLOTS);
+    return js_object_value(js_alloc_object(ctx, JS_CELL_OBJECT, instance_root(ctx, js_as_function(new_target), proto, JS_DEFAULT_INLINE_SLOTS)));
 }
 
 JSValue js_new_instance(JSContext *ctx, JSValue fv, uint16_t slots, JSPropCache *ic) {
@@ -234,26 +262,25 @@ JSValue js_new_instance(JSContext *ctx, JSValue fv, uint16_t slots, JSPropCache 
                                                                     : js_get_prop(ctx, fv, JS_ATOM(prototype), ic);
     if (js_is_exception(proto)) return JS_EXCEPTION;
     if (!js_is_object(proto)) proto = ctx->intrinsics[JS_INTRINSIC_OBJECT_PROTOTYPE];  /* OrdinaryCreateFromConstructor's fallback */
-    JSFunction *f = js_as_function(fv);
-    JSShape *s = f->instance_shape;
-    if (JS_UNLIKELY(!s || !js_same_bits(s->proto, proto) || s->inline_cap != slots)) {
-        s = js_shape_root(ctx, &js_class_object, proto, slots);
-        js_store_ptr(ctx, &f->obj.cell, &f->instance_shape, s);
-    }
-    return js_object_value(js_alloc_object(ctx, JS_CELL_OBJECT, s));
+    return js_object_value(js_alloc_object(ctx, JS_CELL_OBJECT, instance_root(ctx, js_as_function(fv), proto, slots)));
 }
 
 JSValue js_construct(JSContext *ctx, JSValue f, uint32_t argc, const JSValue *argv, JSValue new_target, const char *callee_text) {
     if (JS_UNLIKELY(!js_is_constructor(f))) return not_callable(ctx, f, callee_text, "constructor");
     JSFunction *fn = js_as_function(f);
+    bool outermost = js_is_undefined(new_target) || js_same_bits(new_target, f);  /* not a super() */
     if (js_is_undefined(new_target)) new_target = f;
-    if (!(fn->flags & JS_FN_ORDINARY))  /* builtins create their own object; a derived constructor gets it from super() */
-        return fn->entry(fn->flags & JS_FN_PROXY ? ctx : fn->realm, f, JS_UNDEFINED, argc, argv, new_target);
+    if (!(fn->flags & JS_FN_ORDINARY)) {  /* builtins create their own object; a derived constructor gets it from super() */
+        JSValue r = fn->entry(fn->flags & JS_FN_PROXY ? ctx : fn->realm, f, JS_UNDEFINED, argc, argv, new_target);
+        if (outermost && (fn->flags & JS_FN_DERIVED) && !js_is_exception(r)) learn_instance_slots(ctx, fn, r);
+        return r;
+    }
     /* [[Construct]] of an ordinary function (§10.2.2): this = a new object; an object result wins */
     JSValue this_val = js_create_from_constructor(fn->realm, new_target, JS_INTRINSIC_OBJECT_PROTOTYPE);
     if (js_is_exception(this_val)) return JS_EXCEPTION;
     JSValue r = fn->entry(fn->realm, f, this_val, argc, argv, new_target);
     if (js_is_exception(r)) return JS_EXCEPTION;
+    if (outermost) learn_instance_slots(ctx, fn, this_val);
     return js_is_object(r) ? r : this_val;
 }
 
