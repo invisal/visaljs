@@ -1,7 +1,7 @@
 // Typed arrays a function makes and only indexes: `const a = new Uint8Array(n)` whose every use
 // is `a[i]` or `a[i] = v`. Nothing else can reach it, so nothing can detach or resize its
 // buffer: its elements' address and its length, taken once after `new`, hold for its life.
-// A typed function's ("use visaljs") typed array parameter too: other code can reach that one,
+// A typed function's ("use static") typed array parameter too: other code can reach that one,
 // so its C takes the view again after anything that may run code.
 // Each access then checks the index against that length and reads or writes the element
 // (Instr.taView, a JSTAView in C), the generic path covering the rest: an index out of

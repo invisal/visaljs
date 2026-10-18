@@ -211,7 +211,7 @@ static inline JSValue js_call_char_code_at(JSContext *ctx, JSValue f, JSValue s,
     return js_call_site(ctx, f, s, 1, &i, site);
 }
 
-/* s.charCodeAt(i) in typed code ("use visaljs"), which trusts the built-ins to be the standard
+/* s.charCodeAt(i) in typed code ("use static"), which trusts the built-ins to be the standard
  * ones (char_code_at): s is a string; its unit read inline, else (a rope, an index out of
  * range) the built-in's answer. */
 static inline double js_string_char_code_at(JSContext *ctx, JSValue s, double i) {

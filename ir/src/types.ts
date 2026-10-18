@@ -20,7 +20,7 @@ export const T = {
   BigInt: 1 << 7,
   Object: 1 << 8,
   Empty: 1 << 9,      // internal: an uninitialized binding (TDZ), never JS-visible
-  Int64: 1 << 10,     // a typed file's ("use visaljs") `int`: a Number held as a C int64_t (C semantics)
+  Int64: 1 << 10,     // a typed file's ("use static") `int`: a Number held as a C int64_t (C semantics)
 } as const;
 
 export const Number_: Type = T.Int32 | T.Double | T.Int64;

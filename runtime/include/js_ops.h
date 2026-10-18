@@ -46,7 +46,7 @@ JS_WARN_UNUSED JSValue js_ge(JSContext *ctx, JSValue a, JSValue b);
 /* ===, !==: never throw (strings compare by content). */
 bool js_strict_equals(JSContext *ctx, JSValue a, JSValue b);
 static inline JSValue js_strict_eq(JSContext *ctx, JSValue a, JSValue b) { return js_bool(js_strict_equals(ctx, a, b)); }
-/* A Number as a typed file's ("use visaljs") int, an int64_t: truncated toward zero and wrapped
+/* A Number as a typed file's ("use static") int, an int64_t: truncated toward zero and wrapped
  * modulo 2^64, as ToInt32 is for 32 bits; NaN and the infinities 0 (a plain C conversion of those
  * would be undefined behaviour). */
 static inline int64_t js_f64_to_i64(double d) {

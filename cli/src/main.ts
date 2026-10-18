@@ -210,7 +210,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   const script = options.script === true;
   const bundled = !script && options["no-bundle"] !== true;
   let map: string | undefined;
-  const typedFiles = new Set<string>();  /* PROTOTYPE: "use visaljs" files, compiled as their own unit */
+  const typedFiles = new Set<string>();  /* PROTOTYPE: "use static" files, compiled as their own unit */
   let typed: TypedUnit | undefined;
   if (bundled) {
     try {

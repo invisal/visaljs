@@ -1,4 +1,4 @@
-"use visaljs";
+"use static";
 // The characters HTTP allows in header names (a token, RFC 9110 §5.6.2) and values: Node's
 // tokenRegExp and headerCharRegex as loops, typed (setHeader checks both on every call).
 

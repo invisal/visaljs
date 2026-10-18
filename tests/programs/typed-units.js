@@ -1,4 +1,4 @@
-// "use visaljs" files: a typed unit the program's JavaScript calls into (prototype). Checked
+// "use static" files: a typed unit the program's JavaScript calls into (prototype). Checked
 // entries take the plain JS copy for arguments of other types; int arithmetic stays in range here,
 // where its C semantics and JavaScript's agree.
 import { add, callCount, isToken, norm, sieve, triangle } from "./typed-units/lib.ts";

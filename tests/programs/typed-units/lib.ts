@@ -1,4 +1,4 @@
-"use visaljs";
+"use static";
 import type { int } from "visaljs";
 
 let calls: int = 0;  // one copy, whoever imports it

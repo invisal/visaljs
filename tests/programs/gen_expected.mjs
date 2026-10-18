@@ -5,7 +5,7 @@
 // in the Europe/Lisbon time zone, so Date's local times don't depend on the machine. The programs
 // in <process.platform>/ (win32/) are generated too, on that OS only; or name the programs to generate.
 // A program whose first line is `// visaljs-expected: by hand` is skipped: its output isn't
-// Node's by design (a "use visaljs" file's C semantics), and its .expected is written by hand.
+// Node's by design (a "use static" file's C semantics), and its .expected is written by hand.
 //
 //   node tests/programs/gen_expected.mjs [win32/require-json-paths.js ...]
 import { spawnSync } from "node:child_process";

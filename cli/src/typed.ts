@@ -1,4 +1,4 @@
-// PROTOTYPE: "use visaljs" files, compiled as one typed unit with their declared types.
+// PROTOTYPE: "use static" files, compiled as one typed unit with their declared types.
 //
 // The program's bundle leaves them out: an import of one resolves to "visaljs:host", and each
 // of their exports becomes a host primitive whose C function is the export's generic entry in
@@ -8,7 +8,7 @@
 // before the program's.
 //
 // Prototype limits: parameters of type number, string or boolean (and unions of them, null,
-// undefined); the unit imports only other "use visaljs" files and "visaljs:host"; export names
+// undefined); the unit imports only other "use static" files and "visaljs:host"; export names
 // are unique across the unit and don't collide with the host's primitives.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -19,10 +19,10 @@ import { optimize, type PassReport } from "@visaljs/optimizer";
 import { type Plugin, rolldown } from "rolldown";
 import ts from "typescript";
 
-export const TYPED_DIRECTIVE = "use visaljs";
+export const TYPED_DIRECTIVE = "use static";
 export const TYPED_PREFIX = "vt_";
 
-/** Whether a file starts with the "use visaljs" directive. */
+/** Whether a file starts with the "use static" directive. */
 export function isTypedFile(file: string): boolean {
   if (!/\.[cm]?tsx?$/.test(file)) return false;
   let text: string;
@@ -31,7 +31,7 @@ export function isTypedFile(file: string): boolean {
   } catch {
     return false;
   }
-  return /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*(["'])use visaljs\1/.test(text);
+  return /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*(["'])use static\1/.test(text);
 }
 
 /** The program's bundle: a typed file's import resolves to the host module (its exports are

@@ -422,7 +422,7 @@ function genericEntry(fn: FunctionIR, prefix: string): string {
   );
   const call = `${direct}(${["ctx", ...args.map((a, k) => convert(a, "boxed", fn.params[k]!.repr))].join(", ")})`;
   const ret = fn.returnRepr ?? "boxed";
-  /* a "use visaljs" function: untyped callers' arguments checked against the declared types */
+  /* a "use static" function: untyped callers' arguments checked against the declared types */
   const hidden = fn.params.length - declared - Number(meta.hasRest);
   const checks = (meta.declared ?? []).flatMap((t, k) => {
     if (t === undefined) return [];

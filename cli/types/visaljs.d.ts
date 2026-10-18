@@ -1,4 +1,4 @@
-// The types a "use visaljs" file can import: `import type { int } from "visaljs"`. Integers with
+// The types a "use static" file can import: `import type { int } from "visaljs"`. Integers with
 // C semantics: what is stored in one (a local, a parameter, a return value, an argument) is
 // converted to it (truncated toward zero, wrapped), and +, -, *, % by a constant wrap.
 declare module "visaljs" {

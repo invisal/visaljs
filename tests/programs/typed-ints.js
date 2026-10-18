@@ -1,5 +1,5 @@
 // visaljs-expected: by hand
-// "use visaljs" integers have C semantics: `int` an int64_t, `i32` an int32_t; what is stored in
+// "use static" integers have C semantics: `int` an int64_t, `i32` an int32_t; what is stored in
 // one is converted (truncated toward zero, wrapped), +, -, * wrap, / and % are integer division
 // (a zero divisor: a RangeError, as BigInt's), and the bitwise operators are 64-bit. A literal written
 // as a float (1.0, 1e3) is a double, as in C: 1.0 / n divides as doubles. The expected output is

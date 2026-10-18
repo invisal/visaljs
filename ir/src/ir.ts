@@ -38,7 +38,7 @@ export type Op =
   | "num_lt" | "num_le" | "num_gt" | "num_ge" | "num_eq" | "num_ne"
   | "num_bitand" | "num_bitor" | "num_bitxor" | "num_bitnot" | "num_shl" | "num_sar" | "num_shr"
   | "in" | "instanceof" | "to_property_key"
-  // typed code ("use visaljs"), which trusts the built-ins: s.charCodeAt(i) of a string s, a Number;
+  // typed code ("use static"), which trusts the built-ins: s.charCodeAt(i) of a string s, a Number;
   // Math.<Instr.target>(x) of a Number (sqrt, abs, floor, ceil, trunc), C's
   | "char_code_at" | "math"
   // typed code's `int` arithmetic: C's, wrapping (int32 operands)
@@ -247,7 +247,7 @@ function accepts(t: Type): Type {
   return isSubtype(t, T.Int64) ? (T.Int32 | T.Double | T.Int64) : t;
 }
 
-/** Whether a direct call of a typed function ("use visaljs") may take its typed entry: each
+/** Whether a direct call of a typed function ("use static") may take its typed entry: each
  *  declared parameter's argument proven of its type (`type`: the types; inference passes the ones
  *  it is inferring). Otherwise the call goes through the checked entry, whose untyped copy takes
  *  any arguments: tsc lets typed code pass a number to an `int`. */
@@ -303,7 +303,7 @@ export interface Instr {
   name?: string;
   /** const */
   lit?: { value: JSConst };
-  /** const: written as a floating-point literal (`1.0`, `1e3`) in a typed file ("use visaljs"):
+  /** const: written as a floating-point literal (`1.0`, `1e3`) in a typed file ("use static"):
    *  not an integer to C's arithmetic, so 1.0 / n divides as doubles */
   floatLit?: boolean;
   /** param: index; load_global / store_global: slot; identical, strict_eq_atom, is_type: 1 when negated */
@@ -380,7 +380,7 @@ export interface FunctionMeta {
   arrow: boolean;
   /** The last parameter is a rest array: the generic entry collects argv beyond the others. */
   hasRest: boolean;
-  /** A "use visaljs" file's function: its parameters' declared types, trusted (as fn.params, the
+  /** A "use static" file's function: its parameters' declared types, trusted (as fn.params, the
    *  hidden ones undefined). Typed callers were checked by tsc; every other call comes through
    *  the generic entry, which checks them. */
   declared?: (Type | undefined)[];

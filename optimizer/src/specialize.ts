@@ -55,7 +55,7 @@ function inlineBuiltin(i: Instr): string | null {
   return null;
 }
 
-/** What typed code ("use visaljs", which trusts the built-ins to be the standard ones) makes of a
+/** What typed code ("use static", which trusts the built-ins to be the standard ones) makes of a
  *  built-in call: s.charCodeAt(i) of a string, or Math's sqrt/abs/floor/ceil/trunc of a Number,
  *  the C helper's suffix; null for anything else. `type`: the values' types. */
 export function trustedBuiltin(i: Instr, type: (v: Instr) => Type): string | null {

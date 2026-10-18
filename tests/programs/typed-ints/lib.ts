@@ -1,4 +1,4 @@
-"use visaljs";
+"use static";
 import type { i32, int } from "visaljs";
 
 export function mul(a: int, b: int): int { return a * b; }
@@ -22,7 +22,7 @@ export function sumSquares(n: int): int {
 export function div(a: int, b: int): int { return a / b; }
 export function rem(a: int, b: int): int { return a % b; }
 export function minOverMinusOne(): int {
-  const min: int = -9223372036854775807 - 1;
+  const min: int = -4611686018427387904 * 2;  /* -2^63: 2^62 is exact as a literal */
   return min / -1;
 }
 export function bits(a: int, b: int): string {
