@@ -31,6 +31,7 @@ JSValue js_host_fs_read(JSContext *ctx, JSValue callee, JSValue this_val, uint32
 int js_node_uv_error(int e);
 JSValue js_host_errno_name(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
 JSValue js_host_timer_unref(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
+JSValue js_host_loop_now(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
 JSValue js_host_timer_start(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
 JSValue js_host_timer_ref(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
 JSValue js_host_async_context_get(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);

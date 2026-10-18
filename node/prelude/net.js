@@ -9,7 +9,7 @@
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import {
   errnoMessage, errnoName, netAddress, netBind, netCallback, netChmod, netClose, netConnect, netGuessHandle, netKeepAlive, netListen,
-  netFd, netNoDelay, netOpen, netOpenFd, netReadStart, netReadStop, netRef, netReset, netShutdown, netWrite, timerUnref,
+  loopNow, netFd, netNoDelay, netOpen, netOpenFd, netReadStart, netReadStop, netRef, netReset, netShutdown, netWrite, timerUnref,
 } from "visaljs:host";
 import { ADDRCONFIG, lookup } from "./dns.js";
 import { EventEmitter } from "./events.js";
@@ -29,12 +29,6 @@ const NET_CONNECTION = 0, NET_READ = 1, NET_CONNECT = 2, NET_WRITE = 3, NET_SHUT
 const UV_EOF = -4095;
 const UV_EINVAL = -22;
 const TIMEOUT_MAX = 2 ** 31 - 1;
-
-/* a monotonic clock in ms */
-const now = () => {
-  const [seconds, nanoseconds] = process.hrtime();
-  return seconds * 1e3 + nanoseconds / 1e6;
-};
 
 /* ---- Node's error shapes ------------------------------------------------------------------- */
 
@@ -210,7 +204,8 @@ class SocketClass extends Duplex {
     this._keepAlive = options.keepAlive === true ? [true, ~~((options.keepAliveInitialDelay ?? 0) / 1000)] : null;
     this._unref = false;
     this._timer = null;         /* the timeout: an unref'd timer, re-armed for the idle time left when it fires */
-    this._timeoutMs = 0;
+    this._timerDue = 0;         /* when _timer fires (loopNow's clock) */
+    this._timeoutMs = 0;        /* 0: off; a pending _timer then finds nothing to do */
     this._lastActive = 0;
     this._onread = null;
     if (options.typeOfService !== undefined) feature("validateTypeOfService")(options.typeOfService);
@@ -468,16 +463,19 @@ class SocketClass extends Duplex {
     if (typeof msecs !== "number") throw invalidArgType("msecs", "of type number", msecs);
     if (!(msecs >= 0 && msecs !== Infinity)) throw outOfRange("msecs", "a non-negative finite number", msecs);
     if (msecs > TIMEOUT_MAX) msecs = TIMEOUT_MAX;
-    this._clearTimeout();
+    /* the pending timer stays when it fires no later than the new deadline: _onTimer re-arms it
+     * for the rest, so a keep-alive socket, off for each request and on after it, sets no timer */
     if (msecs === 0) {
+      this._timeoutMs = 0;
       if (callback !== undefined) {
         validateFunction(callback, "callback");
         this.removeListener("timeout", callback);
       }
     } else {
       this._timeoutMs = msecs;
-      this._lastActive = now();
-      this._armTimeout(msecs);
+      this._lastActive = loopNow();
+      if (this._timer !== null && this._timerDue > this._lastActive + msecs) this._stopTimer();
+      if (this._timer === null) this._armTimeout(msecs);
       if (callback !== undefined) {
         validateFunction(callback, "callback");
         this.once("timeout", callback);
@@ -487,26 +485,32 @@ class SocketClass extends Duplex {
   }
 
   _armTimeout(ms) {
+    this._timerDue = loopNow() + ms;
     this._timer = timerUnref(() => this._onTimer(), ms);
   }
 
   _onTimer() {
     this._timer = null;
-    const idle = now() - this._lastActive;
+    if (this._timeoutMs === 0) return;
+    const idle = loopNow() - this._lastActive;
     if (idle < this._timeoutMs - 1) this._armTimeout(this._timeoutMs - idle);
     else this.emit("timeout");
   }
 
-  _clearTimeout() {
+  _stopTimer() {
     if (this._timer !== null) clearTimeout(this._timer);
     this._timer = null;
+  }
+
+  _clearTimeout() {
+    this._stopTimer();
     this._timeoutMs = 0;
   }
 
   /* activity: the timeout counts from now (Node's timer.refresh(), which re-arms a fired one) */
   _unrefTimer() {
     if (this._timeoutMs) {
-      this._lastActive = now();
+      this._lastActive = loopNow();
       if (this._timer === null) this._armTimeout(this._timeoutMs);
     }
   }

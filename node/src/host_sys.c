@@ -19,6 +19,7 @@
 #include "jscontext.h"
 #include "js_ops.h"
 #include "jsstring.h"
+#include "js_uv.h"
 
 /* Each error by its C errno and its libuv code: the same number on POSIX, but on Windows libuv
  * has codes of its own (UV_ECONNREFUSED is -4078) while the C library's errno has the C values. */
@@ -153,6 +154,14 @@ JSValue js_host_timer_unref(JSContext *ctx, JSValue callee, JSValue this_val, ui
     (void)callee, (void)this_val, (void)new_target;
     if (argc < 2 || !js_is_callable(argv[0]) || !js_is_number(argv[1])) return js_throw_type_error(ctx, "timerUnref: (fn, ms) expected");
     return js_int32((int32_t)js_add_timer(ctx, argv[0], js_as_number(argv[1]), true));
+}
+
+/* loopNow() → libuv's time in ms, as of the last poll (Node's getLibuvNow): what a socket's
+ * activity is measured with, without a clock read or an allocation per read and write */
+JSValue js_host_loop_now(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv,
+                         JSValue new_target) {
+    (void)callee, (void)this_val, (void)argc, (void)argv, (void)new_target;
+    return js_number((double)uv_now(js_uv_loop(ctx)));
 }
 
 /* the id a timer primitive takes: a positive int32, else 0 */

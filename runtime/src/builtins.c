@@ -826,6 +826,19 @@ BUILTIN(function_proto_apply) {
     UNUSED_ARGS;
     if (!js_is_callable(this_val)) return js_throw_type_error(ctx, "Function.prototype.apply was called on a non-function");
     if (js_is_nullish(ARG(1))) return js_call(ctx, this_val, ARG(0), 0, NULL);
+    /* a short dense array without holes (emit's arguments): its elements are its own data
+     * properties, so reading them can't run code. Copied, as the callee may change the array. */
+    if (js_is_array(ARG(1))) {
+        JSObject *a = js_as_object(ARG(1));
+        JSElements *e = a->elements;
+        uint32_t n = js_array_length(a);
+        JSValue args[8];
+        if (e->kind == JS_ELEMENTS_DENSE && e->length == n && n <= 8) {
+            uint32_t i = 0;
+            while (i < n && !js_is_empty(e->data[i])) args[i] = e->data[i], i++;
+            if (i == n) return js_call(ctx, this_val, ARG(0), n, args);
+        }
+    }
     JSValueArray *list = list_from_array_like(ctx, ARG(1));
     if (!list) return JS_EXCEPTION;
     JSValue r = js_call(ctx, this_val, ARG(0), list->cell.aux, list->values);

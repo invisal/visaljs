@@ -183,18 +183,38 @@ function addHeader(headers, name, value, join) {
 /* ---- OutgoingMessage: a response's (and a request's) headers ------------------------------------ */
 
 /* Node's checks: a header name is an HTTP token; a value has no control characters */
-const tokenRegExp = /^[\^_`a-zA-Z\-0-9!#$%&'*+.|~]+$/;
-const headerCharRegex = /[^\t\x20-\x7e\x80-\xff]/;
+/* Node's tokenRegExp and headerCharRegex as loops: a regular expression is interpreted here, and
+ * every setHeader checks both */
+const TOKEN_CHARS = new Uint8Array(128);
+for (const c of "!#$%&'*+-.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") TOKEN_CHARS[c.charCodeAt(0)] = 1;
+
+function isHttpToken(s) {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 128 || TOKEN_CHARS[c] === 0) return false;
+  }
+  return s.length > 0;
+}
+
+/* a character outside tab, 0x20-0x7e and 0x80-0xff */
+function hasInvalidHeaderChar(value) {
+  const s = String(value);
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if ((c < 0x20 && c !== 9) || c === 0x7f || c > 0xff) return true;
+  }
+  return false;
+}
 
 export function validateHeaderName(name, label = "Header name") {
-  if (typeof name !== "string" || !name || !tokenRegExp.test(name)) {
+  if (typeof name !== "string" || !isHttpToken(name)) {
     throw codeError(TypeError, "ERR_INVALID_HTTP_TOKEN", label + " must be a valid HTTP token [\"" + name + "\"]");
   }
 }
 
 export function validateHeaderValue(name, value) {
   if (value === undefined) throw codeError(TypeError, "ERR_HTTP_INVALID_HEADER_VALUE", "Invalid value \"" + value + "\" for header \"" + name + "\"");
-  if (headerCharRegex.test(value)) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in header content [\"" + name + "\"]");
+  if (hasInvalidHeaderChar(value)) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in header content [\"" + name + "\"]");
 }
 
 const headersSent = (what) => codeError(Error, "ERR_HTTP_HEADERS_SENT", "Cannot " + what + " headers after they are sent to the client");
@@ -584,7 +604,7 @@ export class OutgoingMessage extends Stream {
       validateHeaderName(field, "Trailer name");
       const values = Array.isArray(value) && value.length > 1 ? value : [Array.isArray(value) ? value.join("; ") : value];
       for (const v of values) {
-        if (headerCharRegex.test(v)) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in trailer content [\"" + field + "\"]");
+        if (hasInvalidHeaderChar(v)) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in trailer content [\"" + field + "\"]");
         this._trailer += field + ": " + v + "\r\n";
       }
     }
@@ -1176,7 +1196,7 @@ class ServerClass extends NetServer {
     } else {
       state.res = res;
     }
-    res.once("finish", () => this._resOnFinish(state, req, res));
+    res.on("finish", () => this._resOnFinish(state, req, res));  /* Node's resOnFinish, an `on` listener too */
     if (this.requireHostHeader && major === 1 && minor === 1 && !req.headers.host) {  /* Node: a 400, and the connection ends */
       res.writeHead(400, ["Connection", "close"]);
       res.end();
@@ -1189,8 +1209,11 @@ class ServerClass extends NetServer {
   /* Node's resOnFinish: the request is done with; the next response's turn, or the idle keep-alive
    * timeout */
   _resOnFinish(state, req, res) {
-    const i = state.incoming.indexOf(req);
-    if (i !== -1) state.incoming.splice(i, 1);
+    if (state.incoming[0] === req) state.incoming.shift();
+    else {
+      const i = state.incoming.indexOf(req);
+      if (i !== -1) state.incoming.splice(i, 1);
+    }
     if (state.req === req && req.complete) state.req = null;
     if (state.res === res) state.res = null;
     if (res._last || !res._keepAlive) return;  /* the socket is ending */
@@ -1625,7 +1648,7 @@ export class ClientRequest extends OutgoingMessage {
     let method = options.method;
     if (method !== null && method !== undefined && typeof method !== "string") throw invalidArgType("options.method", "of type string", method);
     if (method) {
-      if (!tokenRegExp.test(method)) throw codeError(TypeError, "ERR_INVALID_HTTP_TOKEN", "Method must be a valid HTTP token [\"" + method + "\"]");
+      if (!isHttpToken(method)) throw codeError(TypeError, "ERR_INVALID_HTTP_TOKEN", "Method must be a valid HTTP token [\"" + method + "\"]");
       method = this.method = method.toUpperCase();
     } else {
       method = this.method = "GET";
