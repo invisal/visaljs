@@ -247,6 +247,8 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
     case "char_code_at":  /* a unit, or NaN past the end */
     case "math":
       return Number_;
+    case "int_add": case "int_sub": case "int_mul":
+      return T.Int32;
     case "call": {
       /* typed code trusts the built-ins to be the standard ones, as tsc's types do */
       if (trustedBuiltin(i, t)) return Number_;

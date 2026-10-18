@@ -41,6 +41,8 @@ export type Op =
   // typed code ("use visaljs"), which trusts the built-ins: s.charCodeAt(i) of a string s, a Number;
   // Math.<Instr.target>(x) of a Number (sqrt, abs, floor, ceil, trunc), C's
   | "char_code_at" | "math"
+  // typed code's `int` arithmetic: C's, wrapping (int32 operands)
+  | "int_add" | "int_sub" | "int_mul"
   // for…in: an iterator over an object's enumerable string keys, and its next key (undefined: done)
   | "for_in_start" | "for_in_next"
   // iterators (for…of): a record from GetIterator, its next value (EMPTY: done), IteratorClose
@@ -135,6 +137,7 @@ export const OPS: Record<Op, OpInfo> = {
   typeof: { ...pure(1), allocates: false },
   char_code_at: { ...pure(2), allocates: true },  // a rope is flattened
   math: pure(1),
+  int_add: pure(2), int_sub: pure(2), int_mul: pure(2),
   in: generic(2), instanceof: generic(2), to_property_key: generic(1),
   for_in_start: { ...generic(1), callsUser: false }, for_in_next: { ...generic(1), callsUser: false },
   iter_start: generic(1), iter_next: generic(1), not_empty: pure(1),

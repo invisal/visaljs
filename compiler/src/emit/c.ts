@@ -931,7 +931,9 @@ class FunctionEmitter {
         break;
       case "get_index":  /* a double key: the variant that takes it unboxed */
         if (i.taView) {
-          expr = i.operands[1]!.repr === "f64" || i.operands[1]!.repr === "i32"
+          expr = i.operands[1]!.repr === "i32"
+            ? `js_tav_get_${i.taView}_i(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "i32")})`
+            : i.operands[1]!.repr === "f64"
             ? `js_tav_get_${i.taView}_d(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`
             : `js_tav_get_${i.taView}(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${args[1]})`;
           break;
@@ -956,7 +958,9 @@ class FunctionEmitter {
         break;
       case "set_index":
         if (i.taView) {
-          status = i.operands[1]!.repr === "f64" || i.operands[1]!.repr === "i32"
+          status = i.operands[1]!.repr === "i32"
+            ? `js_tav_set_${i.taView}_i(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "i32")}, ${args[2]}, ${strict})`
+            : i.operands[1]!.repr === "f64"
             ? `js_tav_set_${i.taView}_d(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "f64")}, ${args[2]}, ${strict})`
             : `js_tav_set_${i.taView}(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
           break;
@@ -1100,6 +1104,11 @@ class FunctionEmitter {
       case "math": {  /* typed code: Math's, as C's */
         const f = { sqrt: "sqrt", abs: "fabs", floor: "floor", ceil: "ceil", trunc: "trunc" }[i.target!];
         expr = convert(`${f}(${this.as(i.operands[0]!, "f64")})`, "f64", i.repr);
+        break;
+      }
+      case "int_add": case "int_sub": case "int_mul": {  /* typed code's int: C's arithmetic, wrapping */
+        const [x, y] = i.operands.map((o) => `(uint32_t)${this.as(o, "i32")}`);
+        expr = convert(`(int32_t)(${x} ${i.op === "int_add" ? "+" : i.op === "int_sub" ? "-" : "*"} ${y})`, "i32", i.repr);
         break;
       }
       case "char_code_at":

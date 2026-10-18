@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { analyze, emitHarnessScript, HOST_MODULE, type HostPrimitives, lower, parseModule, programNames } from "@visaljs/compiler";
-import { type FunctionIR, type Instr, type ModuleIR, T, type Type, type TypedCall } from "@visaljs/ir";
+import { type FunctionIR, type Instr, type ModuleIR, OPS, T, type Type, type TypedCall } from "@visaljs/ir";
 import { optimize, type PassReport } from "@visaljs/optimizer";
 import { type Plugin, rolldown } from "rolldown";
 import ts from "typescript";
@@ -62,8 +62,36 @@ export interface TypedUnit {
 }
 
 /** The declared parameter types of the top-level functions of the typed files, by name. */
-function declaredSignatures(files: readonly string[]): Map<string, { types: Type[]; views: (Instr["taView"] | undefined)[] }> {
-  const program = ts.createProgram([...files], {
+/** A function's `int` declarations: its locals' names and whether it returns one. */
+interface Ints {
+  locals: Set<string>;
+  returns: boolean;
+}
+
+/** `int` (from "visaljs", or a `type int = number` alias: erased by tsc, so by its name). */
+const isInt = (node: ts.TypeNode | undefined, sf: ts.SourceFile) => node?.getText(sf) === "int";
+
+/** Each top-level function's `int` locals and return. */
+function intDeclarations(sf: ts.SourceFile): Map<string, Ints> {
+  const out = new Map<string, Ints>();
+  for (const st of sf.statements) {
+    if (!ts.isFunctionDeclaration(st) || !st.name || !st.body) continue;
+    const ints: Ints = { locals: new Set(), returns: isInt(st.type, sf) };
+    const visit = (n: ts.Node): void => {
+      if (ts.isFunctionLike(n) && n !== st) return;  /* a nested function's are its own */
+      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && isInt(n.type, sf)) ints.locals.add(n.name.text);
+      ts.forEachChild(n, visit);
+    };
+    ts.forEachChild(st.body, visit);
+    if (ints.locals.size || ints.returns) out.set(st.name.text, ints);
+  }
+  return out;
+}
+
+const TYPES_FILE = resolve(import.meta.dirname, "..", "types", "visaljs.d.ts");
+
+function declaredSignatures(files: readonly string[], ints: Map<string, Ints>): Map<string, { types: Type[]; views: (Instr["taView"] | undefined)[] }> {
+  const program = ts.createProgram([...files, TYPES_FILE], {
     strict: true, noEmit: true, target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler, allowImportingTsExtensions: true, skipLibCheck: true,
   });
@@ -73,12 +101,13 @@ function declaredSignatures(files: readonly string[]): Map<string, { types: Type
   const out = new Map<string, { types: Type[]; views: (Instr["taView"] | undefined)[] }>();
   for (const file of files) {
     const sf = program.getSourceFile(file)!;
+    for (const [name, i] of intDeclarations(sf)) ints.set(name, i);
     for (const st of sf.statements) {
       if (!ts.isFunctionDeclaration(st) || !st.name) continue;
       /* a parameter of another type (an array, an object): the function stays untyped; an export
          of one is an error (buildTypedUnit) */
       /* `int` (a `type int = number` alias, erased by tsc): a 32-bit integer */
-      const types = st.parameters.map((p) => (p.type?.getText(sf) === "int" ? T.Int32 : irType(checker, checker.getTypeAtLocation(p))));
+      const types = st.parameters.map((p) => (isInt(p.type, sf) ? T.Int32 : irType(checker, checker.getTypeAtLocation(p))));
       const views = st.parameters.map((p) => VIEW_KINDS[checker.getTypeAtLocation(p).getSymbol()?.name ?? ""]);
       if (types.every((t) => t !== null)) out.set(st.name.text, { types: types as Type[], views });
     }
@@ -110,6 +139,42 @@ function irType(checker: ts.TypeChecker, t: ts.Type): Type | null {
   return null;
 }
 
+/** C semantics for `int`: what a function stores in an `int` local or returns as one is
+ *  truncated to 32 bits (`x | 0`, which specialize makes C's wrapping arithmetic). */
+function truncateInts(fn: FunctionIR, ints: Ints) {
+  let next = 1 + Math.max(0, ...fn.params.map((p) => p.id), ...fn.blocks.flatMap((b) => [...b.phis, ...b.instrs].map((i) => i.id)));
+  const make = (b: FunctionIR["blocks"][number], op: Instr["op"], operands: Instr[], extra: Partial<Instr> = {}): Instr =>
+    ({ id: next++, op, operands, type: T.None, repr: "boxed", mayThrow: op === "bitor", block: b, loc: null, ...extra });
+  const truncate = (b: FunctionIR["blocks"][number], v: Instr, at: number): Instr => {
+    const zero = make(b, "const", [], { lit: { value: 0 } });
+    const w = make(b, "bitor", [v, zero], v.name ? { name: v.name } : {});
+    b.instrs.splice(at, 0, zero, w);
+    return w;
+  };
+  const replaced = new Map<Instr, Instr>();
+  for (const b of fn.blocks)
+    for (const i of [...b.instrs]) {
+      if (!i.name || !ints.locals.has(i.name) || i.op === "param" || i.op === "empty" || !OPS_RESULT(i)) continue;  /* empty: a `let` before its declaration */
+      const at = b.instrs.indexOf(i);
+      if (b.handler && i.mayThrow && at === b.instrs.length - 1) continue;  /* it ends a protected block: left as it is */
+      replaced.set(i, truncate(b, i, at + 1));
+    }
+  if (ints.returns)
+    for (const b of fn.blocks)
+      if (b.term?.kind === "return") b.term.value = truncate(b, b.term.value, b.instrs.length);
+  /* every use of a truncated value takes the truncated one */
+  const swap = (v: Instr) => replaced.get(v) ?? v;
+  for (const b of fn.blocks) {
+    for (const phi of b.phis) for (const inc of phi.incoming!) inc.value = swap(inc.value);
+    for (const i of b.instrs) if (!(i.op === "bitor" && replaced.get(i.operands[0]!) === i)) i.operands = i.operands.map(swap);
+    const term = b.term;
+    if (term?.kind === "branch") term.cond = swap(term.cond);
+    else if (term?.kind === "return" || term?.kind === "throw") term.value = swap(term.value);
+  }
+}
+
+const OPS_RESULT = (i: Instr) => OPS[i.op].result;
+
 /** A function's name in C, as the emitter makes it (its ident). */
 function ident(name: string): string {
   let out = "";
@@ -119,7 +184,8 @@ function ident(name: string): string {
 
 /** Compiles the typed files as one unit. */
 export async function buildTypedUnit(files: readonly string[], primitives: HostPrimitives): Promise<TypedUnit> {
-  const signatures = declaredSignatures(files);
+  const ints = new Map<string, Ints>();
+  const signatures = declaredSignatures(files, ints);
   const ENTRY = "\0visaljs-typed-entry";
   const bundle = await rolldown({
     input: ENTRY,
@@ -166,6 +232,8 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
     if (hidden < 0) continue;
     meta.declared = fn.params.map((_, k) => (k < hidden ? undefined : sig.types[k - hidden]));
     meta.declaredViews = fn.params.map((_, k) => (k < hidden ? undefined : sig.views[k - hidden]));
+    const declaredInts = ints.get(meta.jsName);
+    if (declaredInts) truncateInts(fn, declaredInts);
     meta.external = true;
     meta.untyped = untypedName(fn.name);
     const twin = copy.functions.find((f) => f.name === meta.untyped)!;

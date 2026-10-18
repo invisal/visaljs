@@ -17,7 +17,7 @@
 // `String.fromCharCode(c)`. Their C compares the callee with the built-in and, when it is and
 // the argument suits, does its work inline (C's sqrt; reading the unit), else makes the call.
 // Anywhere, not just in loops: a call is big anyway.
-import { Number_, T, isSubtype, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { Number_, T, isSubtype, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { clearMayThrow, functionsOf, loopDepths, removeInstrs, removeUnreachable, useCounts } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
@@ -63,6 +63,21 @@ export function trustedBuiltin(i: Instr, type: (v: Instr) => Type): string | nul
   if (name === "char_code_at") return isSubtype(type(i.operands[1]!), T.String) ? name : null;
   if (name?.startsWith("math_")) return isSubtype(type(i.operands[2]!), Number_) ? name : null;
   return null;
+}
+
+/** Typed code's `int` arithmetic (`(a + b) | 0` of int32s), by the Number operator. */
+const INT_FORM: Partial<Record<Op, Op>> = { num_add: "int_add", num_sub: "int_sub", num_mul: "int_mul", num_inc: "int_add", num_dec: "int_sub" };
+
+/** A constant 1 before `i`, for x++ as x + 1. */
+function one(i: Instr): Instr {
+  const b = i.block;
+  const c: Instr = { id: nextId(b.fn), op: "const", operands: [], type: T.Int32, repr: "boxed", mayThrow: false, block: b, loc: i.loc, lit: { value: 1 } };
+  b.instrs.splice(b.instrs.indexOf(i), 0, c);
+  return c;
+}
+
+function nextId(fn: FunctionIR): number {
+  return 1 + Math.max(0, ...fn.params.map((p) => p.id), ...fn.blocks.flatMap((b) => [...b.phis, ...b.instrs].map((i) => i.id)));
 }
 
 /** Element access's form for a Number key. */
@@ -129,6 +144,14 @@ export const specialize: Pass = {
           clearMayThrow(i);
           i.op = form;
           count("inlined", "number operator");
+          /* (a + b) | 0 of int32s, an `int` in typed code: C's wrapping arithmetic, not a double's ToInt32 */
+          const x = i.operands[0]!;
+          const zero = i.operands[1]!;
+          if (form === "num_bitor" && zero.op === "const" && zero.lit!.value === 0 && INT_FORM[x.op] && uses.get(x) === 1 && x.operands.every((o) => isSubtype(o.type, T.Int32))) {
+            i.op = INT_FORM[x.op]!;
+            i.operands = x.op === "num_inc" || x.op === "num_dec" ? [x.operands[0]!, one(i)] : [...x.operands];
+            count("wrapped", "int operation");
+          }
         }
       if (unread.size) {
         for (const v of unread) clearMayThrow(v);
