@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import { modules } from "@visaljs/node";
 
 import { compileProgram, DiagnosticFilter, libraryArchive, prebuiltArchive, prebuiltKey, toolchainHint } from "../src/cc.ts";
-import { EntryError, nodeCommand, projectEntry } from "../src/entry.ts";
-import { buildScriptOptions } from "../src/frameworks/vinext.ts";
+import { EntryError, nodeCommand, projectEntry } from "../src/integrations/project.ts";
+import { buildScriptOptions } from "../src/integrations/vinext.ts";
 import { type Io, main, VERSION } from "../src/main.ts";
 import { prebuiltLibraries, TARGETS } from "../scripts/prebuilt.ts";
 

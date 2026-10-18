@@ -1,7 +1,7 @@
 <!--
-For a framework plugin (cli/src/frameworks): `visaljs build <project directory>` building a
-framework's production server. A plugin implements the Framework hooks: detect, build, entry,
-plugins, requires, notes.
+For a framework's integration (cli/src/integrations): `visaljs build <project directory>` building
+a framework's production server. An integration implements detect and the pipeline's hooks
+(cli/src/pipeline/types.ts): frameworkBuild, prepare, bundle, done.
 -->
 
 ## Framework
@@ -16,8 +16,9 @@ plugins, requires, notes.
 ## Proposal
 
 <!-- Which hooks it implements and why each one is needed: how it is detected, the framework's
-     own build it runs, the entry that starts its server, the code it rewrites for the bundler,
-     the packages it require()s at run time. -->
+     own build it runs (frameworkBuild), the entry that starts its server (prepare), the code it
+     rewrites for the bundler, the modules it ignores and the packages it require()s at run time
+     (bundle), what the report tells users (done). -->
 
 ## App
 

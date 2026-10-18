@@ -62,7 +62,6 @@ function argArray(args: string[]): string {
   return args.length ? `(const JSValue[]){ ${args.join(", ")} }` : "NULL";
 }
 
-/** A C identifier fragment from a JS name. */
 function ident(name: string): string {
   let out = "";
   for (const ch of name) out += /[A-Za-z0-9_]/.test(ch) ? ch : `_u${ch.codePointAt(0)!.toString(16)}_`;
@@ -295,7 +294,6 @@ function convert(expr: string, from: Repr, to: Repr): string {
 /** Number comparisons: a C bool from doubles or int32s. */
 const BOOL_OPS = new Set<Op>(["num_lt", "num_le", "num_gt", "num_ge", "num_eq", "num_ne"]);
 
-/** A Number as a C double literal. */
 function cDouble(d: number): string {
   if (Number.isNaN(d)) return "NAN";
   if (d === Infinity) return "INFINITY";
@@ -538,7 +536,6 @@ class FunctionEmitter {
     return this.as(i, "boxed");
   }
 
-  /** A value's C variable. */
   private name(i: Instr): string {
     return `v${i.id}${i.name ? `_${ident(i.name)}` : ""}`;
   }
@@ -641,7 +638,6 @@ class FunctionEmitter {
     return [...this.copies(from, to), `goto bb${to.id};`].join(" ");
   }
 
-  /** Where an exception raised in `b` goes. */
   /** `new F(…)` of a constructor of this module. When F's value is that
    *  function (made in this realm), `this` comes from js_new_instance and the constructor's direct
    *  entry runs; an object it returns wins, as in [[Construct]] (§10.2.2). Anything else, through
@@ -1217,7 +1213,7 @@ export interface EmitOptions {
   regexps?: ReadonlyMap<string, Uint8Array>;
   /** What "visaljs:host" imports name: the host packages' primitives. */
   hostPrimitives?: HostPrimitives;
-  /** emitProgramFiles: split a program into C files of about this many IR instructions each
+  /** emitProgramFiles: split a program into C files of about this many IR instructions each.
    *  Absent: one file. */
   partSize?: number;
   /** A test262 unit (emitUnit) run after harness scripts compiled once into the test host
@@ -1440,14 +1436,17 @@ function partition(fns: readonly FunctionIR[], size: number): Map<FunctionIR, nu
   return new Map(fns.map((fn, i) => [fn, used.indexOf(raw[i]!) + 1]));
 }
 
-/** The program's C files. A program under `options.partSize` instructions is
- *  program.c alone, as emitProgram makes it. A bigger one is program.h (what the files
- *  share), program.c (the data and main()) and program_1.c … program_N.c (the functions),
- *  which compile in parallel. A function another file calls, or makes, isn't static. */
-export function emitProgramFiles(m: ModuleIR, options: EmitOptions = {}): CFile[] {
+/** The program's C files: program.c alone under `options.partSize` instructions, else
+ *  program_1.c … program_N.c (the functions, compiled in parallel), program.h and program.c (the
+ *  data and main()). Yielded as each is made, so a caller that writes each away never holds a
+ *  large program's C (hundreds of megabytes) at once. */
+export function* emitProgramFiles(m: ModuleIR, options: EmitOptions = {}): Generator<CFile> {
   const fns = [...m.functions, m.main];
   const parts = options.partSize ? partition(fns, options.partSize) : null;
-  if (!parts) return [{ name: "program.c", text: emitProgram(m, options) }];
+  if (!parts) {
+    yield { name: "program.c", text: emitProgram(m, options) };
+    return;
+  }
 
   const e = prepare(m, "", options);
   const emitters = new Map(fns.map((fn, i) => [fn, i < m.functions.length ? e.functions[i]! : e.main]));
@@ -1463,10 +1462,35 @@ export function emitProgramFiles(m: ModuleIR, options: EmitOptions = {}): CFile[
         if (i.op === "call_direct" || i.op === "construct_direct") emitters.get(target)!.shared = true;
         if (i.op !== "call_direct") sharedInfos.add(target);  /* construct_direct compares the function's info */
       }
-  /* in the single file's order, so literals and caches are numbered the same */
-  const bodies = new Map(fns.map((fn) => [fn, emitters.get(fn)!.emit()]));
-  const infos = new Map(m.functions.map((fn) => [fn, functionInfo(fn, e.strings, e.embedSource, sharedInfos.has(fn))]));
+  /* each part's functions, in order: a part is a run of them */
+  const byPart = new Map<number, FunctionIR[]>();
+  for (const fn of fns) {
+    const k = parts.get(fn)!;
+    if (!byPart.has(k)) byPart.set(k, []);
+    byPart.get(k)!.push(fn);
+  }
+  for (const [k, own] of byPart) {
+    const made = own.filter((fn) => fn !== m.main);
+    const bodies = own.map((fn) => emitters.get(fn)!.emit());
+    const text = [
+      GENERATED,
+      '#include "program.h"',
+      "",
+      ...own.flatMap((fn) => {
+        const f = emitters.get(fn)!;
+        return [...(f.shared ? [] : [f.prototype()]), ...f.resumePrototype()];
+      }),
+      ...made.map((fn) => genericPrototype(fn, "")),
+      "",
+      ...made.map((fn) => functionInfo(fn, e.strings, e.embedSource, sharedInfos.has(fn))),
+      ...(made.length ? [""] : []),
+      ...bodies.flatMap((body) => [body, ""]),
+      ...made.flatMap((fn) => [genericEntry(fn, ""), ""]),
+    ];
+    yield { name: `program_${k}.c`, text: text.join("\n") };
+  }
 
+  /* once every function is emitted: the literals, caches and hosts they use */
   const header = [
     GENERATED,
     "/* What the program's files share: program.c defines the data, program_N.c the functions. */",
@@ -1485,28 +1509,7 @@ export function emitProgramFiles(m: ModuleIR, options: EmitOptions = {}): CFile[
     ...[...sharedInfos].map((fn) => `extern const JSFunctionInfo ${infoName(fn.name, "")};`),
     "",
   ];
+  yield { name: "program.h", text: header.join("\n") };
   const data = [GENERATED, "#define VISALJS_PROGRAM_DATA", '#include "program.h"', "", ...dataLines(m, "", null, options, e, ""), "", ...mainLines(m, "", null, options, e)];
-  const files: CFile[] = [{ name: "program.h", text: header.join("\n") }, { name: "program.c", text: data.join("\n") }];
-  const count = Math.max(...parts.values());
-  for (let k = 1; k <= count; k++) {
-    const own = fns.filter((fn) => parts.get(fn) === k);
-    const made = own.filter((fn) => fn !== m.main);
-    const text = [
-      GENERATED,
-      '#include "program.h"',
-      "",
-      ...own.flatMap((fn) => {
-        const f = emitters.get(fn)!;
-        return [...(f.shared ? [] : [f.prototype()]), ...f.resumePrototype()];
-      }),
-      ...made.map((fn) => genericPrototype(fn, "")),
-      "",
-      ...made.map((fn) => infos.get(fn)!),
-      ...(made.length ? [""] : []),
-      ...own.flatMap((fn) => [bodies.get(fn)!, ""]),
-      ...made.flatMap((fn) => [genericEntry(fn, ""), ""]),
-    ];
-    files.push({ name: `program_${k}.c`, text: text.join("\n") });
-  }
-  return files;
+  yield { name: "program.c", text: data.join("\n") };
 }

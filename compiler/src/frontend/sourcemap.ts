@@ -8,15 +8,21 @@ interface RawSourceMap {
   mappings: string;
 }
 
-/** A segment: generated column, then (when mapped) source, original line, column and name
- *  (-1: none). All 0-based. */
-type Segment = [genColumn: number, source: number, line: number, column: number, name: number];
+/* A segment is FIELDS numbers in `segments`: generated column, then (when mapped) source,
+ * original line, column and name (-1: none). All 0-based. A bundle's map has tens of millions of
+ * them: one typed array, not an array each. */
+const FIELDS = 5;
+const GEN_COLUMN = 0, SOURCE = 1, LINE = 2, COLUMN = 3, NAME = 4;
 
 const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const DIGIT = new Map([...BASE64].map((c, i) => [c, i]));
+const DIGIT = new Int8Array(128).fill(-1);
+for (let i = 0; i < BASE64.length; i++) DIGIT[BASE64.charCodeAt(i)] = i;
+const COMMA = 44, SEMICOLON = 59;
 
 export class SourceMap {
-  private readonly lines: Segment[][] = [];
+  private segments = new Int32Array(1024 * FIELDS);
+  /** Line n's segments: from lineStarts[n] to lineStarts[n + 1] (segment indexes). */
+  private readonly lineStarts: number[] = [0];
   private readonly sources: string[];
   private readonly rawSources: string[];
   private readonly names: string[];
@@ -27,83 +33,111 @@ export class SourceMap {
     this.rawSources = raw.sources.map((s) => s ?? "");
     this.sources = this.rawSources.map(resolveSource);
     this.names = raw.names ?? [];
-    let source = 0, line = 0, column = 0, name = 0;
-    for (const text of raw.mappings.split(";")) {
-      const segments: Segment[] = [];
-      let genColumn = 0;
-      for (const seg of text.split(",")) {
-        if (seg === "") continue;
-        const f = decodeVlq(seg);
-        genColumn += f[0]!;
-        if (f.length < 4) {
-          segments.push([genColumn, -1, 0, 0, -1]);
-          continue;
+    const mappings = raw.mappings;
+    const fields = [0, 0, 0, 0, 0];
+    let count = 0, lineStart = 0, genColumn = 0, source = 0, line = 0, column = 0, name = 0;
+    for (let i = 0; i <= mappings.length; i++) {
+      const c = i < mappings.length ? mappings.charCodeAt(i) : SEMICOLON;
+      if (c !== COMMA && c !== SEMICOLON) continue;
+      const n = decodeVlq(mappings, lineStart, i, fields);
+      if (n > 0) {
+        genColumn += fields[0]!;
+        if (n >= 4) {
+          source += fields[1]!;
+          line += fields[2]!;
+          column += fields[3]!;
+          if (n >= 5) name += fields[4]!;
         }
-        source += f[1]!;
-        line += f[2]!;
-        column += f[3]!;
-        if (f.length >= 5) name += f[4]!;
-        segments.push([genColumn, source, line, column, f.length >= 5 ? name : -1]);
+        if ((count + 1) * FIELDS > this.segments.length) {
+          const grown = new Int32Array(this.segments.length * 2);
+          grown.set(this.segments);
+          this.segments = grown;
+        }
+        const at = count++ * FIELDS;
+        this.segments[at + GEN_COLUMN] = genColumn;
+        this.segments[at + SOURCE] = n >= 4 ? source : -1;
+        this.segments[at + LINE] = n >= 4 ? line : 0;
+        this.segments[at + COLUMN] = n >= 4 ? column : 0;
+        this.segments[at + NAME] = n >= 5 ? name : -1;
       }
-      segments.sort((a, b) => a[0] - b[0]);
-      this.lines.push(segments);
+      lineStart = i + 1;
+      if (c === SEMICOLON) {
+        this.sortLine(this.lineStarts[this.lineStarts.length - 1]!, count);
+        this.lineStarts.push(count);
+        genColumn = 0;
+      }
     }
+    this.segments = this.segments.slice(0, count * FIELDS);
   }
 
   /** The original location of a 1-based bundle position: the segment at or before it on
    *  its line (else the line's first), or null where the bundler generated the code. */
   original(line: number, column: number): Loc | null {
-    const seg = this.segmentAt(line, column, false);
-    if (!seg || seg[1] < 0) return null;
-    return { file: this.sources[seg[1]]!, line: seg[2] + 1, column: seg[3] + 1 };
+    const at = this.segmentAt(line, column, false);
+    if (at < 0 || this.segments[at + SOURCE]! < 0) return null;
+    return { file: this.sources[this.segments[at + SOURCE]!]!, line: this.segments[at + LINE]! + 1, column: this.segments[at + COLUMN]! + 1 };
   }
 
   /** The original file of a 1-based bundle position, as the map's `sources` names it (absolute
    *  paths from the driver), or null. */
   originalSource(line: number, column: number): string | null {
-    const seg = this.segmentAt(line, column, false);
-    return seg && seg[1] >= 0 ? this.rawSources[seg[1]]! : null;
+    const at = this.segmentAt(line, column, false);
+    return at >= 0 && this.segments[at + SOURCE]! >= 0 ? this.rawSources[this.segments[at + SOURCE]!]! : null;
   }
 
   /** The original name of the identifier starting exactly at a 1-based bundle position. */
   originalName(line: number, column: number): string | undefined {
-    const seg = this.segmentAt(line, column, true);
-    return seg && seg[4] >= 0 ? this.names[seg[4]] : undefined;
+    const at = this.segmentAt(line, column, true);
+    return at >= 0 && this.segments[at + NAME]! >= 0 ? this.names[this.segments[at + NAME]!] : undefined;
   }
 
-  private segmentAt(line: number, column: number, exact: boolean): Segment | undefined {
-    const segments = this.lines[line - 1];
-    if (!segments || segments.length === 0) return undefined;
+  /** The offset in `segments` of the segment for a 1-based position, or -1. */
+  private segmentAt(line: number, column: number, exact: boolean): number {
+    if (line < 1 || line >= this.lineStarts.length) return -1;
+    const first = this.lineStarts[line - 1]!, last = this.lineStarts[line]! - 1;
+    if (last < first) return -1;
     const col = column - 1;
-    let lo = 0, hi = segments.length - 1, found = -1;
+    let lo = first, hi = last, found = -1;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
-      if (segments[mid]![0] <= col) {
+      if (this.segments[mid * FIELDS + GEN_COLUMN]! <= col) {
         found = mid;
         lo = mid + 1;
       } else {
         hi = mid - 1;
       }
     }
-    if (exact) return found >= 0 && segments[found]![0] === col ? segments[found] : undefined;
-    return segments[found >= 0 ? found : 0];
+    if (exact) return found >= 0 && this.segments[found * FIELDS + GEN_COLUMN] === col ? found * FIELDS : -1;
+    return (found >= 0 ? found : first) * FIELDS;
+  }
+
+  /** Segments `from` to `to` in generated column order (maps almost always have them so). */
+  private sortLine(from: number, to: number) {
+    let sorted = true;
+    for (let s = from + 1; s < to && sorted; s++) sorted = this.segments[(s - 1) * FIELDS]! <= this.segments[s * FIELDS]!;
+    if (sorted) return;
+    const line = [...Array(to - from).keys()].map((k) => this.segments.slice((from + k) * FIELDS, (from + k + 1) * FIELDS));
+    line.sort((a, b) => a[GEN_COLUMN]! - b[GEN_COLUMN]!);
+    line.forEach((seg, k) => this.segments.set(seg, (from + k) * FIELDS));
   }
 }
 
-function decodeVlq(s: string): number[] {
-  const out: number[] = [];
-  let value = 0, shift = 0;
-  for (const c of s) {
-    const digit = DIGIT.get(c);
-    if (digit === undefined) throw new Error(`invalid source map mapping '${s}'`);
+/** Decodes the VLQ fields of mappings[from, to) into `out`; returns how many there are. */
+function decodeVlq(mappings: string, from: number, to: number, out: number[]): number {
+  let n = 0, value = 0, shift = 0;
+  for (let i = from; i < to; i++) {
+    const c = mappings.charCodeAt(i);
+    const digit = c < 128 ? DIGIT[c]! : -1;
+    if (digit < 0) throw new Error(`invalid source map mapping '${mappings.slice(from, to)}'`);
     value += (digit & 31) << shift;
     if (digit & 32) {
       shift += 5;
     } else {
-      out.push(value & 1 ? -(value >>> 1) : value >>> 1);
+      if (n < out.length) out[n] = value & 1 ? -(value >>> 1) : value >>> 1;
+      n++;
       value = 0;
       shift = 0;
     }
   }
-  return out;
+  return n;
 }

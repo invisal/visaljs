@@ -1,24 +1,24 @@
-// The entry of a project that isn't a framework's (frameworks/): `visaljs build` with no file, or
-// with a directory, finds the file that starts the program from its package.json, in this order:
+// The entry when no framework set one: the first of these whose file exists.
 //
-//   1. "bin", when it names one command: the entry of a command-line tool
-//   2. "scripts.start", when it runs `node <file>`: how the app is started (npm start)
-//   3. "main", when the file is there: npm init writes "index.js" whether or not there's one
+//   1. "bin", when it names one command
+//   2. "scripts.start", when it runs `node <file>`
+//   3. "main" (npm init writes "index.js" whether or not there's one)
 //   4. index.js
 //
-// The first whose file exists is the entry; the binary is named after the command, else the
-// package (its name without the scope), else the directory.
+// The binary is named after the command, else the package without its scope, else the directory.
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 
-export class EntryError extends Error {}
+import { IntegrationError } from "../pipeline/errors.ts";
+import type { Integration } from "../pipeline/types.ts";
+
+/** The project names no entry, or several. */
+export class EntryError extends IntegrationError {}
 
 export interface ProjectEntry {
-  /** The entry file's absolute path. */
   file: string;
   /** Where it came from, for the report: `package.json "scripts.start"`, `index.js`. */
   from: string;
-  /** The binary's name. */
   name: string;
   /** The arguments `scripts.start` gives the program, which a binary can't have built in. */
   ignoredArgs: string[];
@@ -75,7 +75,7 @@ export function projectEntry(root: string): ProjectEntry {
     }
   }
   const name = projectName(pkg, root);
-  /* each place an entry can come from, in order; the files named that aren't there, for the error */
+  /* the files named that aren't there, for the error */
   const missing: string[] = [];
   const found = (path: string, from: string, binName = name, ignoredArgs: string[] = []): ProjectEntry | undefined => {
     const file = existing(root, path);
@@ -116,3 +116,19 @@ export function projectEntry(root: string): ProjectEntry {
   const checked = existsSync(pkgFile) ? `package.json's "bin", "scripts.start" and "main", and index.js` : "a package.json and index.js";
   throw new EntryError(`no entry file: checked ${checked}${missing.length ? ` (${missing.join("; ")})` : ""}`);
 }
+
+export const project: Integration = {
+  id: "project",
+  name: "package.json",
+  provides: "entry",
+  detect: () => true,
+  hooks: {
+    prepare(ctx) {
+      const entry = projectEntry(ctx.root);
+      ctx.entryFile = entry.file;
+      ctx.output = join(ctx.root, entry.name);
+      ctx.note(`Entry: ${relative(ctx.root, entry.file).replaceAll("\\", "/")} (${entry.from})`, "📄");
+      if (entry.ignoredArgs.length) ctx.note(`its arguments (${entry.ignoredArgs.join(" ")}) aren't built in: give them when you run the binary`);
+    },
+  },
+};

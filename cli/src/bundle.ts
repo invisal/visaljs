@@ -20,29 +20,44 @@ export interface Bundle {
 /** A bundling failure, already formatted as `file:line:col: Kind: message` lines. */
 export class BundleError extends Error {}
 
-/** Bundles `entry` into one ES module, `node:*` imports resolved to the host
- *  packages' modules. Warnings go to `warn`, with their location ("file:line:col: ", or ""). */
 export interface BundleExtras {
   /** The entry's source, when it isn't a file: a module generated as if it were `entry`. */
   source?: string;
-  /** More plugins: a framework's rewrites of its code (frameworks/). */
+  /** An integration's plugins, for its code. */
   plugins?: Plugin[];
-  /** Packages a require() may ask for at run time beyond those the bundler finds: a framework's. */
+  /** Packages a require() may ask for at run time beyond those the bundler finds: an integration's. */
   requires?: string[];
   /** `process.env.NODE_ENV`'s value, fixed at build time; undefined: read at run time. */
   nodeEnv?: string | undefined;
   /** Every implicit module, not only those the program's code reaches (--all-features). */
   allFeatures?: boolean;
+  /** Modules the program never runs, which its code still requires: an integration's. */
+  ignored?: readonly IgnoredModule[];
 }
 
+/** A module the program never runs, left out of the bundle: a require() of it gets a stand-in. */
+export interface IgnoredModule {
+  /** Its file under node_modules ("next/dist/build/swc/index.js"), or a package: each of its files ("sharp"). */
+  module: string;
+  /** "require" (the default): a module that throws when required, for one required only where the
+   *  program never goes; "call": its exports, each throwing when called, for one never called. */
+  stub?: "require" | "call";
+  /** Why the program never runs it: the stand-in's error says. */
+  reason: string;
+  /** The "require" stand-in's error code (default MODULE_NOT_FOUND): what the code requiring it
+   *  expects of its failure (ERR_DLOPEN_FAILED for a native addon). */
+  code?: string;
+}
+
+/** Bundles `entry` into one ES module, `node:*` imports resolved to the host packages' modules.
+ *  Warnings go to `warn`, with their location ("file:line:col: ", or ""). */
 export async function bundle(entry: string, hosts: readonly HostPackage[], warn: (message: string, where: string) => void,
   extras: BundleExtras = {}): Promise<Bundle> {
   const rollup = (implicit: readonly string[], warn: (message: string, where: string) => void, required: readonly string[]) =>
     rollupOnce(entry, hosts, implicit, warn, required, extras);
   const b = await rollup([], warn, []);
-  /* the host's implicit modules its code reaches, and the packages it may require() at run time
-   * (registered in the host's table first): bundled again, with them run first (the warnings
-   * were given) */
+  /* bundled again, run first: the implicit modules the code reaches and the packages it may
+   * require() at run time (the warnings were given) */
   const program = programCode(b.code, dirname(resolve(entry)), hosts);
   const implicit = hosts.flatMap((h) => h.implicitModules ?? []).filter((m) => extras.allFeatures === true || m.reached(b.code, program)).map((m) => m.file);
   const required = hosts.some((h) => h.requireTable) ? [...requiredPackages(b.code, entry, extras.requires ?? []), ...namedBuiltins(program)] : [];
@@ -58,11 +73,8 @@ function programCode(code: string, cwd: string, hosts: readonly HostPackage[]): 
     (preludes.some((dir) => resolve(cwd, path.replace(/^(?:\0|\\0)visaljs-runtime:/, "")).startsWith(dir)) ? "" : region));
 }
 
-/** The packages a bundle names in a call the bundler couldn't follow as a require() (and those
- *  `given`):
- *  ``a(`react-dom`)``, where `a` is a bundle's createRequire(import.meta.url) (Vite's, for the
- *  packages it left external). Only in code that calls createRequire; a call of a plain name with
- *  one string, naming a package (not a built-in) that resolves from the entry. A call that isn't a
+/** `given`, and the packages a bundle names in ``a(`react-dom`)``, where `a` is a createRequire()
+ *  the bundler couldn't follow (Vite's, for the packages it left external). A call that isn't a
  *  require() but names an installed package bundles it needlessly: the build lists them. */
 function requiredPackages(code: string, entry: string, given: readonly string[]): string[] {
   if (!/\bcreateRequire\s*\(/.test(code)) return [];
@@ -102,7 +114,7 @@ async function rollupOnce(entry: string, hosts: readonly HostPackage[], implicit
       /* a constant NODE_ENV: `if (process.env.NODE_ENV === "production")` folds, and tree-shaking
        * drops the other branch (React's development build, half of the bundle) */
       ...(extras.nodeEnv === undefined ? {} : { transform: { define: { "process.env.NODE_ENV": JSON.stringify(extras.nodeEnv) } } }),
-      plugins: [hostModules(hosts), commonJS(), missingRequires(warn), depdWrappers(), implicitEntry(entry, implicit), requireTable(hosts, required), ...generatedEntry(entry, extras.source), ...(extras.plugins ?? [])],
+      plugins: [hostModules(hosts), commonJS(), ...ignoredModules(extras.ignored ?? []), missingRequires(warn), depdWrappers(), implicitEntry(entry, implicit), requireTable(hosts, required), ...generatedEntry(entry, extras.source), ...(extras.plugins ?? [])],
     });
     try {
       const { output } = await build.generate({
@@ -125,9 +137,8 @@ async function rollupOnce(entry: string, hosts: readonly HostPackage[], implicit
   }
 }
 
-/** Host modules: `node:fs` (or `fs`) resolves to its host package's prelude
- *  module, which is bundled like the program's own code; prelude modules may import the host
- *  primitives. */
+/** `node:fs` (or `fs`) resolves to its host package's prelude module, bundled like the program's
+ *  code; only prelude modules may import the host primitives. */
 function hostModules(hosts: readonly HostPackage[]): Plugin {
   const modules = providedModules(hosts);
   const preludes = hosts.map((h) => h.preludeDir + sep);
@@ -139,22 +150,17 @@ function hostModules(hosts: readonly HostPackage[]): Plugin {
         this.error({ message: `${HOST_MODULE} is internal to the host prelude`, ...(importer ? { id: importer } : {}) });
       }
       if (!source.startsWith("node:") && !isBuiltin(source)) return null;
-      /* rolldown's runtime imports createRequire for a require() it can't resolve (a computed
-       * specifier): node:module's, which reports the module missing, as Node would */
       const name = source.replace(/^node:/, "");
       const file = Object.hasOwn(modules, name) ? modules[name] : undefined;
-      /* rolldown's runtime imports createRequire from node:module, so that module comes before
-       * the runtime; a dynamic import() of it would wrap it in the runtime's helpers, used before
-       * they're defined: the runtime gets its own copy (node:module's prelude imports nothing) */
+      /* rolldown's runtime imports createRequire from node:module, before its helpers are defined:
+       * it gets its own copy (node:module's prelude imports nothing) */
       if (file && importer === ROLLDOWN_RUNTIME) return RUNTIME_COPY + file;
       if (file) return kind === "require-call" ? REQUIRED + file : file;
       const provided = Object.keys(modules).sort().map((m) => `node:${m}`).join(", ");
       this.error({ message: `node:${name} is not provided by visaljs (it provides ${provided})`, ...(importer ? { id: importer } : {}) });
     },
-    /* require() of a built-in gives its module.exports, as Node does: the prelude's default
-     * export (EventEmitter, Stream, the fs object…), with the named exports it lacks (own or
-     * inherited: process.emit is EventEmitter.prototype's, not node:process's wrapper of it), and not
-     * the ES module namespace a require() of an ES module gives */
+    /* require() of a built-in gives its module.exports, as Node does: the prelude's default export
+     * with the named exports it lacks (`in`: process.emit is inherited), not the namespace */
     load(id) {
       if (id.startsWith(RUNTIME_COPY)) return readFileSync(id.slice(RUNTIME_COPY.length), "utf8");
       if (!id.startsWith(REQUIRED)) return null;
@@ -167,14 +173,11 @@ module.exports = m;
   };
 }
 
-/** CommonJS modules, as Node decides it: `.cjs`, or `.js` without module syntax outside a
- *  `"type": "module"` package. Node runs one as sloppy code unless it says "use strict", though the
- *  bundle is an ES module (strict): the bundler wraps each in a function, which gets the compiler's
- *  COMMONJS_DIRECTIVE, so it's sloppy; one that says "use strict" (a directive the bundler drops)
- *  runs in a strict function of its own. One that names `__filename` or `__dirname`
- *  declares them at its top as the original file's absolute path and directory at build time, as
- *  `import.meta`'s `filename` and `dirname` are. ES modules keep them undefined (code tests
- *  `typeof __dirname` to tell which it is). */
+/** CommonJS modules (as Node decides: `.cjs`, or `.js` without module syntax outside a `"type":
+ *  "module"` package) run sloppy, though the bundle is strict: each wrapper gets COMMONJS_DIRECTIVE,
+ *  and one saying "use strict" (a directive the bundler drops) gets a strict function of its own.
+ *  `__filename` and `__dirname` are the file's at build time; ES modules keep them undefined (code
+ *  tests `typeof __dirname`). */
 function commonJS(): Plugin {
   const types = new Map<string, string | undefined>();  // a directory → its package's "type"
   const packageType = (dir: string): string | undefined => {
@@ -227,15 +230,16 @@ function commonJS(): Plugin {
         s.appendLeft(m.index + m[0].length, `${JSON.stringify(COMMONJS_DIRECTIVE)};`);
         marked = true;
       }
-      return marked ? { code: s.toString(), map: s.generateMap({ hires: true }).toString() } : null;
+      /* a segment per word, not per character: the chunk's map is chained with the modules', and
+       * a large bundle's would have tens of millions of segments */
+      return marked ? { code: s.toString(), map: s.generateMap({ hires: "boundary" }).toString() } : null;
     },
   };
 }
 
-/** A require() of a file that isn't there, or of a native addon (a .node file), throws when it's
- *  reached, as in Node, instead of failing the build: packages require() files their published
- *  build leaves out (a framework's dev server, in a branch production never takes: Next.js's
- *  standalone output), and addons they fall back from (sharp, in a try). A warning says where. */
+/** A require() of a missing file or a native addon throws when reached, as in Node, instead of
+ *  failing the build: packages require() files their published build leaves out (Next.js's dev
+ *  server) and addons they fall back from (sharp, in a try). */
 function missingRequires(warn: (message: string, where: string) => void): Plugin {
   return {
     name: "visaljs-missing-requires",
@@ -261,10 +265,60 @@ function missingRequires(warn: (message: string, where: string) => void): Plugin
 
 const MISSING = "\0visaljs-missing:";
 
-/** depd (deprecation warnings: Express 4, body-parser, http-errors, Next.js's send) wraps a
- *  deprecated function with new Function, to give the wrapper the function's arity: a closure
- *  instead, whose length is 0. new Function needs eval; depd's call is the same everywhere it's
- *  bundled or vendored: `new Function("fn", "log", "deprecate", "message", "site", body)(…)`. */
+/** Stand-ins for the `ignored` modules. A "call" one whose export names can't be read is bundled
+ *  instead. */
+function ignoredModules(ignored: readonly IgnoredModule[]): Plugin[] {
+  if (!ignored.length) return [];
+  const matching = (id: string) => {
+    const path = id.replaceAll("\\", "/");
+    return ignored.find((m) => (/\.[cm]?js$/.test(m.module) ? path.endsWith(`/node_modules/${m.module}`) : path.includes(`/node_modules/${m.module}/`)));
+  };
+  return [{
+    name: "visaljs-ignored",
+    async resolveId(source, importer, { kind }) {
+      if (kind !== "require-call" || !importer || source.startsWith("\0")) return null;
+      const resolved = await this.resolve(source, importer, { skipSelf: true });
+      const m = resolved && !resolved.external ? matching(resolved.id) : undefined;
+      /* the others resolve as if this weren't here: this.resolve doesn't tell them it's a require() */
+      if (!resolved || !m) return null;
+      const code = m.stub === "call" ? readFileSync(resolved.id, "utf8") : "";
+      const names = m.stub === "call" ? exportNames(code) : [];
+      if (m.stub === "call" && !names.length) return null;
+      return IGNORED + JSON.stringify({ module: m.module, reason: m.reason, code: m.code ?? "MODULE_NOT_FOUND", names, esModule: code.includes('Object.defineProperty(exports, "__esModule"') });
+    },
+    load(id) {
+      if (!id.startsWith(IGNORED)) return null;
+      const { module, reason, code, names, esModule } = JSON.parse(id.slice(IGNORED.length)) as
+        { module: string; reason: string; code: string; names: string[]; esModule: boolean };
+      if (!names.length) {
+        /* CommonJS: wrapped, so it throws only when required */
+        const message = code === "MODULE_NOT_FOUND" ? `Cannot find module '${module}' (${reason})` : `${module}: ${reason}`;
+        return `throw Object.assign(new Error(${JSON.stringify(message)}), { code: ${JSON.stringify(code)} });\n`;
+      }
+      const message = JSON.stringify(`${module} isn't in the compiled program (${reason})`);
+      return (esModule ? 'Object.defineProperty(exports, "__esModule", { value: true });\n' : "") +
+        names.map((n) => `exports.${n} = function () { throw new Error(${message}); };\n`).join("");
+    },
+  }];
+}
+
+const IGNORED = "\0visaljs-ignored:";
+
+/** A CommonJS module's export names, as compilers write them: `exports.a = …`,
+ *  `Object.defineProperty(exports, "a", …)`, and TypeScript's and SWC's `_export(exports, { a: …, b: … })`. */
+function exportNames(code: string): string[] {
+  const names = new Set<string>();
+  for (const m of code.matchAll(/\bexports\.([A-Za-z_$][\w$]*)\s*=(?!=)/g)) names.add(m[1]!);
+  for (const m of code.matchAll(/\bObject\.defineProperty\(exports, "([A-Za-z_$][\w$]*)"/g)) names.add(m[1]!);
+  const block = /\b_export\(exports, \{\n([\s\S]*?)\n\}\);/.exec(code)?.[1];
+  if (block) for (const m of block.matchAll(/^ {4}([A-Za-z_$][\w$]*): function\(\) \{/gm)) names.add(m[1]!);
+  names.delete("__esModule");
+  return [...names];
+}
+
+/** depd (Express 4, body-parser, Next.js's send) wraps deprecated functions with new Function,
+ *  which needs eval, for their arity: a closure instead (length 0). Its call is the same wherever
+ *  it's bundled or vendored. */
 function depdWrappers(): Plugin {
   const call = /\bnew Function\((?=\s*(["'])fn\1\s*,\s*\1log\1\s*,\s*\1deprecate\1\s*,\s*\1message\1\s*,\s*\1site\1\s*,)/g;
   const helper = "function __visaljs_depdWrapper() { return function (fn, log, deprecate, message, site) { " +

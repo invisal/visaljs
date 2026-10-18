@@ -1,6 +1,5 @@
-// What `visaljs build` tells the user while it works: a line per step on stderr. On a terminal
-// the running step spins and is redrawn as a check mark (or a red cross) with its time when it
-// ends; piped, only finished steps print, without color.
+// What `visaljs build` tells the user while it works: a line per step on stderr, redrawn in place
+// on a terminal; piped, only finished steps print.
 
 export interface ReportStyle {
   /** Draw the running step and redraw it in place (a terminal). */
@@ -58,6 +57,11 @@ export class Report {
     if (this.#live && this.#running) this.#write(CLEAR);
     this.#write(`${text}\n`);
     if (this.#live && this.#running) this.#draw();
+  }
+
+  /** A line of the report, as `note`, but only when reporting (not --quiet). */
+  info(text: string) {
+    if (this.#style) this.note(text);
   }
 
   /** A warning, after its location (`where`, if any): printed even when quiet, its label in yellow. */
