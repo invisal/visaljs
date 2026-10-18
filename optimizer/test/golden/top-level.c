@@ -91,7 +91,7 @@ bb9:;
 #line 14 "top-level.js"
     js_discard(js_take_exception(ctx));
 #line 15 "top-level.js"
-    v37 = js_num_neg(js_int32(1));
+    v37 = js_number(-(1.0));
     v48_sum = v37; goto bb8;
 bb10:;
 #line 13 "top-level.js"

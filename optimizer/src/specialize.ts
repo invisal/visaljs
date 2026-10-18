@@ -17,9 +17,10 @@
 // `String.fromCharCode(c)`. Their C compares the callee with the built-in and, when it is and
 // the argument suits, does its work inline (C's sqrt; reading the unit), else makes the call.
 // Anywhere, not just in loops: a call is big anyway.
-import { Number_, isSubtype, type Instr, type ModuleIR, type Op } from "@visaljs/ir";
+import { Number_, T, isSubtype, type FunctionIR, type Instr, type JSConst, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
-import { clearMayThrow, functionsOf, loopDepths, removeUnreachable } from "./cfg.ts";
+import { int64Arith } from "./infer-types.ts";
+import { clearMayThrow, functionsOf, loopDepths, removeInstrs, removeUnreachable, useCounts } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
 /** Each generic operator's Number form. */
@@ -54,6 +55,75 @@ function inlineBuiltin(i: Instr): string | null {
   return null;
 }
 
+/** What typed code ("use static", which trusts the built-ins to be the standard ones) makes of a
+ *  built-in call: s.charCodeAt(i) of a string, or Math's sqrt/abs/floor/ceil/trunc of a Number,
+ *  the C helper's suffix; null for anything else. `type`: the values' types. */
+export function trustedBuiltin(i: Instr, type: (v: Instr) => Type): string | null {
+  if (!i.block.fn.meta?.declared) return null;
+  const name = inlineBuiltin(i);
+  if (name === "char_code_at") return isSubtype(type(i.operands[1]!), T.String) ? name : null;
+  if (name?.startsWith("math_")) return isSubtype(type(i.operands[2]!), Number_) ? name : null;
+  return null;
+}
+
+/** The bitwise operators: ToInt32 (ToUint32) of their operands first. */
+const TRUNCATING = new Set<Op>(["num_bitor", "num_bitand", "num_bitxor", "num_shl", "num_sar", "num_shr"]);
+
+/** Wrapping int32 arithmetic (`(a + b) | 0` of int32s, an i32's to_i32), by the Number operator. */
+const INT_FORM: Partial<Record<Op, Op>> = { num_add: "int_add", num_sub: "int_sub", num_mul: "int_mul", num_inc: "int_add", num_dec: "int_sub" };
+
+/** A constant 1 before `i`, for x++ as x + 1. */
+function one(i: Instr): Instr {
+  const b = i.block;
+  const c: Instr = { id: nextId(b.fn), op: "const", operands: [], type: T.Int32, repr: "boxed", mayThrow: false, block: b, loc: i.loc, lit: { value: 1 } };
+  b.instrs.splice(b.instrs.indexOf(i), 0, c);
+  return c;
+}
+
+function nextId(fn: FunctionIR): number {
+  return 1 + Math.max(0, ...fn.params.map((p) => p.id), ...fn.blocks.flatMap((b) => [...b.phis, ...b.instrs].map((i) => i.id)));
+}
+
+/** Kinds of value whose === compares contents, not bits: two Numbers (1 and 1.0 boxed
+ *  differently, NaN), two strings (equal units in two cells), two BigInts. */
+const BY_CONTENT = Number_ | T.String | T.BigInt;
+
+const NONE = Symbol("no literal");
+
+/** A comparison js_strict_equals (js_eq) needn't make: `typeof x === "function"`, `x == null`,
+ *  `x === "literal"`, and === where the operands can't both be Numbers, strings or BigInts
+ *  (`x === undefined`, objects): a C bool test of boxed values. Rewrites `i`; false: kept. */
+function simplerComparison(i: Instr): boolean {
+  const strict = i.op === "strict_eq" || i.op === "strict_ne";
+  if (!strict && i.op !== "eq" && i.op !== "ne") return false;
+  const negated = i.op === "strict_ne" || i.op === "ne" ? 1 : 0;
+  const literal = (v: Instr): JSConst | typeof NONE => (v.op === "const" ? v.lit!.value : NONE);
+  for (const [x, y] of [[i.operands[0]!, i.operands[1]!], [i.operands[1]!, i.operands[0]!]] as const) {
+    const lit = literal(y);
+    if (x.op === "typeof" && typeof lit === "string") {  /* typeof's result is one of its names: either works */
+      Object.assign(i, { op: "is_type", operands: [x.operands[0]!], target: lit, index: negated });
+      return true;
+    }
+    if (!strict && (lit === null || lit === undefined)) {  /* x == null: null or undefined (no document.all here) */
+      Object.assign(i, { op: "is_type", operands: [x], target: "nullish", index: negated });
+      return true;
+    }
+    if (strict && typeof lit === "string") {
+      Object.assign(i, { op: "strict_eq_atom", operands: [x, y], index: negated });
+      return true;
+    }
+    if (strict && typeof lit === "number" && !Number.isNaN(lit) && !(x.op === "const" && typeof x.lit!.value === "number")) {
+      Object.assign(i, { op: "strict_eq_num", operands: [x, y], index: negated });
+      return true;
+    }
+  }
+  if (strict && (i.operands[0]!.type & i.operands[1]!.type & BY_CONTENT) === 0) {
+    Object.assign(i, { op: "identical", index: negated });
+    return true;
+  }
+  return false;
+}
+
 /** Element access's form for a Number key. */
 const INDEX_FORM: Partial<Record<Op, Op>> = { get_elem: "get_index", set_elem: "set_index" };
 
@@ -63,8 +133,45 @@ export const specialize: Pass = {
     for (const fn of functionsOf(m)) {
       let edges = false;
       const depth = loopDepths(fn);
+      const uses = useCounts(fn);
+      const unread = new Set<Instr>();
       for (const b of fn.blocks)
         for (const i of b.instrs) {
+          /* an i32's conversion: the int32 arithmetic feeding it wraps, as C's */
+          if (i.op === "to_i32")
+            for (const x of i.operands)
+              if (INT_FORM[x.op] && uses.get(x) === 1 && x.operands.every((o) => isSubtype(o.type, T.Int32))) {
+                if (x.op === "num_inc" || x.op === "num_dec") x.operands = [x.operands[0]!, one(x)];
+                x.op = INT_FORM[x.op]!;
+                count("wrapped", "int operation");
+              }
+          /* typed code trusts the built-ins: s.charCodeAt(i), a string's unit; Math.sqrt(x), C's.
+             Reading the method (and Math) does nothing else: it goes when nothing else reads it. */
+          const trusted = trustedBuiltin(i, (v) => v.type);
+          if (trusted) {
+            edges ||= i.mayThrow;
+            clearMayThrow(i);
+            const method = i.operands[0]!;
+            if (method.mayThrow) edges = true;
+            if (uses.get(method) === 1) {
+              unread.add(method);
+              const holder = method.operands[0]!;  /* Math */
+              if (trusted !== "char_code_at" && holder.op === "global_name" && uses.get(holder) === 2) {  /* the callee's and `this` */
+                unread.add(holder);
+                edges = true;
+              }
+            }
+            if (trusted === "char_code_at") {
+              i.op = "char_code_at";
+              i.operands = [i.operands[1]!, i.operands[2]!];
+            } else {
+              i.op = "math";
+              i.target = trusted.slice("math_".length);
+              i.operands = [i.operands[2]!];
+            }
+            count("inlined", "built-in call");
+            continue;
+          }
           const builtin = inlineBuiltin(i);
           if (builtin) {
             i.builtin = builtin;
@@ -78,7 +185,14 @@ export const specialize: Pass = {
             continue;
           }
           const form = NUMBER_FORM[i.op];
-          if (!form || !i.operands.every((o) => isSubtype(o.type, Number_))) {
+          const numbers = i.operands.every((o) => isSubtype(o.type, Number_));
+          if (!numbers && simplerComparison(i)) {
+            edges ||= i.mayThrow;  /* == can call valueOf; x == null can't */
+            clearMayThrow(i);
+            count("simplified", "comparison");
+            continue;
+          }
+          if (!form || !numbers) {
             if (NUMBER_FIRST.has(i.op) && depth.get(b)! > 0 && i.operands.every((o) => o.type & Number_)) {
               i.numberFirst = true;
               count("added", "number fast path");
@@ -89,7 +203,28 @@ export const specialize: Pass = {
           clearMayThrow(i);
           i.op = form;
           count("inlined", "number operator");
+          /* an int's / and %: C's integer division; a zero divisor throws (a constant one can't) */
+          if ((form === "num_div" || form === "num_mod") && int64Arith(i, (v) => v.type)) {
+            i.op = form === "num_div" ? "int_div" : "int_mod";
+            const d = i.operands[1]!;
+            i.mayThrow = !(d.op === "const" && d.lit!.value !== 0);
+            count("inlined", "integer division", 1, "integer divisions");
+            continue;
+          }
+          /* (a + b) | 0 of int32s: the bitwise operator truncates its operands to 32 bits, so a + b
+             wrapping in an int32 gives it the same bits */
+          if (TRUNCATING.has(form) && !int64Arith(i, (v) => v.type))
+            for (const x of i.operands)
+              if (INT_FORM[x.op] && uses.get(x) === 1 && x.operands.every((o) => isSubtype(o.type, T.Int32))) {
+                if (x.op === "num_inc" || x.op === "num_dec") x.operands = [x.operands[0]!, one(x)];
+                x.op = INT_FORM[x.op]!;
+                count("wrapped", "int operation");
+              }
         }
+      if (unread.size) {
+        for (const v of unread) clearMayThrow(v);
+        removeInstrs(fn, unread);
+      }
       if (edges) removeUnreachable(fn);
     }
     return m;

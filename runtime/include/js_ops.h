@@ -46,6 +46,33 @@ JS_WARN_UNUSED JSValue js_ge(JSContext *ctx, JSValue a, JSValue b);
 /* ===, !==: never throw (strings compare by content). */
 bool js_strict_equals(JSContext *ctx, JSValue a, JSValue b);
 static inline JSValue js_strict_eq(JSContext *ctx, JSValue a, JSValue b) { return js_bool(js_strict_equals(ctx, a, b)); }
+/* A Number as a typed file's ("use static") int, an int64_t: truncated toward zero and wrapped
+ * modulo 2^64, as ToInt32 is for 32 bits; NaN and the infinities 0 (a plain C conversion of those
+ * would be undefined behaviour). */
+static inline int64_t js_f64_to_i64(double d) {
+    if (d >= -9223372036854775808.0 && d < 9223372036854775808.0) return (int64_t)d;
+    if (d != d || d == INFINITY || d == -INFINITY) return 0;
+    double m = fmod(trunc(d), 18446744073709551616.0);  /* exact: d is an integer this large */
+    if (m < 0) m += 18446744073709551616.0;
+    return (int64_t)(uint64_t)m;
+}
+/* A Number value as an int; anything else (typed code's caller passed it unchecked) 0. */
+static inline int64_t js_value_to_i64(JSValue v) {
+    if (js_is_int32(v)) return js_as_int32(v);
+    return js_is_number(v) ? js_f64_to_i64(js_as_number(v)) : 0;
+}
+
+/* v === d, d a number literal (not NaN): v is a Number of that value (0 and -0 alike). */
+static inline bool js_strict_eq_num(JSValue v, double d) {
+    if (js_is_int32(v)) return (double)js_as_int32(v) == d;
+    return js_is_number(v) && js_as_number(v) == d;
+}
+
+/* a === s, s a string literal: an atom, so a string with its units is s itself unless it isn't
+ * interned */
+static inline bool js_strict_eq_atom(JSContext *ctx, JSValue a, JSValue s) {
+    return js_same_bits(a, s) || (js_is_string(a) && !js_is_atom(a) && js_string_equals(ctx, a, s));
+}
 static inline JSValue js_strict_ne(JSContext *ctx, JSValue a, JSValue b) { return js_bool(!js_strict_equals(ctx, a, b)); }
 
 /* A switch whose cases are all string literals: the index of the first case `v` is === to, or

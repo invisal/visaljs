@@ -19,22 +19,26 @@
 //
 // Int32s: a value inference proved an int32 (bitwise results, a loop counter its
 // bound keeps in range) is a C int32_t (`i32`) instead of a double, with the same choice of
-// boxed or not.
+// boxed or not; a typed file's int (Int64) is an int64_t (`i64`). A typed function's declared
+// parameters and return value are unboxed like a closed function's.
 //
 // Generator and async functions stay boxed: their frames save JSValues across pauses.
-import { isSubtype, Number_, T, type Block, type Instr, type ModuleIR, type Op, type Repr, type Type } from "@visaljs/ir";
+import { declaredCallFits, isSubtype, Number_, readsDouble, T, typedCallFits, type Block, type Instr, type ModuleIR, type Op, type Repr, type Type } from "@visaljs/ir";
 
 import { closedFunctions, functionsOf, loopDepths, pauses } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
 const F64 = new Set<Op>([
+  "char_code_at", "math", "int_add", "int_sub", "int_mul", "to_i64", "to_i32", "int_div", "int_mod",
   "num_add", "num_sub", "num_mul", "num_div", "num_mod", "num_neg", "num_inc", "num_dec",
   "num_bitand", "num_bitor", "num_bitxor", "num_bitnot", "num_shl", "num_sar", "num_shr",
 ]);
 const BOOL = new Set<Op>(["num_lt", "num_le", "num_gt", "num_ge", "num_eq", "num_ne"]);
+/** Boolean tests of boxed operands: their result is a C bool, their operands stay boxed. */
+const TESTS = new Set<Op>(["same_function", "identical", "strict_eq_atom", "is_type", "strict_eq_num"]);
 
 /** How the report names each unboxed repr. */
-const REPR_NOUN: Record<Repr, string> = { boxed: "", f64: "double", i32: "int32", bool: "bool" };
+const REPR_NOUN: Record<Repr, string> = { boxed: "", f64: "double", i32: "int32", i64: "int64", bool: "bool" };
 
 /** Boxing a double for a use, against unboxing a JSValue (per use, before loop weights). */
 const BOX_COST = 2;
@@ -65,6 +69,7 @@ interface Use {
 function unboxedRepr(t: Type): Repr | null {
   if (t === T.None) return null;
   if (isSubtype(t, T.Int32)) return "i32";
+  if (isSubtype(t, T.Int64 | T.Int32)) return "i64";
   if (isSubtype(t, Number_)) return "f64";
   if (isSubtype(t, T.Boolean)) return "bool";
   return null;
@@ -75,8 +80,8 @@ function unboxModule(m: ModuleIR) {
   const byName = new Map(m.functions.map((fn) => [fn.name, fn]));
   const fns = functionsOf(m).filter((fn) => !pauses(fn));
 
-  /* return values: a closed function's, when every return is one kind */
-  for (const fn of closed) {
+  /* return values: a closed or declared function's, when every return is one kind */
+  for (const fn of m.functions.filter((fn) => closed.has(fn) || (fn.meta?.declared && !pauses(fn)))) {
     const returns = fn.blocks.flatMap((b) => (b.term?.kind === "return" ? [b.term.value] : []));
     const repr = unboxedRepr(returns.reduce<Type>((u, v) => u | v.type, T.None));
     if (repr) fn.returnRepr = repr;
@@ -100,7 +105,8 @@ function unboxModule(m: ModuleIR) {
       if (t?.kind === "branch") use(t.cond, { user: null, block: b, index: 0 });
       if (t?.kind === "return" || t?.kind === "throw") use(t.value, { user: null, block: b, index: t.kind === "return" ? 1 : 0 });
     }
-    const params = closed.has(fn) ? fn.params : [];
+    const declared = fn.meta?.declared;
+    const params = closed.has(fn) ? fn.params : declared ? fn.params.filter((_, k) => declared[k] !== undefined) : [];
     for (const v of [...params, ...fn.blocks.flatMap((b) => b.phis)]) {
       const repr = unboxedRepr(v.type);
       if (repr === "bool") v.repr = "bool";
@@ -108,24 +114,31 @@ function unboxModule(m: ModuleIR) {
     }
     for (const b of fn.blocks)
       for (const i of b.instrs) {
-        if (F64.has(i.op)) candidates.push(i);
-        else if (BOOL.has(i.op) || i.op === "same_function") i.repr = "bool";  /* an inlining guard: a C condition */
-        else if (i.op === "call_direct") i.repr = byName.get(i.target!)?.returnRepr ?? "boxed";
+        if (F64.has(i.op) || readsDouble(i)) candidates.push(i);
+        else if (BOOL.has(i.op) || TESTS.has(i.op)) i.repr = "bool";  /* an inlining guard, a test: a C condition */
+        else if (i.op === "call_direct") {
+          const callee = byName.get(i.target!);
+          i.repr = callee && declaredCallFits(i, callee) ? callee.returnRepr ?? "boxed" : "boxed";  /* else through the checked entry */
+        }
+        else if (typedCallFits(i)) i.repr = i.typedCall!.returnRepr;  /* a typed unit's typed entry */
       }
   }
-  /* an int32 in an int32_t, any other Number in a double */
-  for (const c of candidates) c.repr = isSubtype(c.type, T.Int32) ? "i32" : "f64";
+  /* an int32 in an int32_t, an int in an int64_t, any other Number in a double */
+  for (const c of candidates) c.repr = isSubtype(c.type, T.Int32) ? "i32" : isSubtype(c.type, T.Int64 | T.Int32) ? "i64" : "f64";
 
   /* the repr a use wants its value in */
   const wants = (u: Use): Repr => {
     if (!u.user) return u.index === 1 ? (u.block.fn.returnRepr ?? "boxed") : "boxed";  // a branch on a Number tests it boxed (js_truthy)
     if (u.user.op === "phi") return u.user.repr;
-    if (F64.has(u.user.op) || BOOL.has(u.user.op)) return u.user.repr === "boxed" ? "boxed" : "f64";
+    if (F64.has(u.user.op) || BOOL.has(u.user.op)) return "f64";  /* computed unboxed whatever its result's repr (C emission boxes that once) */
     if ((u.user.op === "get_index" || u.user.op === "set_index") && u.index === 1) return "f64";  // a double key: js_get_index_f64
+    if ((u.user.op === "set_index" || u.user.op === "set_elem") && u.index === 2 && u.user.taView === "f64") return "f64";  // js_tav_put_f64
     if (u.user.op === "call_direct") {
       const callee = byName.get(u.user.target!);
-      return callee && closed.has(callee) ? callee.params[u.index]!.repr : "boxed";
+      if (callee?.meta?.declared && !declaredCallFits(u.user, callee)) return "boxed";
+      return callee && (closed.has(callee) || callee.meta?.declared?.[u.index] !== undefined) ? callee.params[u.index]!.repr : "boxed";
     }
+    if (u.index >= 2 && typedCallFits(u.user)) return u.user.typedCall!.params[u.index - 2]!.repr;
     return "boxed";
   };
   for (let changed = true; changed; ) {

@@ -7,6 +7,7 @@
 // upgrade (or CONNECT) hands the socket over with 'upgrade' ('connect'). Idle keep-alive
 // connections close after keepAliveTimeout; server.timeout and setTimeout are the sockets'.
 // Not yet: the client, headersTimeout and requestTimeout, trailers.
+import { hasInvalidHeaderChar, isHttpToken } from "./internal/http_chars.ts";
 import {
   httpAttach, httpBusy, httpDate, httpPending, httpWatchDrain, httpDetach, httpExpired, httpFedClose, httpFedOpen, httpFeed, httpFlush, httpParsers, httpWrite, timerUnref,
 } from "visaljs:host";
@@ -183,28 +184,6 @@ function addHeader(headers, name, value, join) {
 /* ---- OutgoingMessage: a response's (and a request's) headers ------------------------------------ */
 
 /* Node's checks: a header name is an HTTP token; a value has no control characters */
-/* Node's tokenRegExp and headerCharRegex as loops: a regular expression is interpreted here, and
- * every setHeader checks both */
-const TOKEN_CHARS = new Uint8Array(128);
-for (const c of "!#$%&'*+-.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") TOKEN_CHARS[c.charCodeAt(0)] = 1;
-
-function isHttpToken(s) {
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    if (c >= 128 || TOKEN_CHARS[c] === 0) return false;
-  }
-  return s.length > 0;
-}
-
-/* a character outside tab, 0x20-0x7e and 0x80-0xff */
-function hasInvalidHeaderChar(value) {
-  const s = String(value);
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    if ((c < 0x20 && c !== 9) || c === 0x7f || c > 0xff) return true;
-  }
-  return false;
-}
 
 export function validateHeaderName(name, label = "Header name") {
   if (typeof name !== "string" || !isHttpToken(name)) {
@@ -214,7 +193,7 @@ export function validateHeaderName(name, label = "Header name") {
 
 export function validateHeaderValue(name, value) {
   if (value === undefined) throw codeError(TypeError, "ERR_HTTP_INVALID_HEADER_VALUE", "Invalid value \"" + value + "\" for header \"" + name + "\"");
-  if (hasInvalidHeaderChar(value)) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in header content [\"" + name + "\"]");
+  if (hasInvalidHeaderChar(String(value))) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in header content [\"" + name + "\"]");
 }
 
 const headersSent = (what) => codeError(Error, "ERR_HTTP_HEADERS_SENT", "Cannot " + what + " headers after they are sent to the client");
@@ -604,7 +583,7 @@ export class OutgoingMessage extends Stream {
       validateHeaderName(field, "Trailer name");
       const values = Array.isArray(value) && value.length > 1 ? value : [Array.isArray(value) ? value.join("; ") : value];
       for (const v of values) {
-        if (hasInvalidHeaderChar(v)) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in trailer content [\"" + field + "\"]");
+        if (hasInvalidHeaderChar(String(v))) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in trailer content [\"" + field + "\"]");
         this._trailer += field + ": " + v + "\r\n";
       }
     }

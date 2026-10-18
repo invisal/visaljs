@@ -1,7 +1,7 @@
 // The IR verifier: run after every pass in tests and debug builds.
 // Checks CFG consistency, SSA dominance, phi arity, exception-edge rules and
 // representation consistency (a repr agrees with the type).
-import { isExceptionalEdge, OPS, successors, throwingInstr, type Block, type FunctionIR, type Instr } from "./ir.ts";
+import { isExceptionalEdge, OPS, readsDouble, successors, throwingInstr, typedCallFits, type Block, type FunctionIR, type Instr } from "./ir.ts";
 import { Any, isSubtype, Number_, T, typeName, type Repr, type Type } from "./types.ts";
 
 export class VerifyError extends Error {
@@ -111,13 +111,13 @@ export function verify(fn: FunctionIR): void {
   };
 
   /* representation follows type: a double holds only Numbers, an int32_t only Int32s, a bool only Booleans (C emission
-     converts between reprs where a value is used) */
-  const REPR_TYPE: Record<Repr, Type> = { boxed: Any | T.Empty, f64: Number_, i32: T.Int32, bool: T.Boolean };
+     converts between reprs where a value is used); an int64_t only ints and Int32s */
+  const REPR_TYPE: Record<Repr, Type> = { boxed: Any | T.Empty, f64: Number_, i32: T.Int32, i64: T.Int64 | T.Int32, bool: T.Boolean };
   const reprFits = (repr: Repr, t: Type) => isSubtype(t, REPR_TYPE[repr]);
   for (const i of [...fn.params, ...fn.blocks.flatMap((b) => [...b.phis, ...b.instrs])]) {
     if (!reprFits(i.repr, i.type)) bad(`%${i.id} ${i.op} is ${i.repr} but its type is ${typeName(i.type)}`);
     /* a direct call's result is its callee's return repr: a throw then shows as the pending exception */
-    if (i.repr !== "boxed" && ((i.mayThrow && i.op !== "call_direct") || !OPS[i.op].result)) bad(`%${i.id} ${i.op} is ${i.repr} but can throw or has no result`);
+    if (i.repr !== "boxed" && ((i.mayThrow && i.op !== "call_direct" && i.op !== "int_div" && i.op !== "int_mod" && !readsDouble(i) && !typedCallFits(i)) || !OPS[i.op].result)) bad(`%${i.id} ${i.op} is ${i.repr} but can throw or has no result`);
   }
   const ret = fn.returnRepr ?? "boxed";
   for (const b of fn.blocks)

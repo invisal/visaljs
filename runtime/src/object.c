@@ -1133,6 +1133,8 @@ int js_set_keyed_slow(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool 
 JSValue js_get_elem(JSContext *ctx, JSValue obj, JSValue key) {
     JS_ASSERT_NOT_EXC(obj);
     JS_ASSERT_NOT_EXC(key);
+    JSValue elem;  /* a typed array's element: the component reads it inline */
+    if (js_is_int32(key) && ctx->rt->typed_array_get && ctx->rt->typed_array_get(obj, js_as_int32(key), &elem)) return elem;
     if (js_is_nullish(obj)) {
         JSValue k = js_is_object(key) ? key : js_to_property_key(ctx, key);  /* primitives only: no user code */
         if (js_is_exception(k)) return JS_EXCEPTION;
@@ -1145,6 +1147,8 @@ JSValue js_get_elem(JSContext *ctx, JSValue obj, JSValue key) {
 
 int js_set_elem(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool strict) {
     JS_ASSERT_NOT_EXC(v);
+    /* a Number into a typed array's element: no ToNumber code to run, the component stores it inline */
+    if (js_is_int32(key) && js_is_number(v) && ctx->rt->typed_array_set && ctx->rt->typed_array_set(obj, js_as_int32(key), js_as_number(v))) return 1;
     if (js_is_nullish(obj)) {
         JSValue k = js_is_object(key) ? js_empty_string() : js_to_property_key(ctx, key);
         if (js_is_exception(k)) return -1;

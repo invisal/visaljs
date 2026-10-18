@@ -7,7 +7,7 @@
 // splitting blocks, so the variable values reaching a handler are exactly
 // those before the throwing instruction (and never its result).
 import type { Loc } from "./loc.ts";
-import type { Repr, Type } from "./types.ts";
+import { isSubtype, Number_, T, type Repr, type Type } from "./types.ts";
 
 export type Op =
   // values
@@ -38,6 +38,19 @@ export type Op =
   | "num_lt" | "num_le" | "num_gt" | "num_ge" | "num_eq" | "num_ne"
   | "num_bitand" | "num_bitor" | "num_bitxor" | "num_bitnot" | "num_shl" | "num_sar" | "num_shr"
   | "in" | "instanceof" | "to_property_key"
+  // typed code ("use static"), which trusts the built-ins: s.charCodeAt(i) of a string s, a Number;
+  // Math.<Instr.target>(x) of a Number (sqrt, abs, floor, ceil, trunc), C's
+  | "char_code_at" | "math"
+  // typed code's i32 arithmetic: C's, wrapping
+  | "int_add" | "int_sub" | "int_mul"
+  // typed code's `int`: a Number as a C int64_t (truncated toward zero, wrapping; NaN 0); its
+  // integer division and remainder (a zero divisor: a RangeError, as BigInt's); an i32's ToInt32
+  | "to_i64" | "int_div" | "int_mod" | "to_i32"
+  // comparisons the optimizer's specialize pass proved simpler (Instr.index 1: negated): the same
+  // bits; === a string literal (an atom); typeof x === Instr.target, or "nullish" (x == null)
+  | "identical" | "strict_eq_atom" | "is_type"
+  // x === a number literal (not NaN): x is a Number of that value (Instr.index 1: negated)
+  | "strict_eq_num"
   // for…in: an iterator over an object's enumerable string keys, and its next key (undefined: done)
   | "for_in_start" | "for_in_next"
   // iterators (for…of): a record from GetIterator, its next value (EMPTY: done), IteratorClose
@@ -130,6 +143,11 @@ export const OPS: Record<Op, OpInfo> = {
   num_bitand: pure(2), num_bitor: pure(2), num_bitxor: pure(2), num_bitnot: pure(1),
   num_shl: pure(2), num_sar: pure(2), num_shr: pure(2),
   typeof: { ...pure(1), allocates: false },
+  char_code_at: { ...pure(2), allocates: true },  // a rope is flattened
+  math: pure(1),
+  int_add: pure(2), int_sub: pure(2), int_mul: pure(2), to_i64: pure(1), to_i32: pure(1),
+  int_div: { ...pure(2), mayThrow: true }, int_mod: { ...pure(2), mayThrow: true },
+  identical: pure(2), strict_eq_atom: pure(2), is_type: pure(1), strict_eq_num: pure(2),
   in: generic(2), instanceof: generic(2), to_property_key: generic(1),
   for_in_start: { ...generic(1), callsUser: false }, for_in_next: { ...generic(1), callsUser: false },
   iter_start: generic(1), iter_next: generic(1), not_empty: pure(1),
@@ -214,6 +232,53 @@ export const OPS: Record<Op, OpInfo> = {
 
 export type JSConst = number | string | boolean | null | undefined;
 
+/** A typed unit's export, as a calling module sees it: its typed entry (raw C parameters, no
+ *  checks), for arguments of the declared types, and its checked (generic) entry otherwise. */
+export interface TypedCall {
+  direct: string;
+  generic: string;
+  params: { type: Type; repr: Repr }[];
+  returns: Type;
+  returnRepr: Repr;
+}
+
+/** What a typed parameter of type `t` takes: an int any Number (the function converts it, as C). */
+function accepts(t: Type): Type {
+  return isSubtype(t, T.Int64) ? Number_ : t;
+}
+
+/** Whether a direct call of a typed function ("use static") may take its typed entry: each
+ *  declared parameter's argument proven of its type (`type`: the types; inference passes the ones
+ *  it is inferring). Otherwise the call goes through the checked entry, whose untyped copy takes
+ *  any arguments: tsc lets typed code pass a number to an `int`. */
+export function declaredCallFits(i: Instr, callee: FunctionIR, type: (v: Instr) => Type = (v) => v.type): boolean {
+  const declared = callee.meta?.declared;
+  if (!declared) return true;
+  return declared.every((t, k) => {
+    if (t === undefined) return true;
+    const o = i.operands[k];
+    const a = o ? type(o) & ~T.Empty : T.Undefined;
+    return a !== T.None && isSubtype(a, accepts(t));
+  });
+}
+
+/** Whether a typed export's call takes its typed entry: as many arguments as it declares, each
+ *  proven of its declared type (inference, unboxing and C emission all ask this). */
+export function typedCallFits(i: Instr, type: (v: Instr) => Type = (v) => v.type): boolean {
+  const tc = i.typedCall;
+  if (!tc || i.operands.length - 2 !== tc.params.length) return false;
+  return i.operands.slice(2).every((o, k) => {
+    const t = type(o) & ~T.Empty;
+    return t !== T.None && isSubtype(t, accepts(tc.params[k]!.type));
+  });
+}
+
+/** Whether i reads a Float64Array's element in typed code: a double, past the end undefined as
+ *  a number (NaN), as its type, number, says. */
+export function readsDouble(i: Instr): boolean {
+  return i.taView === "f64" && (i.op === "get_index" || i.op === "get_elem") && i.block.fn.meta?.declared !== undefined;
+}
+
 /** A constant property key, as ToPropertyKey makes it: an array index or a string (an atom). */
 export type PropKey = { index: number } | { name: string };
 
@@ -244,9 +309,12 @@ export interface Instr {
   name?: string;
   /** const */
   lit?: { value: JSConst };
-  /** param: index; load_global / store_global: slot */
+  /** const: written as a floating-point literal (`1.0`, `1e3`) in a typed file ("use static"):
+   *  not an integer to C's arithmetic, so 1.0 / n divides as doubles */
+  floatLit?: boolean;
+  /** param: index; load_global / store_global: slot; identical, strict_eq_atom, is_type: 1 when negated */
   index?: number;
-  /** global_name: the name; call_direct, construct_direct: the callee function's name;
+  /** is_type: the typeof name it tests for, or "nullish"; global_name: the name; call_direct, construct_direct: the callee function's name;
    *  call_runtime: the runtime function; call / new: the callee's source text, for "x is not a function" */
   target?: string;
   /** construct_direct: the callee's source text, for "x is not a constructor" */
@@ -256,6 +324,11 @@ export interface Instr {
   /** get_elem, set_elem: the key is most likely the same at every run (a module binding stored
    *  once): the site caches the key it sees, and is a named access while the key stays it */
   keyedSite?: boolean;
+  /** new of a typed array only indexed (the typed-arrays pass), and its accesses: the element type
+   *  of its view, taken once after `new` */
+  taView?: "i8" | "u8" | "i32" | "f64";
+  /** call of a typed unit's export (a "visaljs:host" import the typed unit defines) */
+  typedCall?: TypedCall;
   /** call, construct_direct: the fallback of an inlined site (its guard failed): not inlined again */
   slowPath?: boolean;
   /** *_prop, define_prop */
@@ -313,6 +386,18 @@ export interface FunctionMeta {
   arrow: boolean;
   /** The last parameter is a rest array: the generic entry collects argv beyond the others. */
   hasRest: boolean;
+  /** A "use static" file's function: its parameters' declared types, trusted (as fn.params, the
+   *  hidden ones undefined). Typed callers were checked by tsc; every other call comes through
+   *  the generic entry, which checks them. */
+  declared?: (Type | undefined)[];
+  /** The declared parameters that are typed arrays: their element types (as `declared`). */
+  declaredViews?: (Instr["taView"] | undefined)[];
+  /** Called from outside the module (a typed unit's entries): its parameters can't be inferred
+   *  from its call sites. */
+  external?: boolean;
+  /** A typed function's untyped copy (its name): what its generic entry runs when the arguments
+   *  aren't the declared types, so the call behaves as the plain JS would. */
+  untyped?: string;
   /** The direct entry's hidden leading parameters: the environment it
    *  closes over, the function object (a named expression reading its own name),
    *  and `this` (only when used). */
