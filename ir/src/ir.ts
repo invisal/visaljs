@@ -7,7 +7,9 @@
 // splitting blocks, so the variable values reaching a handler are exactly
 // those before the throwing instruction (and never its result).
 import type { Loc } from "./loc.ts";
+import { type Dialect, isStatic } from "./static.ts";
 import { isSubtype, Number_, T, type Repr, type Type } from "./types.ts";
+import type { ViewKind } from "./views.ts";
 
 export type Op =
   // values
@@ -238,7 +240,7 @@ export interface TypedCall {
   direct: string;
   generic: string;
   /** view: a typed array parameter's element type (its type is only Object) */
-  params: { type: Type; repr: Repr; view?: NonNullable<Instr["taView"]> }[];
+  params: { type: Type; repr: Repr; view?: ViewKind }[];
   /** what the call returns either way (the checked entry throws for anything else): a Number,
    *  never an Int64, which stays inside typed code */
   returns: Type;
@@ -280,7 +282,7 @@ export function typedCallFits(i: Instr, type: (v: Instr) => Type = (v) => v.type
 /** Whether i reads a Float64Array's element in typed code: a double, past the end undefined as
  *  a number (NaN), as its type, number, says. */
 export function readsDouble(i: Instr): boolean {
-  return i.taView === "f64" && (i.op === "get_index" || i.op === "get_elem") && i.block.fn.meta?.declared !== undefined;
+  return i.taView === "f64" && (i.op === "get_index" || i.op === "get_elem") && isStatic(i.block.fn);
 }
 
 /** A constant property key, as ToPropertyKey makes it: an array index or a string (an atom). */
@@ -330,7 +332,7 @@ export interface Instr {
   keyedSite?: boolean;
   /** new of a typed array only indexed (the typed-arrays pass), and its accesses: the element type
    *  of its view, taken once after `new` */
-  taView?: "i8" | "u8" | "i32" | "f64";
+  taView?: ViewKind;
   /** call of a typed unit's export (a "visaljs:host" import the typed unit defines) */
   typedCall?: TypedCall;
   /** call, construct_direct: the fallback of an inlined site (its guard failed): not inlined again */
@@ -395,7 +397,7 @@ export interface FunctionMeta {
    *  the generic entry, which checks them and throws a TypeError (ERR_INVALID_ARG_TYPE). */
   declared?: (Type | undefined)[];
   /** The declared parameters that are typed arrays: their element types (as `declared`). */
-  declaredViews?: (Instr["taView"] | undefined)[];
+  declaredViews?: (ViewKind | undefined)[];
   /** Called from outside the module (a typed unit's entries): its parameters can't be inferred
    *  from its call sites. */
   external?: boolean;
@@ -418,6 +420,8 @@ export interface FunctionIR {
   name: string;
   /** Absent for the script's top-level code. */
   meta?: FunctionMeta;
+  /** "static": a "use static" file's code (absent: JavaScript's) */
+  dialect?: Dialect;
   params: Instr[];
   /** How the direct entry returns its result: absent, boxed. A function returning
    *  a double or a bool signals a throw by the pending exception alone. */

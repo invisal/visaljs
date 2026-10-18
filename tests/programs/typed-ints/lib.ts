@@ -40,3 +40,9 @@ export function halve(n: int): int {
 export function literals(n: int): string {
   return [1 / 4 * 4, 1.0 / 4 * 4, 1e3 / n, 7 / n, 2.5 * n, n / 2.0 * 2].join(" ");
 }
+
+/** A nested function is static code too: 7 / 2 divides as C's integers. */
+export function nested(): number {
+  const half = () => 7 / 2;
+  return half();
+}

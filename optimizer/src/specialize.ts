@@ -18,7 +18,7 @@
 // the argument suits, does its work inline (C's sqrt; reading the unit), else makes the call.
 // Anywhere, not just in loops: a call is big anyway. `f.apply(t, args)` and `f.call(t, …)` the
 // same way: f called directly when the method is the built-in (every emit and once wrapper).
-import { Number_, T, isSubtype, type FunctionIR, type Instr, type JSConst, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { Number_, T, isStatic, isSubtype, type FunctionIR, type Instr, type JSConst, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { int64Arith } from "./infer-types.ts";
 import { clearMayThrow, functionsOf, loopDepths, removeInstrs, removeUnreachable, useCounts } from "./cfg.ts";
@@ -63,7 +63,7 @@ function inlineBuiltin(i: Instr): string | null {
  *  built-in call: s.charCodeAt(i) of a string, or Math's sqrt/abs/floor/ceil/trunc of a Number,
  *  the C helper's suffix; null for anything else. `type`: the values' types. */
 export function trustedBuiltin(i: Instr, type: (v: Instr) => Type): string | null {
-  if (!i.block.fn.meta?.declared) return null;
+  if (!isStatic(i.block.fn)) return null;
   const name = inlineBuiltin(i);
   if (name === "char_code_at") return isSubtype(type(i.operands[1]!), T.String) ? name : null;
   if (name?.startsWith("math_")) return isSubtype(type(i.operands[2]!), Number_) ? name : null;

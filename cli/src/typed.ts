@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { analyze, emitHarnessScript, HOST_MODULE, type HostPrimitives, lower, parseModule, programNames } from "@visaljs/compiler";
-import { type FunctionIR, type Instr, type ModuleIR, OPS, T, type Type, type TypedCall } from "@visaljs/ir";
+import { type FunctionIR, type Instr, type IntKind, type ModuleIR, OPS, STATIC_TYPES, T, type Type, type TypedCall, viewOf, type ViewKind } from "@visaljs/ir";
 import { optimize, type PassReport } from "@visaljs/optimizer";
 import { type Plugin, rolldown } from "rolldown";
 import ts from "typescript";
@@ -59,19 +59,17 @@ export interface TypedUnit {
   report: PassReport[];
 }
 
-/** The integers ("visaljs"'s types, or aliases of the same names: tsc erases them, so by name):
- *  `int` 64-bit, `i32` 32-bit, C semantics both. */
-type IntType = "i32" | "i64";
-const INT_TYPES: Record<string, IntType> = { int: "i64", i32: "i32" };
-
 /** A function's integer declarations: its locals', its parameters' (by index), its return's. */
 interface Ints {
-  locals: Map<string, IntType>;
-  params: Map<number, IntType>;
-  returns: IntType | undefined;
+  locals: Map<string, IntKind>;
+  params: Map<number, IntKind>;
+  returns: IntKind | undefined;
 }
 
-const intType = (node: ts.TypeNode | undefined, sf: ts.SourceFile): IntType | undefined => (node ? INT_TYPES[node.getText(sf)] : undefined);
+/** An integer type ("visaljs"'s, or an alias of the same name), as the source names it. */
+const intType = (node: ts.TypeNode | undefined, sf: ts.SourceFile): IntKind | undefined => (node ? staticType(node.getText(sf))?.int : undefined);
+
+const staticType = (name: string) => (Object.hasOwn(STATIC_TYPES, name) ? STATIC_TYPES[name] : undefined);
 
 /** Each top-level function's integer declarations. */
 function intDeclarations(sf: ts.SourceFile): Map<string, Ints> {
@@ -99,7 +97,7 @@ const TYPES_FILE = resolve(import.meta.dirname, "..", "types", "visaljs.d.ts");
 
 /** The declared parameter types of the top-level functions of the typed files, by name; their
  *  integer declarations into `ints`. */
-function declaredSignatures(files: readonly string[], ints: Map<string, Ints>): Map<string, { types: Type[]; views: (Instr["taView"] | undefined)[] }> {
+function declaredSignatures(files: readonly string[], ints: Map<string, Ints>): Map<string, { types: Type[]; views: (ViewKind | undefined)[] }> {
   const program = ts.createProgram([...files, TYPES_FILE], {
     strict: true, noEmit: true, target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler, allowImportingTsExtensions: true, skipLibCheck: true,
@@ -107,7 +105,7 @@ function declaredSignatures(files: readonly string[], ints: Map<string, Ints>): 
   const errors = ts.getPreEmitDiagnostics(program).filter((d) => d.category === ts.DiagnosticCategory.Error && files.includes(d.file?.fileName ?? ""));
   if (errors.length) throw new Error(ts.formatDiagnostics(errors, { getCanonicalFileName: (f) => f, getCurrentDirectory: () => process.cwd(), getNewLine: () => "\n" }));
   const checker = program.getTypeChecker();
-  const out = new Map<string, { types: Type[]; views: (Instr["taView"] | undefined)[] }>();
+  const out = new Map<string, { types: Type[]; views: (ViewKind | undefined)[] }>();
   for (const file of files) {
     const sf = program.getSourceFile(file)!;
     for (const [name, i] of intDeclarations(sf)) ints.set(name, i);
@@ -115,21 +113,24 @@ function declaredSignatures(files: readonly string[], ints: Map<string, Ints>): 
       if (!ts.isFunctionDeclaration(st) || !st.name) continue;
       /* a parameter of another type (an array, an object): the function stays untyped; an export
          of one is an error (buildTypedUnit) */
-      const types = st.parameters.map((p) => {
-        const int = intType(p.type, sf);
-        return int ? (int === "i64" ? T.Int64 : T.Int32) : irType(checker, checker.getTypeAtLocation(p));
-      });
-      const views = st.parameters.map((p) => VIEW_KINDS[checker.getTypeAtLocation(p).getSymbol()?.name ?? ""]);
+      const types = st.parameters.map((p) => (intType(p.type, sf) ? staticType(p.type!.getText(sf))!.type : irType(checker, checker.getTypeAtLocation(p))));
+      const views = st.parameters.map((p) => viewOf(checker.getTypeAtLocation(p).getSymbol()?.name ?? ""));
       if (types.every((t) => t !== null)) out.set(st.name.text, { types: types as Type[], views });
     }
   }
   return out;
 }
 
-/** Typed array parameters: their elements are read and written in place (taView). */
-const VIEW_KINDS: Record<string, "i8" | "u8" | "i32" | "f64"> = { Int8Array: "i8", Uint8Array: "u8", Int32Array: "i32", Float64Array: "f64" };
+/** tsc's primitive types (and their literals), by the name STATIC_TYPES knows them by. */
+const PRIMITIVE_FLAGS: [ts.TypeFlags, string][] = [
+  [ts.TypeFlags.Number | ts.TypeFlags.NumberLiteral, "number"],
+  [ts.TypeFlags.String | ts.TypeFlags.StringLiteral, "string"],
+  [ts.TypeFlags.Boolean | ts.TypeFlags.BooleanLiteral, "boolean"],
+  [ts.TypeFlags.Undefined, "undefined"],
+  [ts.TypeFlags.Null, "null"],
+];
 
-/** A TypeScript type as the IR's, if the prototype takes it. */
+/** A TypeScript type as the IR's, if static code takes it. */
 function irType(checker: ts.TypeChecker, t: ts.Type): Type | null {
   if (t.isUnion()) {
     let u: Type = T.None;
@@ -140,14 +141,9 @@ function irType(checker: ts.TypeChecker, t: ts.Type): Type | null {
     }
     return u;
   }
-  const f = t.flags;
-  if (f & (ts.TypeFlags.Number | ts.TypeFlags.NumberLiteral)) return T.Int32 | T.Double;
-  if (f & (ts.TypeFlags.String | ts.TypeFlags.StringLiteral)) return T.String;
-  if (f & (ts.TypeFlags.Boolean | ts.TypeFlags.BooleanLiteral)) return T.Boolean;
-  if (f & ts.TypeFlags.Undefined) return T.Undefined;
-  if (f & ts.TypeFlags.Null) return T.Null;
-  if (Object.hasOwn(VIEW_KINDS, t.getSymbol()?.name ?? "")) return T.Object;
-  return null;
+  const name = PRIMITIVE_FLAGS.find(([flags]) => t.flags & flags)?.[1];
+  if (name) return STATIC_TYPES[name]!.type;
+  return viewOf(t.getSymbol()?.name ?? "") ? T.Object : null;
 }
 
 type Block = FunctionIR["blocks"][number];
@@ -156,7 +152,7 @@ type Block = FunctionIR["blocks"][number];
  *  of block b. */
 function converter(fn: FunctionIR) {
   let next = 1 + Math.max(0, ...fn.params.map((p) => p.id), ...fn.blocks.flatMap((b) => [...b.phis, ...b.instrs].map((i) => i.id)));
-  return (b: Block, v: Instr, at: number, type: IntType): Instr => {
+  return (b: Block, v: Instr, at: number, type: IntKind): Instr => {
     const w: Instr = { id: next++, op: type === "i32" ? "to_i32" : "to_i64", operands: [v], type: T.None, repr: "boxed", mayThrow: false, block: b, loc: null, ...(v.name ? { name: v.name } : {}) };
     b.instrs.splice(at, 0, w);
     return w;
@@ -292,6 +288,7 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
 
   const ast = parseModule(code, "typed.js", undefined, undefined, primitives);
   const ir = lower(ast, analyze(ast));
+  for (const fn of [ir.main, ...ir.functions]) fn.dialect = "static";
   unmarkLiterals(ir);
   const byJsName = new Map<string, number>();
   for (const fn of ir.functions) byJsName.set(fn.meta!.jsName, (byJsName.get(fn.meta!.jsName) ?? 0) + 1);

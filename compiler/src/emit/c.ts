@@ -11,7 +11,7 @@
 import type { Loc } from "../frontend/ast.ts";
 import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr, Type, TypedCall } from "@visaljs/ir";
 import type { HostPrimitives } from "../frontend/host.ts";
-import { declaredCallFits, isSubtype, Number_, OPS, readsDouble, successors, T, typedCallFits } from "@visaljs/ir";
+import { declaredCallFits, expectedText, isSubtype, Number_, OPS, readsDouble, successors, T, typedCallFits, VIEWS } from "@visaljs/ir";
 import { liveAfterPauses } from "@visaljs/ir";
 import type { CoreEntry } from "./core.ts";
 import { ATOMS } from "./atoms.ts";
@@ -275,9 +275,6 @@ function keyValue(k: PropKey, strings: Strings): string {
 }
 
 /** C types and initial values of the IR's representations. */
-/** A typed-arrays view's element type: its JSTypedArrayType. */
-const TA_TYPE: Record<NonNullable<Instr["taView"]>, string> = { i8: "JS_TA_INT8", u8: "JS_TA_UINT8", i32: "JS_TA_INT32", f64: "JS_TA_FLOAT64" };
-const TA_CLASS: Record<NonNullable<Instr["taView"]>, string> = { i8: "Int8Array", u8: "Uint8Array", i32: "Int32Array", f64: "Float64Array" };
 const C_TYPE: Record<Repr, string> = { boxed: "JSValue", f64: "double", i32: "int32_t", i64: "int64_t", bool: "bool" };
 const C_ZERO: Record<Repr, string> = { boxed: "JS_UNDEFINED", f64: "0", i32: "0", i64: "0", bool: "false" };
 /** What a direct entry returns after a throw: unboxed, any value, the pending
@@ -406,19 +403,6 @@ function typeTest(t: Type, v: string): string {
   return tests.length ? tests.join(" || ") : "false";
 }
 
-/** A declared parameter's type as ERR_INVALID_ARG_TYPE words it: "of type string or undefined". */
-function expectedText(t: Type, view: Instr["taView"] | undefined): string {
-  if (view) return `an instance of ${TA_CLASS[view]}`;
-  const names: string[] = [];
-  if (t & T.Boolean) names.push("boolean");
-  if (t & (T.Double | T.Int64)) names.push("number");
-  else if (t & T.Int32) names.push("i32");
-  if (t & T.String) names.push("string");
-  if (t & T.Undefined) names.push("undefined");
-  if (t & T.Null) names.push("null");
-  return `of type ${names.length > 2 ? `${names.slice(0, -1).join(", ")}, or ${names.at(-1)}` : names.join(" or ")}`;
-}
-
 /** The generic entry: unpacks argv into the direct entry's parameters. */
 function genericEntry(fn: FunctionIR, prefix: string): string {
   const meta = fn.meta!;
@@ -449,7 +433,7 @@ function genericEntry(fn: FunctionIR, prefix: string): string {
     if (t === undefined) return [];
     const v = `(argc > ${k - hidden} ? argv[${k - hidden}] : JS_UNDEFINED)`;
     const view = meta.declaredViews?.[k];
-    const test = view ? `js_ta_is(ctx, ${v}, ${TA_TYPE[view]})` : typeTest(t, v);
+    const test = view ? `js_ta_is(ctx, ${v}, ${VIEWS[view].c})` : typeTest(t, v);
     const name = cString(fn.params[k]!.name ?? `argument ${k - hidden + 1}`);
     return [`    if (!(${test})) return js_throw_invalid_arg_type(ctx, ${name}, ${cString(expectedText(t, view))}, ${v});`];
   });
@@ -831,7 +815,7 @@ class FunctionEmitter {
     this.hosts.typed.set(tc.direct, `${C_TYPE[tc.returnRepr]} ${tc.direct}(JSContext *${tc.params.map((p) => `, ${C_TYPE[p.repr]}`).join("")});  /* typed entry */`);
     const tests = fits ? [] : operands.flatMap((o, k) => {
       const { type, view } = tc.params[k]!;
-      if (view) return [`js_ta_is(ctx, ${args[k + 2]!}, ${TA_TYPE[view]})`];
+      if (view) return [`js_ta_is(ctx, ${args[k + 2]!}, ${VIEWS[view].c})`];
       return isSubtype(o.type & ~T.Empty, type) ? [] : [`(${typeTest(type, args[k + 2]!)})`];
     });
     const call = `${tc.direct}(ctx${operands.map((o, k) => `, ${tests.length ? convert(args[k + 2]!, "boxed", tc.params[k]!.repr) : this.as(o, tc.params[k]!.repr)}`).join("")})`;
@@ -1209,7 +1193,7 @@ class FunctionEmitter {
         expr = `js_construct(ctx, ${args[0]}, ${args.length - 1}, ${argArray(args.slice(1))}, JS_UNDEFINED, ${cString(i.target!)})`;
         if (i.taView && this.hasVar(i)) {  /* a typed array only indexed: its elements, once */
           this.lines.push(`    ${this.name(i)} = ${expr};`, `    if (JS_UNLIKELY(js_is_exception(${this.name(i)}))) { ${this.onException(i.block)} }`,
-            `    ${this.name(i)}_view = js_ta_view(ctx, ${this.name(i)}, ${TA_TYPE[i.taView]});`);
+            `    ${this.name(i)}_view = js_ta_view(ctx, ${this.name(i)}, ${VIEWS[i.taView].c});`);
           return;
         }
         break;
@@ -1346,7 +1330,7 @@ class FunctionEmitter {
    *  their slow paths. */
   private retakeViews(i: Instr) {
     if (!OPS[i.op].callsUser || !i.mayThrow || i.taView) return;  /* can't throw: simplify proved it runs no code */
-    for (const p of this.views()) if (p.op === "param") this.lines.push(`    ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${TA_TYPE[p.taView!]});`);
+    for (const p of this.views()) if (p.op === "param") this.lines.push(`    ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${VIEWS[p.taView!].c});`);
   }
 
   private terminator(b: Block) {
@@ -1454,7 +1438,7 @@ class FunctionEmitter {
           if (i.op === "new" && i.taView) locals.push(`    JSTAView ${this.name(i)}_view = { NULL, 0 };`);
         }
     const unusedParams = fn.params.filter((p) => !this.used.has(p)).map((p) => `    (void)${this.name(p)};`);
-    for (const p of this.views().filter((v) => v.op === "param")) locals.push(`    JSTAView ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${TA_TYPE[p.taView!]});`);
+    for (const p of this.views().filter((v) => v.op === "param")) locals.push(`    JSTAView ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${VIEWS[p.taView!].c});`);
     /* non-leaf: anything that can run JS code again (calls, getters, valueOf) checks the stack */
     const calls = fn.blocks.some((b) => b.instrs.some((i) => OPS[i.op].callsUser));
     /* a body that only touches its environment never needs the context */

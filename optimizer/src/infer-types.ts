@@ -3,7 +3,7 @@
 // to a fixpoint (the lattice is a bitset of 10 kinds, so that's quick). A phi is the union of its
 // inputs; an operation's type comes from its operands' (`transfer`). Operations it knows nothing
 // about are Unknown: any JS value, or EMPTY.
-import { dominators, isSubtype, Number_, OPS, Primitive, readsDouble, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { dominators, isStatic, isSubtype, Number_, OPS, Primitive, readsDouble, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { callers, closedFunctions, functionsOf, pauses, reversePostorder } from "./cfg.ts";
 import { trustedBuiltin } from "./specialize.ts";
@@ -118,7 +118,7 @@ const INT64_OPS = new Set<Instr["op"]>([
 export function int64Arith(i: Instr, type: (v: Instr) => Type): boolean {
   if (!INT64_OPS.has(i.op)) return false;
   const integral = (o: Instr) => isSubtype(type(o), T.Int64 | T.Int32) && !o.floatLit;
-  const typed = i.block.fn.meta?.declared !== undefined;
+  const typed = isStatic(i.block.fn);
   return (typed || i.operands.some((o) => isSubtype(type(o), T.Int64) && type(o) !== T.None)) && i.operands.every(integral)
     && i.operands.some((o) => type(o) !== T.None);
 }
@@ -256,7 +256,7 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
       return sig?.returns.get(i.target!) ?? Unknown;
     case "get_elem": case "get_index":  /* typed code's typed array view: an element, or (an integer array's) undefined past the end */
       if (readsDouble(i)) return T.Int32 | T.Double;
-      if (i.taView && i.block.fn.meta?.declared) return T.Int32 | T.Undefined;
+      if (i.taView && isStatic(i.block.fn)) return T.Int32 | T.Undefined;
       return Unknown;
     case "char_code_at":  /* a unit, or NaN past the end */
     case "math":
