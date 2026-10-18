@@ -17,6 +17,7 @@
 #include "js_console.h"
 #include "js_ops.h"
 #include "js_object.h"
+#include "js_buffer.h"
 #include "js_function.h"
 #include "js_error.h"
 #include "js_generator.h"

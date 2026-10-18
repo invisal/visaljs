@@ -11,7 +11,7 @@
 import type { Loc } from "../frontend/ast.ts";
 import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr, Type, TypedCall } from "@visaljs/ir";
 import type { HostPrimitives } from "../frontend/host.ts";
-import { isSubtype, Number_, OPS, successors, T, typedCallFits } from "@visaljs/ir";
+import { declaredCallFits, isSubtype, Number_, OPS, successors, T, typedCallFits } from "@visaljs/ir";
 import { liveAfterPauses } from "@visaljs/ir";
 import type { CoreEntry } from "./core.ts";
 import { ATOMS } from "./atoms.ts";
@@ -916,8 +916,8 @@ class FunctionEmitter {
         break;
       case "get_index":  /* a double key: the variant that takes it unboxed */
         expr = i.operands[1]!.repr === "f64"
-          ? `js_get_index_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`
-          : `js_get_index(ctx, ${args[0]}, ${args[1]})`;
+          ? `js_get_index_ta_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`
+          : `js_get_index_ta(ctx, ${args[0]}, ${args[1]})`;
         break;
       case "set_prop":
         status = "name" in i.key!
@@ -931,8 +931,8 @@ class FunctionEmitter {
         break;
       case "set_index":
         status = i.operands[1]!.repr === "f64"
-          ? `js_set_index_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")}, ${args[2]}, ${strict})`
-          : `js_set_index(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
+          ? `js_set_index_ta_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")}, ${args[2]}, ${strict})`
+          : `js_set_index_ta(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
         break;
       case "delete_prop":
         expr = `js_delete_value(ctx, ${args[0]}, ${this.key(i)}, ${strict})`;
@@ -1061,6 +1061,11 @@ class FunctionEmitter {
         this.constructDirect(i, args);
         return;
       }
+      case "math": {  /* typed code: Math's, as C's */
+        const f = { sqrt: "sqrt", abs: "fabs", floor: "floor", ceil: "ceil", trunc: "trunc" }[i.target!];
+        expr = convert(`${f}(${this.as(i.operands[0]!, "f64")})`, "f64", i.repr);
+        break;
+      }
       case "char_code_at":
         expr = convert(`js_string_char_code_at(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`, "f64", i.repr);
         break;
@@ -1080,6 +1085,13 @@ class FunctionEmitter {
         break;
       case "call_direct": {
         const callee = this.callees.get(i.target!);
+        if (callee?.meta?.declared && !declaredCallFits(i, callee)) {  /* a typed function, arguments not proven its types: its checked entry */
+          const hidden = callee.meta.declared.findIndex((t) => t !== undefined);
+          const call = `${this.strings.prefix}jsf_${ident(i.target!)}__generic(ctx, JS_UNDEFINED, JS_UNDEFINED, ${i.operands.length - hidden}, ${argArray(i.operands.slice(hidden).map((o) => this.as(o, "boxed")))}, JS_UNDEFINED)`;
+          const out = this.hasVar(i) ? this.name(i) : null;
+          this.lines.push(`    { JSValue r = ${call};`, `    if (JS_UNLIKELY(js_is_exception(r))) { ${this.onException(i.block)} }`, ...(out ? [`    ${out} = ${convert("r", "boxed", i.repr)}; }`] : ["    js_discard(r); }"]));
+          return;
+        }
         const passed = i.operands.map((o, k) => this.as(o, callee?.params[k]?.repr ?? "boxed"));
         const call = `${this.strings.prefix}jsf_${ident(i.target!)}(ctx${passed.map((a) => `, ${a}`).join("")})`;
         const ret = callee?.returnRepr ?? "boxed";

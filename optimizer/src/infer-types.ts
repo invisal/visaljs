@@ -3,9 +3,10 @@
 // to a fixpoint (the lattice is a bitset of 10 kinds, so that's quick). A phi is the union of its
 // inputs; an operation's type comes from its operands' (`transfer`). Operations it knows nothing
 // about are Unknown: any JS value, or EMPTY.
-import { dominators, isSubtype, Number_, OPS, Primitive, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { declaredCallFits, dominators, isSubtype, Number_, OPS, Primitive, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { callers, closedFunctions, functionsOf, pauses, reversePostorder } from "./cfg.ts";
+import { trustedBuiltin } from "./specialize.ts";
 import type { Count, Pass } from "./index.ts";
 
 export const inferTypes: Pass = {
@@ -34,12 +35,14 @@ export const inferTypes: Pass = {
 interface Signatures {
   params: Map<Instr, Type>;
   returns: Map<string, Type>;
+  /** typed functions by name: a call that doesn't fit their declared types runs the untyped copy */
+  declared: Map<string, FunctionIR>;
 }
 
 /** Infers every function's types; returns the closed functions. */
 function inferModule(m: ModuleIR): Set<FunctionIR> {
   const closed = closedFunctions(m);
-  const sig: Signatures = { params: new Map(), returns: new Map() };
+  const sig: Signatures = { params: new Map(), returns: new Map(), declared: new Map(m.functions.filter((fn) => fn.meta?.declared).map((fn) => [fn.name, fn])) };
   for (const fn of m.functions) {
     if (!pauses(fn)) sig.returns.set(fn.name, T.None);
     const declared = fn.meta?.declared;
@@ -233,15 +236,17 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
       return T.Boolean;
     case "get_prop":  // a string's length: its own, non-writable, at most 2^30 - 1
       return i.key && "name" in i.key && i.key.name === "length" && isSubtype(t(a!), T.String) ? T.Int32 : Unknown;
-    case "call_direct":
+    case "call_direct": {
+      const typed = sig?.declared.get(i.target!);
+      if (typed && !declaredCallFits(i, typed, t)) return Unknown;  /* the untyped copy's result */
       return sig?.returns.get(i.target!) ?? Unknown;
+    }
     case "char_code_at":  /* a unit, or NaN past the end */
+    case "math":
       return Number_;
     case "call": {
       /* typed code trusts the built-ins to be the standard ones, as tsc's types do */
-      const callee = i.operands[0]!;
-      if (i.block.fn.meta?.declared && callee.op === "get_prop" && callee.key && "name" in callee.key && callee.key.name === "charCodeAt"
-          && i.operands[1] === callee.operands[0] && isSubtype(t(i.operands[1]!), T.String)) return Number_;
+      if (trustedBuiltin(i, t)) return Number_;
       /* a typed unit's export: its declared result, when its typed entry runs */
       const tc = i.typedCall;
       const args = i.operands.slice(2);

@@ -22,13 +22,13 @@
 // boxed or not.
 //
 // Generator and async functions stay boxed: their frames save JSValues across pauses.
-import { isSubtype, Number_, T, typedCallFits, type Block, type Instr, type ModuleIR, type Op, type Repr, type Type } from "@visaljs/ir";
+import { declaredCallFits, isSubtype, Number_, T, typedCallFits, type Block, type Instr, type ModuleIR, type Op, type Repr, type Type } from "@visaljs/ir";
 
 import { closedFunctions, functionsOf, loopDepths, pauses } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
 const F64 = new Set<Op>([
-  "char_code_at",
+  "char_code_at", "math",
   "num_add", "num_sub", "num_mul", "num_div", "num_mod", "num_neg", "num_inc", "num_dec",
   "num_bitand", "num_bitor", "num_bitxor", "num_bitnot", "num_shl", "num_sar", "num_shr",
 ]);
@@ -112,7 +112,10 @@ function unboxModule(m: ModuleIR) {
       for (const i of b.instrs) {
         if (F64.has(i.op)) candidates.push(i);
         else if (BOOL.has(i.op) || i.op === "same_function") i.repr = "bool";  /* an inlining guard: a C condition */
-        else if (i.op === "call_direct") i.repr = byName.get(i.target!)?.returnRepr ?? "boxed";
+        else if (i.op === "call_direct") {
+          const callee = byName.get(i.target!);
+          i.repr = callee && declaredCallFits(i, callee) ? callee.returnRepr ?? "boxed" : "boxed";  /* else through the checked entry */
+        }
         else if (typedCallFits(i)) i.repr = i.typedCall!.returnRepr;  /* a typed unit's typed entry */
       }
   }
@@ -127,7 +130,8 @@ function unboxModule(m: ModuleIR) {
     if ((u.user.op === "get_index" || u.user.op === "set_index") && u.index === 1) return "f64";  // a double key: js_get_index_f64
     if (u.user.op === "call_direct") {
       const callee = byName.get(u.user.target!);
-      return callee && closed.has(callee) ? callee.params[u.index]!.repr : "boxed";
+      if (callee?.meta?.declared && !declaredCallFits(u.user, callee)) return "boxed";
+      return callee && (closed.has(callee) || callee.meta?.declared?.[u.index] !== undefined) ? callee.params[u.index]!.repr : "boxed";
     }
     if (u.index >= 2 && typedCallFits(u.user)) return u.user.typedCall!.params[u.index - 2]!.repr;
     return "boxed";

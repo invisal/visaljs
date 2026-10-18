@@ -17,7 +17,7 @@
 // `String.fromCharCode(c)`. Their C compares the callee with the built-in and, when it is and
 // the argument suits, does its work inline (C's sqrt; reading the unit), else makes the call.
 // Anywhere, not just in loops: a call is big anyway.
-import { Number_, T, isSubtype, type Instr, type ModuleIR, type Op } from "@visaljs/ir";
+import { Number_, T, isSubtype, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { clearMayThrow, functionsOf, loopDepths, removeInstrs, removeUnreachable, useCounts } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
@@ -54,6 +54,17 @@ function inlineBuiltin(i: Instr): string | null {
   return null;
 }
 
+/** What typed code ("use visaljs", which trusts the built-ins to be the standard ones) makes of a
+ *  built-in call: s.charCodeAt(i) of a string, or Math's sqrt/abs/floor/ceil/trunc of a Number,
+ *  the C helper's suffix; null for anything else. `type`: the values' types. */
+export function trustedBuiltin(i: Instr, type: (v: Instr) => Type): string | null {
+  if (!i.block.fn.meta?.declared) return null;
+  const name = inlineBuiltin(i);
+  if (name === "char_code_at") return isSubtype(type(i.operands[1]!), T.String) ? name : null;
+  if (name?.startsWith("math_")) return isSubtype(type(i.operands[2]!), Number_) ? name : null;
+  return null;
+}
+
 /** Element access's form for a Number key. */
 const INDEX_FORM: Partial<Record<Op, Op>> = { get_elem: "get_index", set_elem: "set_index" };
 
@@ -67,15 +78,30 @@ export const specialize: Pass = {
       const unread = new Set<Instr>();
       for (const b of fn.blocks)
         for (const i of b.instrs) {
-          /* typed code trusts the built-ins: s.charCodeAt(i), a string's unit (the method read is dead) */
-          if (fn.meta?.declared && inlineBuiltin(i) === "char_code_at" && isSubtype(i.operands[1]!.type, T.String)) {
+          /* typed code trusts the built-ins: s.charCodeAt(i), a string's unit; Math.sqrt(x), C's.
+             Reading the method (and Math) does nothing else: it goes when nothing else reads it. */
+          const trusted = trustedBuiltin(i, (v) => v.type);
+          if (trusted) {
             edges ||= i.mayThrow;
             clearMayThrow(i);
-            const method = i.operands[0]!;  /* String.prototype.charCodeAt: reading it does nothing else */
+            const method = i.operands[0]!;
             if (method.mayThrow) edges = true;
-            if (uses.get(method) === 1) unread.add(method);
-            i.op = "char_code_at";
-            i.operands = [i.operands[1]!, i.operands[2]!];
+            if (uses.get(method) === 1) {
+              unread.add(method);
+              const holder = method.operands[0]!;  /* Math */
+              if (trusted !== "char_code_at" && holder.op === "global_name" && uses.get(holder) === 2) {  /* the callee's and `this` */
+                unread.add(holder);
+                edges = true;
+              }
+            }
+            if (trusted === "char_code_at") {
+              i.op = "char_code_at";
+              i.operands = [i.operands[1]!, i.operands[2]!];
+            } else {
+              i.op = "math";
+              i.target = trusted.slice("math_".length);
+              i.operands = [i.operands[2]!];
+            }
             count("inlined", "built-in call");
             continue;
           }

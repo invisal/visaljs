@@ -38,8 +38,9 @@ export type Op =
   | "num_lt" | "num_le" | "num_gt" | "num_ge" | "num_eq" | "num_ne"
   | "num_bitand" | "num_bitor" | "num_bitxor" | "num_bitnot" | "num_shl" | "num_sar" | "num_shr"
   | "in" | "instanceof" | "to_property_key"
-  // typed code ("use visaljs"), which trusts the built-ins: s.charCodeAt(i) of a string s, a Number
-  | "char_code_at"
+  // typed code ("use visaljs"), which trusts the built-ins: s.charCodeAt(i) of a string s, a Number;
+  // Math.<Instr.target>(x) of a Number (sqrt, abs, floor, ceil, trunc), C's
+  | "char_code_at" | "math"
   // for…in: an iterator over an object's enumerable string keys, and its next key (undefined: done)
   | "for_in_start" | "for_in_next"
   // iterators (for…of): a record from GetIterator, its next value (EMPTY: done), IteratorClose
@@ -133,6 +134,7 @@ export const OPS: Record<Op, OpInfo> = {
   num_shl: pure(2), num_sar: pure(2), num_shr: pure(2),
   typeof: { ...pure(1), allocates: false },
   char_code_at: { ...pure(2), allocates: true },  // a rope is flattened
+  math: pure(1),
   in: generic(2), instanceof: generic(2), to_property_key: generic(1),
   for_in_start: { ...generic(1), callsUser: false }, for_in_next: { ...generic(1), callsUser: false },
   iter_start: generic(1), iter_next: generic(1), not_empty: pure(1),
@@ -225,6 +227,21 @@ export interface TypedCall {
   params: { type: Type; repr: Repr }[];
   returns: Type;
   returnRepr: Repr;
+}
+
+/** Whether a direct call of a typed function ("use visaljs") may take its typed entry: each
+ *  declared parameter's argument proven of its type (`type`: the types; inference passes the ones
+ *  it is inferring). Otherwise the call goes through the checked entry, whose untyped copy takes
+ *  any arguments: tsc lets typed code pass a number to an `int`. */
+export function declaredCallFits(i: Instr, callee: FunctionIR, type: (v: Instr) => Type = (v) => v.type): boolean {
+  const declared = callee.meta?.declared;
+  if (!declared) return true;
+  return declared.every((t, k) => {
+    if (t === undefined) return true;
+    const o = i.operands[k];
+    const a = o ? type(o) & ~T.Empty : T.Undefined;
+    return a !== T.None && isSubtype(a, t);
+  });
 }
 
 /** Whether a typed export's call takes its typed entry: as many arguments as it declares, each

@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "js_object.h"
+#include "js_ops.h"
 
 #define JS_BUFFER_RESIZABLE 0x01u
 #define JS_BUFFER_DETACHED  0x02u
@@ -75,5 +76,62 @@ bool js_is_uint8_array(JSValue v);
 int js_typed_array_type(JSValue v);
 /* A new, zeroed Uint8Array of `length` bytes; its bytes are js_buffer_source_bytes'. */
 JS_WARN_UNUSED JSValue js_new_uint8_array(JSContext *ctx, size_t length);
+
+/* ---- Generated code: a typed array's elements inline ------------------------------------------ */
+
+/* The bytes of element i of a typed array generated code may read or write inline: a view of a
+ * fixed-size buffer (it can't shrink below the view, so i < length is in bounds), not detached,
+ * not immutable (for a write). NULL for anything else, which takes js_get_elem / js_set_elem. */
+static JS_FAST_PATH uint8_t *js_ta_inline_elem(JSContext *ctx, JSValue obj, int32_t i, bool write) {
+    if (!js_is_object(obj) || js_as_object(obj)->shape->cls != ctx->rt->typed_array_class) return NULL;
+    const JSTypedArray *ta = (const JSTypedArray *)js_as_object(obj);
+    const JSArrayBuffer *b = js_as_array_buffer(ta->buffer);
+    uint32_t bad = JS_BUFFER_DETACHED | JS_BUFFER_RESIZABLE | (write ? JS_BUFFER_IMMUTABLE : 0);
+    if (ta->length_tracking || i < 0 || (size_t)i >= ta->length || (b->flags & bad)) return NULL;
+    return b->data + ta->byte_offset;
+}
+
+/* obj[i]: a dense array's element or a typed array's (Int8, Uint8, Int32, Float64) inline. */
+static JS_FAST_PATH JSValue js_get_index_ta(JSContext *ctx, JSValue obj, JSValue key) {
+    if (JS_LIKELY(js_is_int32(key)) && !js_is_array(obj)) {
+        int32_t i = js_as_int32(key);
+        const uint8_t *p = js_ta_inline_elem(ctx, obj, i, false);
+        if (p) switch (((const JSTypedArray *)js_as_object(obj))->type) {
+            case JS_TA_UINT8: case JS_TA_UINT8C: return js_int32(p[i]);
+            case JS_TA_INT8: return js_int32((int8_t)p[i]);
+            case JS_TA_INT32: { int32_t v; memcpy(&v, p + 4 * (size_t)i, 4); return js_int32(v); }
+            case JS_TA_FLOAT64: { double v; memcpy(&v, p + 8 * (size_t)i, 8); return js_number(v); }
+            default: break;
+        }
+    }
+    return js_get_index(ctx, obj, key);
+}
+
+/* obj[i] = v: the same, for a Number v (no ToNumber code to run). */
+static JS_FAST_PATH int js_set_index_ta(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool strict) {
+    if (JS_LIKELY(js_is_int32(key)) && js_is_number(v) && !js_is_array(obj)) {
+        int32_t i = js_as_int32(key);
+        uint8_t *p = js_ta_inline_elem(ctx, obj, i, true);
+        if (p) switch (((const JSTypedArray *)js_as_object(obj))->type) {
+            case JS_TA_UINT8: case JS_TA_INT8: p[i] = (uint8_t)(js_is_int32(v) ? js_as_int32(v) : js_double_to_int32(js_as_number(v))); return 1;
+            case JS_TA_INT32: { int32_t x = js_is_int32(v) ? js_as_int32(v) : js_double_to_int32(js_as_number(v)); memcpy(p + 4 * (size_t)i, &x, 4); return 1; }
+            case JS_TA_FLOAT64: { double x = js_as_number(v); memcpy(p + 8 * (size_t)i, &x, 8); return 1; }
+            default: break;
+        }
+    }
+    return js_set_index(ctx, obj, key, v, strict);
+}
+
+/* The same with a double key (an unboxed index): an integral one is the int32 key (-0 too: "0"). */
+static inline JSValue js_get_index_ta_f64(JSContext *ctx, JSValue obj, double key) {
+    int32_t i = (int32_t)key;
+    if (key >= -2147483648.0 && key <= 2147483647.0 && (double)i == key) return js_get_index_ta(ctx, obj, js_int32(i));
+    return js_get_index_f64(ctx, obj, key);
+}
+static inline int js_set_index_ta_f64(JSContext *ctx, JSValue obj, double key, JSValue v, bool strict) {
+    int32_t i = (int32_t)key;
+    if (key >= -2147483648.0 && key <= 2147483647.0 && (double)i == key) return js_set_index_ta(ctx, obj, js_int32(i), v, strict);
+    return js_set_index_f64(ctx, obj, key, v, strict);
+}
 
 #endif /* JS_BUFFER_H */

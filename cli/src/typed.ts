@@ -75,11 +75,11 @@ function declaredSignatures(files: readonly string[]): Map<string, Type[]> {
     const sf = program.getSourceFile(file)!;
     for (const st of sf.statements) {
       if (!ts.isFunctionDeclaration(st) || !st.name) continue;
-      out.set(st.name.text, st.parameters.map((p) => {
-        const t = irType(checker, checker.getTypeAtLocation(p));
-        if (t === null) throw new Error(`${file}: ${st.name!.text}(${p.name.getText(sf)}): the prototype takes number, string or boolean parameters, not ${checker.typeToString(checker.getTypeAtLocation(p))}`);
-        return t;
-      }));
+      /* a parameter of another type (an array, an object): the function stays untyped; an export
+         of one is an error (buildTypedUnit) */
+      /* `int` (a `type int = number` alias, erased by tsc): a 32-bit integer */
+      const types = st.parameters.map((p) => (p.type?.getText(sf) === "int" ? T.Int32 : irType(checker, checker.getTypeAtLocation(p))));
+      if (types.every((t) => t !== null)) out.set(st.name.text, types as Type[]);
     }
   }
   return out;
@@ -168,7 +168,7 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
   ir.functions.push(...copy.functions);
   for (const [name, local] of exported) {
     const fn = ir.functions.find((f) => f.meta!.jsName === local && f.meta!.declared);
-    if (!fn) throw new Error(`typed unit: export '${name}' is not a typed function declaration`);
+    if (!fn) throw new Error(`typed unit: export '${name}' is not a function declaration whose parameters are all number, string or boolean`);
     if (Object.hasOwn(primitives, name)) throw new Error(`typed unit: export '${name}' is a host primitive's name`);
     exports[name] = { c: `${TYPED_PREFIX}jsf_${ident(fn.name)}__generic`, length: fn.meta!.length };
   }
