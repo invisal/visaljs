@@ -808,13 +808,13 @@ class FunctionEmitter {
    *  the typed entry when the tests pass; else its checked entry, called directly. */
   private typedCall(i: Instr, tc: TypedCall, args: string[]) {
     const operands = i.operands.slice(2);
-    const testable = operands.length === tc.params.length && tc.params.every((p) => !(p.type & T.Object));
-    if (!typedCallFits(i) && !testable) {
+    const fits = typedCallFits(i);
+    if (!fits && (operands.length !== tc.params.length || tc.params.some((p) => p.type & T.Object))) {
       this.genericCall(i, tc, args);
       return;
     }
     this.hosts.typed.set(tc.direct, `${C_TYPE[tc.returnRepr]} ${tc.direct}(JSContext *${tc.params.map((p) => `, ${C_TYPE[p.repr]}`).join("")});  /* typed entry */`);
-    const tests = typedCallFits(i) ? [] : operands.flatMap((o, k) => isSubtype(o.type & ~T.Empty, tc.params[k]!.type) ? [] : [`(${typeTest(tc.params[k]!.type, args[k + 2]!)})`]);
+    const tests = fits ? [] : operands.flatMap((o, k) => isSubtype(o.type & ~T.Empty, tc.params[k]!.type) ? [] : [`(${typeTest(tc.params[k]!.type, args[k + 2]!)})`]);
     const call = `${tc.direct}(ctx${operands.map((o, k) => `, ${tests.length ? convert(args[k + 2]!, "boxed", tc.params[k]!.repr) : this.as(o, tc.params[k]!.repr)}`).join("")})`;
     if (tests.length) this.lines.push(`    if (${tests.join(" && ")}) {`);
     if (tc.returnRepr === "boxed") this.boxedCall(i, call);
