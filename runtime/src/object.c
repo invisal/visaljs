@@ -825,7 +825,7 @@ JSValue js_get_value(JSContext *ctx, JSValue obj, JSValue key) {
 }
 
 int js_set_value(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool strict) {
-    if (js_is_object(obj)) return js_set(ctx, js_as_object(obj), key, v, obj, strict);
+    if (js_is_object(obj)) return js_key_is_index(key) ? js_set(ctx, js_as_object(obj), key, v, obj, strict) : js_set_prop_slow(ctx, obj, key, v, strict, NULL);
     if (js_is_nullish(obj)) {
         js_discard(nullish_error(ctx, obj, key, "set"));
         return -1;
@@ -1049,6 +1049,11 @@ int js_set_prop_slow(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool s
     JS_ASSERT_NOT_EXC(obj);
     JS_ASSERT_NOT_EXC(v);
     if (!js_is_object(obj) || js_key_is_index(key)) return js_set_value(ctx, obj, key, v, strict);
+    JSPropCache none;  /* no site (a computed key): only the shared cache */
+    if (!ic) {
+        none.kind = JS_IC_EMPTY;
+        ic = &none;
+    }
     JSObject *o = js_as_object(obj);
     if (ic->kind == JS_IC_ADD && o->shape == ic->shape && chain_holds(ctx, ic)) {
         JSShape *next = ic->next;  /* on the stack: kept alive if ensure_slot collects */
