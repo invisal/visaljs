@@ -697,8 +697,7 @@ const JSClass js_class_array = {
     "Array", sizeof(JSObject), array_get_own, array_define, array_delete, array_extra_keys, NULL, NULL, NULL,
 };
 
-static JSValue array_with_proto(JSContext *ctx, JSValue proto, uint32_t capacity) {
-    JSShape *shape = js_shape_root(ctx, &js_class_array, proto, 0);  /* named properties on arrays are rare */
+static JSValue array_of_shape(JSContext *ctx, JSShape *shape, uint32_t capacity) {
     JSObject *a = js_alloc_object(ctx, JS_CELL_ARRAY, shape);
     if (capacity) {
         JSElements *e = (JSElements *)js_alloc_cell(ctx, JS_CELL_ELEMENTS, sizeof(JSElements) + (size_t)capacity * sizeof(JSValue));
@@ -709,8 +708,13 @@ static JSValue array_with_proto(JSContext *ctx, JSValue proto, uint32_t capacity
     return js_object_value(a);
 }
 
+static JSValue array_with_proto(JSContext *ctx, JSValue proto, uint32_t capacity) {
+    return array_of_shape(ctx, js_shape_root(ctx, &js_class_array, proto, 0), capacity);  /* named properties on arrays are rare */
+}
+
 JSValue js_new_array(JSContext *ctx, uint32_t capacity) {
-    return array_with_proto(ctx, ctx->intrinsics[JS_INTRINSIC_ARRAY_PROTOTYPE], capacity);
+    if (JS_UNLIKELY(!ctx->array_shape)) ctx->array_shape = js_shape_root(ctx, &js_class_array, ctx->intrinsics[JS_INTRINSIC_ARRAY_PROTOTYPE], 0);
+    return array_of_shape(ctx, ctx->array_shape, capacity);
 }
 
 JSValue js_new_array_from(JSContext *ctx, const JSValue *values, uint32_t n) {
