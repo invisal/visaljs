@@ -584,7 +584,7 @@ export class OutgoingMessage extends Stream {
       validateHeaderName(field, "Trailer name");
       const values = Array.isArray(value) && value.length > 1 ? value : [Array.isArray(value) ? value.join("; ") : value];
       for (const v of values) {
-        if (hasInvalidHeaderChar(v)) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in trailer content [\"" + field + "\"]");
+        if (hasInvalidHeaderChar(String(v))) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in trailer content [\"" + field + "\"]");
         this._trailer += field + ": " + v + "\r\n";
       }
     }
