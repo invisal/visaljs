@@ -2,7 +2,7 @@
 // compiler: parse (JS → AST), analyze (scopes), lower (AST → IR, @visaljs/ir), and emit
 // (IR → one C file for @visaljs/runtime). The driver (visaljs, cli/) bundles, runs these
 // stages, and builds the C; the optimizer (@visaljs/optimizer) runs between lower and emit.
-export { firstUnsupported, parseModule, parseScript } from "./frontend/adapter.ts";
+export { convertStaticUnit, firstUnsupported, parseModule, parseScript, type StaticUnitSource } from "./frontend/adapter.ts";
 export type { Program } from "./frontend/ast.ts";
 export { CompileError } from "./frontend/errors.ts";
 export { COMMONJS_DIRECTIVE, HOST_MODULE, type HostPrimitive, type HostPrimitives } from "./frontend/host.ts";

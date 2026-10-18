@@ -4,7 +4,7 @@
 // It covers the language the compiler handles: scripts and modules, functions, classes,
 // generators and async functions, and the expression and statement forms.
 
-import type { Loc } from "@visaljs/ir";
+import type { IntKind, Loc } from "@visaljs/ir";
 
 /** 1-based line and column (UTF-16 units) in the original file (the IR's Loc). */
 export type { Loc };
@@ -30,6 +30,8 @@ export interface Program extends Base {
   /** Constructs the compiler doesn't handle yet, in source order. They appear in
    *  the tree as Unsupported nodes, so analysis can still find syntax errors. */
   unsupported: { detail: string; loc: Loc }[];
+  /** "use static" code (a static unit): C's integers, where its declarations say so */
+  static?: true;
 }
 
 /** A statement or expression the compiler doesn't handle yet (Program.unsupported). */
@@ -185,6 +187,8 @@ interface Parameters {
 export interface FunctionDeclaration extends Base, Parameters {
   type: "FunctionDeclaration";
   id: Identifier;
+  /** Static code: the integer its declared return type names. */
+  returnsInt?: IntKind;
   body: BlockStatement;
   strict: boolean;  // own "use strict" directive (strictness is inherited in sema)
   commonJS?: boolean;  // own COMMONJS_DIRECTIVE: sloppy, though in module code (sema)
@@ -199,6 +203,8 @@ export interface FunctionDeclaration extends Base, Parameters {
 export interface FunctionExpression extends Base, Parameters {
   type: "FunctionExpression";
   id: Identifier | null;
+  /** Static code: the integer its declared return type names. */
+  returnsInt?: IntKind;
   body: BlockStatement;
   strict: boolean;
   commonJS?: boolean;  // own COMMONJS_DIRECTIVE: sloppy, though in module code (sema)
@@ -430,6 +436,8 @@ export type Expression =
 export interface Literal extends Base {
   type: "Literal";
   value: number | string | boolean | null;
+  /** static code's number written as a floating-point literal (1.0, 1e3): a double, as in C */
+  float?: true;
 }
 
 /** A BigInt literal (§12.9.3): its value in decimal digits, without the `n`. */
@@ -451,6 +459,10 @@ export interface Identifier extends Base {
   name: string;
   /** The name before the bundler renamed it (from the source map): function names use it. */
   original?: string;
+  /** Static code, a declaring identifier: the integer its declared type names. */
+  int?: IntKind;
+  /** Static code, a function's name (or a const holding one): the integer the function returns. */
+  returnsInt?: IntKind;
 }
 
 export type UnaryOperator = "-" | "+" | "!" | "~" | "typeof" | "void" | "delete";
