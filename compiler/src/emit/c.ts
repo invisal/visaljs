@@ -1172,6 +1172,14 @@ class FunctionEmitter {
           this.typedCall(i, i.typedCall, args);
           return;
         }
+        if (i.builtin === "apply") {
+          expr = `js_call_apply(ctx, ${args[0]}, ${args[1]}, ${args[2] ?? "JS_UNDEFINED"}, ${args[3] ?? "JS_UNDEFINED"}, ${cString(i.target!)})`;
+          break;
+        }
+        if (i.builtin === "call") {
+          expr = `js_call_call(ctx, ${args[0]}, ${args[1]}, ${args.length - 2}, ${argArray(args.slice(2))}, ${cString(i.target!)})`;
+          break;
+        }
         if (i.builtin) {
           expr = `js_call_${i.builtin}(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${cString(i.target!)})`;
           break;

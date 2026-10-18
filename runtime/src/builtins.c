@@ -793,7 +793,7 @@ CORE(object_proto_lookup_setter) {
 
 /* ---- Function.prototype (§20.2.3) --------------------------------------------------------------- */
 
-BUILTIN(function_proto_call) {
+JSValue js_function_proto_call(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
     UNUSED_ARGS;
     if (!js_is_callable(this_val)) return js_throw_type_error(ctx, "Function.prototype.call called on a non-function");
     return js_call(ctx, this_val, ARG(0), argc > 1 ? argc - 1 : 0, argv + (argc > 1 ? 1 : argc));
@@ -822,7 +822,7 @@ static JSValueArray *list_from_array_like(JSContext *ctx, JSValue v) {
 
 JSValueArray *js_list_from_array_like(JSContext *ctx, JSValue v) { return list_from_array_like(ctx, v); }
 
-BUILTIN(function_proto_apply) {
+JSValue js_function_proto_apply(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
     UNUSED_ARGS;
     if (!js_is_callable(this_val)) return js_throw_type_error(ctx, "Function.prototype.apply was called on a non-function");
     if (js_is_nullish(ARG(1))) return js_call(ctx, this_val, ARG(0), 0, NULL);
@@ -972,8 +972,8 @@ void js_builtins_realm_init(JSContext *ctx, JSObject *global) {
 
     JSValue object = define_constructor(ctx, global, "Object", object_ctor, 1, in[JS_INTRINSIC_OBJECT_PROTOTYPE]);
     static const JSBuiltin function_proto[] = {
-        JS_BUILTIN_FN("call", function_proto_call, 1),
-        JS_BUILTIN_FN("apply", function_proto_apply, 2),
+        JS_BUILTIN_FN("call", js_function_proto_call, 1),
+        JS_BUILTIN_FN("apply", js_function_proto_apply, 2),
         JS_BUILTIN_FN("bind", function_proto_bind, 1),
         JS_BUILTIN_FN("toString", function_proto_to_string, 0),
     };

@@ -16,7 +16,8 @@
 // Built-in calls with one argument: `Math.sqrt(x)` (abs, floor, ceil, trunc), `s.charCodeAt(i)`,
 // `String.fromCharCode(c)`. Their C compares the callee with the built-in and, when it is and
 // the argument suits, does its work inline (C's sqrt; reading the unit), else makes the call.
-// Anywhere, not just in loops: a call is big anyway.
+// Anywhere, not just in loops: a call is big anyway. `f.apply(t, args)` and `f.call(t, …)` the
+// same way: f called directly when the method is the built-in (every emit and once wrapper).
 import { Number_, T, isSubtype, type FunctionIR, type Instr, type JSConst, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { int64Arith } from "./infer-types.ts";
@@ -42,12 +43,16 @@ const NUMBER_FIRST = new Set<Op>([
 /** Math functions of one Number whose C form generated code may call inline. */
 const MATH_INLINE = new Set(["sqrt", "abs", "floor", "ceil", "trunc"]);
 
-/** The built-in a one-argument call may run inline, if any: `Math.sqrt(x)` …,
- *  `s.charCodeAt(i)`, `String.fromCharCode(c)` (named by its C helper's suffix). */
+/** The built-in a call may run inline, if any: `Math.sqrt(x)` …, `s.charCodeAt(i)`,
+ *  `String.fromCharCode(c)` with one argument, `f.apply(…)` and `f.call(…)` (named by its C
+ *  helper's suffix). */
 function inlineBuiltin(i: Instr): string | null {
-  const callee = i.op === "call" && i.operands.length === 3 ? i.operands[0]! : null;
+  const callee = i.op === "call" ? i.operands[0]! : null;
   if (callee?.op !== "get_prop" || !("name" in callee.key!)) return null;
   const name = callee.key.name;
+  /* f.apply(t, args), f.call(t, …): `this` is f */
+  if (((name === "apply" && i.operands.length <= 4) || name === "call") && i.operands[1] === callee.operands[0]) return name;
+  if (i.operands.length !== 3) return null;
   const global = (g: string) => callee.operands[0]!.op === "global_name" && callee.operands[0]!.target === g;
   if (MATH_INLINE.has(name) && global("Math")) return `math_${name}`;
   if (name === "fromCharCode" && global("String")) return "from_char_code";
