@@ -241,6 +241,9 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
       if (typed && !declaredCallFits(i, typed, t)) return Unknown;  /* the untyped copy's result */
       return sig?.returns.get(i.target!) ?? Unknown;
     }
+    case "get_elem": case "get_index":  /* typed code's typed array view: an element, or undefined past the end */
+      if (i.taView && i.block.fn.meta?.declared) return (i.taView === "f64" ? Number_ : T.Int32) | T.Undefined;
+      return Unknown;
     case "char_code_at":  /* a unit, or NaN past the end */
     case "math":
       return Number_;

@@ -62,7 +62,7 @@ export interface TypedUnit {
 }
 
 /** The declared parameter types of the top-level functions of the typed files, by name. */
-function declaredSignatures(files: readonly string[]): Map<string, Type[]> {
+function declaredSignatures(files: readonly string[]): Map<string, { types: Type[]; views: (Instr["taView"] | undefined)[] }> {
   const program = ts.createProgram([...files], {
     strict: true, noEmit: true, target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler, allowImportingTsExtensions: true, skipLibCheck: true,
@@ -70,7 +70,7 @@ function declaredSignatures(files: readonly string[]): Map<string, Type[]> {
   const errors = ts.getPreEmitDiagnostics(program).filter((d) => d.category === ts.DiagnosticCategory.Error && files.includes(d.file?.fileName ?? ""));
   if (errors.length) throw new Error(ts.formatDiagnostics(errors, { getCanonicalFileName: (f) => f, getCurrentDirectory: () => process.cwd(), getNewLine: () => "\n" }));
   const checker = program.getTypeChecker();
-  const out = new Map<string, Type[]>();
+  const out = new Map<string, { types: Type[]; views: (Instr["taView"] | undefined)[] }>();
   for (const file of files) {
     const sf = program.getSourceFile(file)!;
     for (const st of sf.statements) {
@@ -79,11 +79,15 @@ function declaredSignatures(files: readonly string[]): Map<string, Type[]> {
          of one is an error (buildTypedUnit) */
       /* `int` (a `type int = number` alias, erased by tsc): a 32-bit integer */
       const types = st.parameters.map((p) => (p.type?.getText(sf) === "int" ? T.Int32 : irType(checker, checker.getTypeAtLocation(p))));
-      if (types.every((t) => t !== null)) out.set(st.name.text, types as Type[]);
+      const views = st.parameters.map((p) => VIEW_KINDS[checker.getTypeAtLocation(p).getSymbol()?.name ?? ""]);
+      if (types.every((t) => t !== null)) out.set(st.name.text, { types: types as Type[], views });
     }
   }
   return out;
 }
+
+/** Typed array parameters: their elements are read and written in place (taView). */
+const VIEW_KINDS: Record<string, "i8" | "u8" | "i32" | "f64"> = { Int8Array: "i8", Uint8Array: "u8", Int32Array: "i32", Float64Array: "f64" };
 
 /** A TypeScript type as the IR's, if the prototype takes it. */
 function irType(checker: ts.TypeChecker, t: ts.Type): Type | null {
@@ -102,6 +106,7 @@ function irType(checker: ts.TypeChecker, t: ts.Type): Type | null {
   if (f & (ts.TypeFlags.Boolean | ts.TypeFlags.BooleanLiteral)) return T.Boolean;
   if (f & ts.TypeFlags.Undefined) return T.Undefined;
   if (f & ts.TypeFlags.Null) return T.Null;
+  if (Object.hasOwn(VIEW_KINDS, t.getSymbol()?.name ?? "")) return T.Object;
   return null;
 }
 
@@ -157,9 +162,10 @@ export async function buildTypedUnit(files: readonly string[], primitives: HostP
     const meta = fn.meta!;
     const sig = signatures.get(meta.jsName);
     if (!sig || byJsName.get(meta.jsName) !== 1 || meta.generator || meta.async || meta.hasRest) continue;
-    const hidden = fn.params.length - sig.length;
+    const hidden = fn.params.length - sig.types.length;
     if (hidden < 0) continue;
-    meta.declared = fn.params.map((_, k) => (k < hidden ? undefined : sig[k - hidden]));
+    meta.declared = fn.params.map((_, k) => (k < hidden ? undefined : sig.types[k - hidden]));
+    meta.declaredViews = fn.params.map((_, k) => (k < hidden ? undefined : sig.views[k - hidden]));
     meta.external = true;
     meta.untyped = untypedName(fn.name);
     const twin = copy.functions.find((f) => f.name === meta.untyped)!;

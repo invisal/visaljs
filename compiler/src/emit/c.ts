@@ -275,6 +275,8 @@ function keyValue(k: PropKey, strings: Strings): string {
 }
 
 /** C types and initial values of the IR's representations. */
+/** A typed-arrays view's element type: its JSTypedArrayType. */
+const TA_TYPE: Record<NonNullable<Instr["taView"]>, string> = { i8: "JS_TA_INT8", u8: "JS_TA_UINT8", i32: "JS_TA_INT32", f64: "JS_TA_FLOAT64" };
 const C_TYPE: Record<Repr, string> = { boxed: "JSValue", f64: "double", i32: "int32_t", bool: "bool" };
 const C_ZERO: Record<Repr, string> = { boxed: "JS_UNDEFINED", f64: "0", i32: "0", bool: "false" };
 /** What a direct entry returns after a throw: unboxed, any value, the pending
@@ -399,7 +401,9 @@ function genericEntry(fn: FunctionIR, prefix: string): string {
   const checks = (meta.declared ?? []).flatMap((t, k) => {
     if (t === undefined) return [];
     const v = `argc > ${k - hidden} ? argv[${k - hidden}] : JS_UNDEFINED`;
-    return [`    if (!(${typeTest(t, `(${v})`)})) return ${prefix}jsf_${ident(meta.untyped!)}__generic(ctx, callee, this_val, argc, argv, new_target);  /* the plain JS */`];
+    const view = meta.declaredViews?.[k];
+    const test = view ? `js_ta_is(ctx, (${v}), ${TA_TYPE[view]})` : typeTest(t, `(${v})`);
+    return [`    if (!(${test})) return ${prefix}jsf_${ident(meta.untyped!)}__generic(ctx, callee, this_val, argc, argv, new_target);  /* the plain JS */`];
   });
   return [
     `${meta.declared ? "" : "static "}JSValue ${direct}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {`,
@@ -703,6 +707,13 @@ class FunctionEmitter {
     );
   }
 
+  /** The typed arrays this function holds views of (the typed-arrays pass). */
+  private viewList: Instr[] | null = null;
+  private views(): Instr[] {
+    this.viewList ??= [...new Set([...this.fn.params, ...this.fn.blocks.flatMap((b) => b.instrs)])].filter((v) => v.taView && (v.op === "param" || v.op === "new"));
+    return this.viewList;
+  }
+
   /** A call of a typed unit's export: its typed entry when the arguments are proven of the
    *  declared types (as many as it declares), its checked entry, called directly, otherwise. */
   private typedCall(i: Instr, tc: TypedCall, args: string[]) {
@@ -912,9 +923,19 @@ class FunctionEmitter {
         break;
       }
       case "get_elem":
+        if (i.taView) {
+          expr = `js_tav_get_${i.taView}(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${args[1]})`;
+          break;
+        }
         expr = i.keyedSite ? `js_get_keyed(ctx, ${args[0]}, ${args[1]}, ${this.keyedCache()})` : `js_get_elem(ctx, ${args[0]}, ${args[1]})`;
         break;
       case "get_index":  /* a double key: the variant that takes it unboxed */
+        if (i.taView) {
+          expr = i.operands[1]!.repr === "f64" || i.operands[1]!.repr === "i32"
+            ? `js_tav_get_${i.taView}_d(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`
+            : `js_tav_get_${i.taView}(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${args[1]})`;
+          break;
+        }
         expr = i.operands[1]!.repr === "f64"
           ? `js_get_index_ta_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`
           : `js_get_index_ta(ctx, ${args[0]}, ${args[1]})`;
@@ -925,11 +946,21 @@ class FunctionEmitter {
           : `js_set_value(ctx, ${args[0]}, ${this.key(i)}, ${args[1]}, ${strict})`;
         break;
       case "set_elem":
+        if (i.taView) {
+          status = `js_tav_set_${i.taView}(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
+          break;
+        }
         status = i.keyedSite
           ? `js_set_keyed(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict}, ${this.keyedCache()})`
           : `js_set_elem(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
         break;
       case "set_index":
+        if (i.taView) {
+          status = i.operands[1]!.repr === "f64" || i.operands[1]!.repr === "i32"
+            ? `js_tav_set_${i.taView}_d(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${this.as(i.operands[1]!, "f64")}, ${args[2]}, ${strict})`
+            : `js_tav_set_${i.taView}(ctx, &${this.name(i.operands[0]!)}_view, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
+          break;
+        }
         status = i.operands[1]!.repr === "f64"
           ? `js_set_index_ta_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")}, ${args[2]}, ${strict})`
           : `js_set_index_ta(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
@@ -1053,6 +1084,11 @@ class FunctionEmitter {
         break;
       case "new":
         expr = `js_construct(ctx, ${args[0]}, ${args.length - 1}, ${argArray(args.slice(1))}, JS_UNDEFINED, ${cString(i.target!)})`;
+        if (i.taView && this.hasVar(i)) {  /* a typed array only indexed: its elements, once */
+          this.lines.push(`    ${this.name(i)} = ${expr};`, `    if (JS_UNLIKELY(js_is_exception(${this.name(i)}))) { ${this.onException(i.block)} }`,
+            `    ${this.name(i)}_view = js_ta_view(ctx, ${this.name(i)}, ${TA_TYPE[i.taView]});`);
+          return;
+        }
         break;
       case "check_tdz":
         expr = `js_check_tdz(ctx, ${args[0]}, ${cString(i.name ?? "variable")})`;
@@ -1125,6 +1161,7 @@ class FunctionEmitter {
     }
     if (status !== null) {
       this.lines.push(`    if (JS_UNLIKELY(${status} < 0)) { ${this.onException(i.block)} }`);
+      this.retakeViews(i);
       return;
     }
     expr = expr!;
@@ -1137,6 +1174,15 @@ class FunctionEmitter {
       this.lines.push(`    js_discard(${expr});`);  /* take_exception clears the pending exception */
     }
     /* unused results of pure operations: nothing to emit */
+    this.retakeViews(i);
+  }
+
+  /** After an operation that may run code (a call, a getter, valueOf), a parameter's view again:
+   *  that code may have detached or resized its buffer. A view's own accesses take it again on
+   *  their slow paths. */
+  private retakeViews(i: Instr) {
+    if (!OPS[i.op].callsUser || !i.mayThrow || i.taView) return;  /* can't throw: simplify proved it runs no code */
+    for (const p of this.views()) if (p.op === "param") this.lines.push(`    ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${TA_TYPE[p.taView!]});`);
   }
 
   private terminator(b: Block) {
@@ -1239,8 +1285,12 @@ class FunctionEmitter {
     const locals: string[] = [];
     for (const b of fn.blocks)
       for (const i of [...b.phis, ...b.instrs])
-        if (this.hasVar(i)) locals.push(`    ${C_TYPE[i.repr]} ${this.name(i)} = ${C_ZERO[i.repr]};`);
+        if (this.hasVar(i)) {
+          locals.push(`    ${C_TYPE[i.repr]} ${this.name(i)} = ${C_ZERO[i.repr]};`);
+          if (i.op === "new" && i.taView) locals.push(`    JSTAView ${this.name(i)}_view = { NULL, 0 };`);
+        }
     const unusedParams = fn.params.filter((p) => !this.used.has(p)).map((p) => `    (void)${this.name(p)};`);
+    for (const p of this.views().filter((v) => v.op === "param")) locals.push(`    JSTAView ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${TA_TYPE[p.taView!]});`);
     /* non-leaf: anything that can run JS code again (calls, getters, valueOf) checks the stack */
     const calls = fn.blocks.some((b) => b.instrs.some((i) => OPS[i.op].callsUser));
     /* a body that only touches its environment never needs the context */

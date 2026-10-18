@@ -297,6 +297,9 @@ export interface Instr {
   /** get_elem, set_elem: the key is most likely the same at every run (a module binding stored
    *  once): the site caches the key it sees, and is a named access while the key stays it */
   keyedSite?: boolean;
+  /** new of a typed array only indexed (the typed-arrays pass), and its accesses: the element type
+   *  of its view, taken once after `new` */
+  taView?: "i8" | "u8" | "i32" | "f64";
   /** call of a typed unit's export (a "visaljs:host" import the typed unit defines) */
   typedCall?: TypedCall;
   /** call, construct_direct: the fallback of an inlined site (its guard failed): not inlined again */
@@ -360,6 +363,8 @@ export interface FunctionMeta {
    *  hidden ones undefined). Typed callers were checked by tsc; every other call comes through
    *  the generic entry, which checks them. */
   declared?: (Type | undefined)[];
+  /** The declared parameters that are typed arrays: their element types (as `declared`). */
+  declaredViews?: (Instr["taView"] | undefined)[];
   /** Called from outside the module (a typed unit's entries): its parameters can't be inferred
    *  from its call sites. */
   external?: boolean;

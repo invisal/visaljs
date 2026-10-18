@@ -134,4 +134,78 @@ static inline int js_set_index_ta_f64(JSContext *ctx, JSValue obj, double key, J
     return js_set_index_f64(ctx, obj, key, v, strict);
 }
 
+/* A typed array's elements as generated code holds them (the typed-arrays pass): taken once,
+ * for an array nothing else can reach, so nothing detaches or resizes its buffer. Empty (length
+ * 0) when the value isn't a typed array of that type: every access then takes the generic path. */
+typedef struct JSTAView {
+    uint8_t *base;
+    size_t   length;
+    int      type;   /* the element type it's for: a slow path that may have run code takes it again */
+} JSTAView;
+
+static inline JSTAView js_ta_view(JSContext *ctx, JSValue obj, int type) {
+    JSTAView v = { NULL, 0, type };
+    if (!js_is_object(obj) || js_as_object(obj)->shape->cls != ctx->rt->typed_array_class) return v;
+    const JSTypedArray *ta = (const JSTypedArray *)js_as_object(obj);
+    const JSArrayBuffer *b = js_as_array_buffer(ta->buffer);
+    if (ta->type != type || ta->length_tracking || (b->flags & (JS_BUFFER_DETACHED | JS_BUFFER_RESIZABLE | JS_BUFFER_IMMUTABLE)) || !b->data) return v;
+    v.base = b->data + ta->byte_offset;
+    v.length = ta->length;
+    return v;
+}
+
+/* Whether v is a typed array of that element type (a typed function's typed array parameter). */
+static inline bool js_ta_is(JSContext *ctx, JSValue v, int type) {
+    return js_is_object(v) && js_as_object(v)->shape->cls == ctx->rt->typed_array_class && ((const JSTypedArray *)js_as_object(v))->type == type;
+}
+
+/* The index a key names when it's in the view, else false. */
+static JS_FAST_PATH bool js_tav_index(const JSTAView *v, JSValue key, size_t *i) {
+    if (!js_is_int32(key) || js_as_int32(key) < 0 || (size_t)js_as_int32(key) >= v->length) return false;
+    *i = (size_t)js_as_int32(key);
+    return true;
+}
+static JS_FAST_PATH bool js_tav_index_d(const JSTAView *v, double key, size_t *i) {
+    if (!(key >= 0 && key < (double)v->length) || (double)(size_t)key != key) return false;
+    *i = (size_t)key;
+    return true;
+}
+
+/* Each element type's read and write (a Number, converted as the spec's NumericToRawBytes). */
+#define JS_TAV_ACCESS(name, ctype, box, unbox)                                                          \
+    static JS_FAST_PATH JSValue js_tav_get_##name(JSContext *ctx, JSTAView *v, JSValue obj, JSValue key) { \
+        size_t i;                                                                                        \
+        if (JS_LIKELY(js_tav_index(v, key, &i))) { ctype x; memcpy(&x, v->base + i * sizeof x, sizeof x); return box(x); } \
+        JSValue r = js_get_elem(ctx, obj, key);                                                          \
+        *v = js_ta_view(ctx, obj, v->type);  /* a getter may have run */                                 \
+        return r;                                                                                        \
+    }                                                                                                    \
+    static JS_FAST_PATH JSValue js_tav_get_##name##_d(JSContext *ctx, JSTAView *v, JSValue obj, double key) { \
+        size_t i;                                                                                        \
+        if (JS_LIKELY(js_tav_index_d(v, key, &i))) { ctype x; memcpy(&x, v->base + i * sizeof x, sizeof x); return box(x); } \
+        JSValue r = js_get_elem(ctx, obj, js_number(key));                                               \
+        *v = js_ta_view(ctx, obj, v->type);                                                              \
+        return r;                                                                                        \
+    }                                                                                                    \
+    static JS_FAST_PATH int js_tav_set_##name(JSContext *ctx, JSTAView *v, JSValue obj, JSValue key, JSValue val, bool strict) { \
+        size_t i;                                                                                        \
+        if (JS_LIKELY(js_is_number(val) && js_tav_index(v, key, &i))) { ctype x = unbox(val); memcpy(v->base + i * sizeof x, &x, sizeof x); return 1; } \
+        int r = js_set_elem(ctx, obj, key, val, strict);  /* valueOf, a setter: they may have run */    \
+        *v = js_ta_view(ctx, obj, v->type);                                                              \
+        return r;                                                                                        \
+    }                                                                                                    \
+    static JS_FAST_PATH int js_tav_set_##name##_d(JSContext *ctx, JSTAView *v, JSValue obj, double key, JSValue val, bool strict) { \
+        size_t i;                                                                                        \
+        if (JS_LIKELY(js_is_number(val) && js_tav_index_d(v, key, &i))) { ctype x = unbox(val); memcpy(v->base + i * sizeof x, &x, sizeof x); return 1; } \
+        int r = js_set_elem(ctx, obj, js_number(key), val, strict);                                      \
+        *v = js_ta_view(ctx, obj, v->type);                                                              \
+        return r;                                                                                        \
+    }
+static JS_FAST_PATH int32_t js_tav_to_int32(JSValue v) { return js_is_int32(v) ? js_as_int32(v) : js_double_to_int32(js_as_number(v)); }
+#define JS_TAV_INT(x) js_int32((int32_t)(x))
+JS_TAV_ACCESS(i8, int8_t, JS_TAV_INT, (int8_t)js_tav_to_int32)
+JS_TAV_ACCESS(u8, uint8_t, JS_TAV_INT, (uint8_t)js_tav_to_int32)
+JS_TAV_ACCESS(i32, int32_t, JS_TAV_INT, js_tav_to_int32)
+JS_TAV_ACCESS(f64, double, js_number, js_as_number)
+
 #endif /* JS_BUFFER_H */
