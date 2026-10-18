@@ -1,50 +1,25 @@
 // "use static" files, compiled as one typed unit with their declared types.
 //
-// The program's bundle leaves them out: an import of one resolves to "visaljs:host", and each
-// of their exports becomes a host primitive whose C function is the export's generic entry in
-// the unit (which checks its arguments against the declared types: a TypeError for any other).
-// The unit's files are checked by tsc and against the subset (static/subset.ts), linked into one
-// module (static/link.ts), their declared types read with tsc's checker, and compiled as a
-// "harness script" (emitHarnessScript): its own prefix, its tables registered and its top level
-// run before the program's.
+// The program's bundle leaves them out (boundary.ts): each of their exports becomes a host
+// primitive whose C function is the export's generic entry in the unit (which checks its
+// arguments against the declared types: a TypeError for any other). The unit's files are
+// checked by tsc and against the subset (subset.ts), linked into one module (link.ts), their
+// declared types read with tsc's checker, and compiled as a "harness script"
+// (emitHarnessScript): its own prefix, its tables registered and its top level run before the
+// program's.
 //
 // A Float64Array's element is a number there, as its type says: past the end, NaN (undefined as
 // a number).
-import { readFileSync } from "node:fs";
-
-import { analyze, emitHarnessScript, HOST_MODULE, type HostPrimitives, lower, programNames } from "@visaljs/compiler";
-import { type FunctionIR, type Instr, type ModuleIR, T, type Type, type TypedCall } from "@visaljs/ir";
+import { analyze, emitHarnessScript, type HostPrimitives, lower, programNames } from "@visaljs/compiler";
+import { type FunctionIR, T, type Type, type TypedCall } from "@visaljs/ir";
 import { optimize, type PassReport } from "@visaljs/optimizer";
-import type { Plugin } from "rolldown";
 import ts from "typescript";
 
-import { linkUnit } from "./static/link.ts";
-import { checkSubset } from "./static/subset.ts";
-import { declaredSignatures, type Signature, TYPES_FILE } from "./static/types.ts";
+import { linkUnit } from "./link.ts";
+import { checkSubset } from "./subset.ts";
+import { declaredSignatures, type Signature, TYPES_FILE } from "./types.ts";
 
 export const TYPED_PREFIX = "vt_";
-
-/** A file that starts with the "use static" directive (after comments). */
-const DIRECTIVE = /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*(["'])use static\1/;
-
-function isTypedFile(file: string): boolean {
-  return /\.[cm]?tsx?$/.test(file) && DIRECTIVE.test(readFileSync(file, "utf8"));
-}
-
-/** The program's bundle: a typed file's import resolves to the host module (its exports are
- *  host primitives); `found` collects the typed files. */
-export function typedImports(found: Set<string>): Plugin {
-  return {
-    name: "visaljs-typed-imports",
-    async resolveId(source, importer, { kind }) {
-      if (source === HOST_MODULE || !importer || kind !== "import-statement") return null;
-      const r = await this.resolve(source, importer, { skipSelf: true });
-      if (!r || r.external || !isTypedFile(r.id)) return null;
-      found.add(r.id);
-      return { id: HOST_MODULE, external: true };
-    },
-  };
-}
 
 export interface TypedUnit {
   c: string;
@@ -117,32 +92,4 @@ export function buildTypedUnit(files: readonly string[], primitives: HostPrimiti
   }
   const unit = emitHarnessScript(optimized, TYPED_PREFIX, new Map(), { hostPrimitives: primitives });
   return { c: unit.c, atoms: new Map(unit.atoms), exports, calls, report, names: [...programNames(ast)] };
-}
-
-/** The program's calls of typed exports: a call whose callee is the export's host import (the
- *  host function, or the module binding one store sets to it). Before optimizing. */
-export function annotateTypedCalls(m: ModuleIR, calls: Record<string, TypedCall>) {
-  const all = [m.main, ...m.functions];
-  const slots = new Map<number, string>();
-  const stores = new Map<number, number>();
-  for (const fn of all)
-    for (const b of fn.blocks)
-      for (const i of b.instrs) {
-        if (i.op !== "store_global" || i.operands[0]!.op === "empty") continue;
-        stores.set(i.index!, (stores.get(i.index!) ?? 0) + 1);
-        const v = i.operands[0]!;
-        if (v.op === "host_function" && Object.hasOwn(calls, v.target!)) slots.set(i.index!, v.target!);
-      }
-  const target = (callee: Instr): string | undefined => {
-    const v = callee.op === "check_tdz" ? callee.operands[0]! : callee;
-    if (v.op === "host_function") return Object.hasOwn(calls, v.target!) ? v.target : undefined;
-    if (v.op === "load_global" && stores.get(v.index!) === 1) return slots.get(v.index!);
-    return undefined;
-  };
-  for (const fn of all)
-    for (const b of fn.blocks)
-      for (const i of b.instrs) {
-        const name = i.op === "call" ? target(i.operands[0]!) : undefined;
-        if (name) i.typedCall = calls[name]!;
-      }
 }
