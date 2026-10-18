@@ -42,7 +42,7 @@ static JS_MAYBE_UNUSED double jsf_sieve(JSContext *ctx, JSValue v0_n) {
 #line 4 "elements.js"
     v3 = js_global_get(ctx, JS_STATIC_STR(jss_0), "Array");
     if (JS_UNLIKELY(js_is_exception(v3))) { return 0; }
-    v5 = js_num_add(v0_n, js_int32(1));
+    v5 = js_number(js_as_number(v0_n) + 1.0);
     v6 = js_construct(ctx, v3, 1, (const JSValue[]){ v5 }, JS_UNDEFINED, "Array");
     if (JS_UNLIKELY(js_is_exception(v6))) { return 0; }
     v7 = js_get_method(ctx, v6, JS_STATIC_STR(jss_1), &mod_ics[0]);
@@ -61,7 +61,7 @@ bb2:;
     if (v15) { goto bb3; } else { goto bb1; }
 bb3:;
 #line 7 "elements.js"
-    v17 = js_get_index_f64(ctx, v9_composite, v13_i);
+    v17 = js_get_index_ta_f64(ctx, v9_composite, v13_i);
     if (JS_UNLIKELY(js_is_exception(v17))) { return 0; }
     if (js_truthy(v17)) { goto bb5; } else { goto bb7; }
 bb4:;
@@ -86,7 +86,7 @@ bb9:;
     if (v25) { goto bb10; } else { goto bb8; }
 bb10:;
 #line 9 "elements.js"
-    if (JS_UNLIKELY(js_set_index_f64(ctx, v9_composite, v23_j, JS_TRUE, true) < 0)) { return 0; }
+    if (JS_UNLIKELY(js_set_index_ta_f64(ctx, v9_composite, v23_j, JS_TRUE, true) < 0)) { return 0; }
     goto bb11;
 bb11:;
 #line 9 "elements.js"
@@ -100,7 +100,7 @@ static JS_MAYBE_UNUSED JSValue jsf_byKey(JSContext *ctx, JSValue v0_o, JSValue v
     JSValue v4 = JS_UNDEFINED;
     JS_CHECK_STACK(ctx);
 #line 15 "elements.js"
-    v2 = js_get_index(ctx, v0_o, v1_k);
+    v2 = js_get_index_ta(ctx, v0_o, v1_k);
     if (JS_UNLIKELY(js_is_exception(v2))) { return JS_EXCEPTION; }
     v3 = js_get_length(ctx, v0_o, JS_ATOM(length), &mod_ics[1]);
     if (JS_UNLIKELY(js_is_exception(v3))) { return JS_EXCEPTION; }

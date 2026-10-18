@@ -138,7 +138,7 @@ export function pauses(fn: FunctionIR): boolean {
  *  optimizer's to choose. */
 export function closedFunctions(m: ModuleIR): Set<FunctionIR> {
   const byName = new Map(m.functions.map((fn) => [fn.name, fn]));
-  const closed = new Set(m.functions.filter((fn) => fn.meta && !pauses(fn)));
+  const closed = new Set(m.functions.filter((fn) => fn.meta && !fn.meta.external && !pauses(fn)));
   for (const fn of functionsOf(m))
     for (const b of fn.blocks)
       for (const i of b.instrs) {

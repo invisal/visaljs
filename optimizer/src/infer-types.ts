@@ -3,9 +3,10 @@
 // to a fixpoint (the lattice is a bitset of 10 kinds, so that's quick). A phi is the union of its
 // inputs; an operation's type comes from its operands' (`transfer`). Operations it knows nothing
 // about are Unknown: any JS value, or EMPTY.
-import { dominators, isSubtype, Number_, OPS, Primitive, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { declaredCallFits, dominators, isSubtype, Number_, OPS, Primitive, readsDouble, T, typedCallFits, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { callers, closedFunctions, functionsOf, pauses, reversePostorder } from "./cfg.ts";
+import { trustedBuiltin } from "./specialize.ts";
 import type { Count, Pass } from "./index.ts";
 
 export const inferTypes: Pass = {
@@ -34,15 +35,18 @@ export const inferTypes: Pass = {
 interface Signatures {
   params: Map<Instr, Type>;
   returns: Map<string, Type>;
+  /** typed functions by name: a call that doesn't fit their declared types runs the untyped copy */
+  declared: Map<string, FunctionIR>;
 }
 
 /** Infers every function's types; returns the closed functions. */
 function inferModule(m: ModuleIR): Set<FunctionIR> {
   const closed = closedFunctions(m);
-  const sig: Signatures = { params: new Map(), returns: new Map() };
+  const sig: Signatures = { params: new Map(), returns: new Map(), declared: new Map(m.functions.filter((fn) => fn.meta?.declared).map((fn) => [fn.name, fn])) };
   for (const fn of m.functions) {
     if (!pauses(fn)) sig.returns.set(fn.name, T.None);
-    for (const p of fn.params) sig.params.set(p, closed.has(fn) ? T.None : Unknown & ~T.Empty);
+    const declared = fn.meta?.declared;
+    fn.params.forEach((p, k) => sig.params.set(p, declared?.[k] ?? (closed.has(fn) ? T.None : Unknown & ~T.Empty)));
   }
   const byName = new Map(m.functions.map((fn) => [fn.name, fn]));
   const callerMap = callers(m);
@@ -64,7 +68,7 @@ function inferModule(m: ModuleIR): Set<FunctionIR> {
     for (const b of fn.blocks)
       for (const i of b.instrs) {
         const callee = i.op === "call_direct" ? byName.get(i.target!) : undefined;
-        if (!callee || !closed.has(callee)) continue;
+        if (!callee || !closed.has(callee) || callee.meta?.declared) continue;  /* declared: as declared */
         callee.params.forEach((p, k) => {
           const old = sig.params.get(p)!;
           const next = old | (i.operands[k]!.type & ~T.Empty);
@@ -105,6 +109,22 @@ function numeric(...ops: Type[]): Type {
   return Number_ | bigint(ops);
 }
 
+/** Typed code's 64-bit `int` arithmetic, C's: +, -, *, /, %, ++, --, unary -, and the bitwise
+ *  operators of integers: ints and int32s with one of them an int, or in a typed function any
+ *  integers (1 / 4 is 0, as in C; a float literal, 1.0, isn't one). Wrapping; / and % integer division. */
+const INT64_OPS = new Set<Instr["op"]>([
+  "add", "sub", "mul", "div", "mod", "neg", "inc", "dec", "bitand", "bitor", "bitxor", "bitnot", "shl", "sar", "shr",
+  "num_add", "num_sub", "num_mul", "num_div", "num_mod", "num_neg", "num_inc", "num_dec",
+  "num_bitand", "num_bitor", "num_bitxor", "num_bitnot", "num_shl", "num_sar", "num_shr", "int_div", "int_mod",
+]);
+export function int64Arith(i: Instr, type: (v: Instr) => Type): boolean {
+  if (!INT64_OPS.has(i.op)) return false;
+  const integral = (o: Instr) => isSubtype(type(o), T.Int64 | T.Int32) && !o.floatLit;
+  const typed = i.block.fn.meta?.declared !== undefined;
+  return (typed || i.operands.some((o) => isSubtype(type(o), T.Int64) && type(o) !== T.None)) && i.operands.every(integral)
+    && i.operands.some((o) => type(o) !== T.None);
+}
+
 /** A bitwise operator's result: ToInt32 of a Number is an int32 (never -0). */
 function int32(...ops: Type[]): Type {
   return T.Int32 | bigint(ops);
@@ -113,6 +133,7 @@ function int32(...ops: Type[]): Type {
 const BOOLEAN = new Set<Instr["op"]>([
   "not", "to_boolean", "is_nullish", "not_empty", "strict_eq", "strict_ne", "eq", "ne",
   "lt", "le", "gt", "ge", "in", "instanceof", "delete_prop", "delete_elem", "private_in", "same_function",
+  "identical", "strict_eq_atom", "is_type", "strict_eq_num",
 ]);
 const OBJECT = new Set<Instr["op"]>([
   "new_object", "new_array", "make_function", "make_arguments", "host_function", "regexp",
@@ -196,6 +217,7 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
   const t = (v: Instr) => type(v) & ~T.Empty;
   if (BOOLEAN.has(i.op)) return T.Boolean;
   if (OBJECT.has(i.op)) return T.Object;
+  if (int64Arith(i, t)) return T.Int64;
   switch (i.op) {
     case "const": return constType(i.lit!.value);
     case "empty": return T.Empty;
@@ -205,7 +227,7 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
     case "bigint": return T.BigInt;
     case "switch_string": return T.Int32;
     case "to_number": return Number_;
-    case "to_numeric": return numeric(t(a!));
+    case "to_numeric": return isSubtype(t(a!), Number_) && t(a!) !== T.None ? t(a!) : numeric(t(a!));  /* a Number as it is (an int stays one) */
     case "add": {
       const ta = t(a!), tb = t(b!);
       if (ta === T.String || tb === T.String) return T.String;
@@ -232,8 +254,30 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
       return T.Boolean;
     case "get_prop":  // a string's length: its own, non-writable, at most 2^30 - 1
       return i.key && "name" in i.key && i.key.name === "length" && isSubtype(t(a!), T.String) ? T.Int32 : Unknown;
-    case "call_direct":
+    case "call_direct": {
+      const typed = sig?.declared.get(i.target!);
+      if (typed && !declaredCallFits(i, typed, t)) return Unknown;  /* the untyped copy's result */
       return sig?.returns.get(i.target!) ?? Unknown;
+    }
+    case "get_elem": case "get_index":  /* typed code's typed array view: an element, or (an integer array's) undefined past the end */
+      if (readsDouble(i)) return T.Int32 | T.Double;
+      if (i.taView && i.block.fn.meta?.declared) return T.Int32 | T.Undefined;
+      return Unknown;
+    case "char_code_at":  /* a unit, or NaN past the end */
+    case "math":
+      return Number_;
+    case "int_add": case "int_sub": case "int_mul":
+      return T.Int32;
+    case "to_i64":
+      return T.Int64;
+    case "to_i32":
+      return T.Int32;
+    case "call": {
+      /* typed code trusts the built-ins to be the standard ones, as tsc's types do */
+      if (trustedBuiltin(i, t)) return Number_;
+      /* a typed unit's export: its declared result, when its typed entry runs */
+      return i.typedCall && typedCallFits(i, t) ? i.typedCall.returns : Unknown;
+    }
     default:
       return Unknown;
   }

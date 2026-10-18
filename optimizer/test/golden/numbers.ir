@@ -35,7 +35,7 @@ bb1:
   return %h1
 bb2:  ; preds bb0, bb4
   %i1: Int32 (i32) = phi [bb0: %i0], [bb4: %i2]
-  %h1: Int32 = phi [bb0: %h0], [bb4: %h2]
+  %h1: Int32 (i32) = phi [bb0: %h0], [bb4: %h2]
   %0: Int32 = get_prop %s0, ."length"  !mayThrow
   %1: Boolean (bool) = num_lt %i1, %0
   branch %1, bb3, bb1

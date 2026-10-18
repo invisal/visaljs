@@ -1234,6 +1234,26 @@ static double hook_typed_array_length(JSValue v) {
     return out_of_bounds(as_ta(v)) ? -1 : (double)ta_length(as_ta(v));
 }
 
+/* An element the core may read or write inline: of a typed array, a valid index (§10.4.5.15
+ * IsValidIntegerIndex), a Number element. Its own data property: no prototype, no code runs. */
+static bool inline_elem(JSValue v, int32_t i) {
+    if (!is_ta(v) || i < 0) return false;
+    const JSTypedArray *ta = as_ta(v);
+    return !is_bigint_type(ta->type) && (size_t)i < ta_length(ta);
+}
+
+static bool hook_typed_array_get(JSValue v, int32_t i, JSValue *out) {
+    if (!inline_elem(v, i)) return false;
+    *out = js_number(load_number(as_ta(v), (size_t)i));
+    return true;
+}
+
+static bool hook_typed_array_set(JSValue v, int32_t i, double d) {
+    if (!inline_elem(v, i) || immutable(as_ta(v))) return false;
+    store(as_ta(v), (size_t)i, d);
+    return true;
+}
+
 static bool hook_view_bytes(JSValue v, uint8_t **data, size_t *length) {
     return !js_is_array_buffer(v) && js_buffer_source_bytes(v, data, length);
 }
@@ -1330,6 +1350,9 @@ static void install_typedarray(JSContext *ctx, JSObject *global) {
     ctx->rt->is_typed_array = hook_is_typed_array;
     ctx->rt->typed_array_length = hook_typed_array_length;
     ctx->rt->view_bytes = hook_view_bytes;
+    ctx->rt->typed_array_get = hook_typed_array_get;
+    ctx->rt->typed_array_class = &ta_class;
+    ctx->rt->typed_array_set = hook_typed_array_set;
 }
 
 const JSComponent js_component_typedarray = { "typedarray", install_typedarray };

@@ -9,9 +9,9 @@
 //   the block's handler (after that edge's phi copies) or returns JS_EXCEPTION.
 // - #line directives map back to the JS source (gdb, error locations).
 import type { Loc } from "../frontend/ast.ts";
-import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr } from "@visaljs/ir";
+import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr, Type, TypedCall } from "@visaljs/ir";
 import type { HostPrimitives } from "../frontend/host.ts";
-import { isSubtype, OPS, successors, T } from "@visaljs/ir";
+import { declaredCallFits, isSubtype, Number_, OPS, readsDouble, successors, T, typedCallFits } from "@visaljs/ir";
 import { liveAfterPauses } from "@visaljs/ir";
 import type { CoreEntry } from "./core.ts";
 import { ATOMS } from "./atoms.ts";
@@ -275,21 +275,40 @@ function keyValue(k: PropKey, strings: Strings): string {
 }
 
 /** C types and initial values of the IR's representations. */
-const C_TYPE: Record<Repr, string> = { boxed: "JSValue", f64: "double", i32: "int32_t", bool: "bool" };
-const C_ZERO: Record<Repr, string> = { boxed: "JS_UNDEFINED", f64: "0", i32: "0", bool: "false" };
+/** A typed-arrays view's element type: its JSTypedArrayType. */
+const TA_TYPE: Record<NonNullable<Instr["taView"]>, string> = { i8: "JS_TA_INT8", u8: "JS_TA_UINT8", i32: "JS_TA_INT32", f64: "JS_TA_FLOAT64" };
+const C_TYPE: Record<Repr, string> = { boxed: "JSValue", f64: "double", i32: "int32_t", i64: "int64_t", bool: "bool" };
+const C_ZERO: Record<Repr, string> = { boxed: "JS_UNDEFINED", f64: "0", i32: "0", i64: "0", bool: "false" };
 /** What a direct entry returns after a throw: unboxed, any value, the pending
  *  exception is the signal. */
-const C_FAIL: Record<Repr, string> = { boxed: "JS_EXCEPTION", f64: "0", i32: "0", bool: "false" };
+const C_FAIL: Record<Repr, string> = { boxed: "JS_EXCEPTION", f64: "0", i32: "0", i64: "0", bool: "false" };
 
 /** A C expression of repr `from` as repr `to`, when the type allows it (an int32_t only ever
  *  holds int32s, so converting to one can't lose anything). */
 function convert(expr: string, from: Repr, to: Repr): string {
   if (from === to) return expr;
+  /* a typed file's int: a JS Number when it leaves (exact up to 2^53); C's conversion when it comes */
+  if (from === "i64") return to === "boxed" ? `js_number((double)(${expr}))` : to === "f64" ? `(double)(${expr})` : to === "i32" ? `(int32_t)(${expr})` : `((${expr}) != 0)`;
+  if (to === "i64") return from === "i32" ? `(int64_t)(${expr})` : from === "f64" ? `js_f64_to_i64(${expr})` : from === "bool" ? `(int64_t)(${expr})` : `js_value_to_i64(${expr})`;
   if (from === "i32") return to === "boxed" ? `js_int32(${expr})` : `(double)(${expr})`;
   if (to === "boxed") return from === "bool" ? `js_bool(${expr})` : `js_number(${expr})`;
   if (to === "i32") return from === "f64" ? `(int32_t)(${expr})` : `js_as_int32_value(${expr})`;
   return to === "bool" ? `js_as_bool(${expr})` : `js_as_number(${expr})`;
 }
+
+/** The narrowest repr that holds every value of a type: an int32_t, an int64_t, a double, or boxed. */
+function reprOf(t: Type): Repr {
+  if (isSubtype(t, T.Int32)) return "i32";
+  if (isSubtype(t, T.Int64 | T.Int32)) return "i64";
+  return isSubtype(t, Number_) ? "f64" : "boxed";
+}
+
+/** The operators on proven Numbers (specialize's num_* forms): their C is unboxed() either way. */
+const NUM_OPS = new Set<Op>([
+  "num_add", "num_sub", "num_mul", "num_div", "num_mod", "num_neg", "num_inc", "num_dec",
+  "num_lt", "num_le", "num_gt", "num_ge", "num_eq", "num_ne",
+  "num_bitand", "num_bitor", "num_bitxor", "num_bitnot", "num_shl", "num_sar", "num_shr",
+]);
 
 /** Number comparisons: a C bool from doubles or int32s. */
 const BOOL_OPS = new Set<Op>(["num_lt", "num_le", "num_gt", "num_ge", "num_eq", "num_ne"]);
@@ -301,6 +320,22 @@ function cDouble(d: number): string {
   if (Object.is(d, -0)) return "-0.0";
   if (Number.isSafeInteger(d)) return `${d}.0`;
   return hexFloat(d);
+}
+
+/** `typeof v === name` (or v == null, name "nullish") as a C condition: js_typeof's cases. */
+function isTypeTest(name: string, v: string): string {
+  switch (name) {
+    case "nullish": return `js_is_nullish(${v})`;
+    case "undefined": return `js_is_undefined(${v})`;
+    case "boolean": return `js_is_bool(${v})`;
+    case "number": return `js_is_number(${v})`;
+    case "string": return `js_is_string(${v})`;
+    case "symbol": return `js_is_symbol(${v})`;
+    case "bigint": return `js_is_bigint(${v})`;
+    case "function": return `js_is_callable(${v})`;
+    case "object": return `(js_is_null(${v}) || (js_is_object(${v}) && !js_is_callable(${v})))`;
+    default: return "false";  /* typeof never gives it */
+  }
 }
 
 /** Inline caches: one per *_prop site with a named key, in mod_ics[]; a keyed site's key, in
@@ -355,6 +390,21 @@ function instanceSlots(fn: FunctionIR): number {
   return keys.size ? Math.min(keys.size, 16) : 4;
 }
 
+/** A C test that `v` (evaluated more than once) has one of the kinds in `t`. */
+function typeTest(t: Type, v: string): string {
+  const tests: string[] = [];
+  if (t & T.Undefined) tests.push(`js_is_undefined(${v})`);
+  if (t & T.Null) tests.push(`js_is_null(${v})`);
+  if (t & T.Boolean) tests.push(`js_is_bool(${v})`);
+  if ((t & Number_) === Number_ || t & (T.Double | T.Int64)) tests.push(`js_is_number(${v})`);  /* an int: any Number, converted */
+  else if (t & T.Int32) tests.push(`js_is_int32(${v})`);
+  if (t & T.String) tests.push(`js_is_string(${v})`);
+  if (t & T.Symbol) tests.push(`js_is_symbol(${v})`);
+  if (t & T.BigInt) tests.push(`js_is_bigint(${v})`);
+  if (t & T.Object) tests.push(`js_is_object(${v})`);
+  return tests.length ? tests.join(" || ") : "false";
+}
+
 /** The generic entry: unpacks argv into the direct entry's parameters. */
 function genericEntry(fn: FunctionIR, prefix: string): string {
   const meta = fn.meta!;
@@ -379,9 +429,19 @@ function genericEntry(fn: FunctionIR, prefix: string): string {
   );
   const call = `${direct}(${["ctx", ...args.map((a, k) => convert(a, "boxed", fn.params[k]!.repr))].join(", ")})`;
   const ret = fn.returnRepr ?? "boxed";
+  /* a "use static" function: untyped callers' arguments checked against the declared types */
+  const hidden = fn.params.length - declared - Number(meta.hasRest);
+  const checks = (meta.declared ?? []).flatMap((t, k) => {
+    if (t === undefined) return [];
+    const v = `argc > ${k - hidden} ? argv[${k - hidden}] : JS_UNDEFINED`;
+    const view = meta.declaredViews?.[k];
+    const test = view ? `js_ta_is(ctx, (${v}), ${TA_TYPE[view]})` : typeTest(t, `(${v})`);
+    return [`    if (!(${test})) return ${prefix}jsf_${ident(meta.untyped!)}__generic(ctx, callee, this_val, argc, argv, new_target);  /* the plain JS */`];
+  });
   return [
-    `static JSValue ${direct}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {`,
+    `${meta.declared ? "" : "static "}JSValue ${direct}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {`,
     ...(unused.length ? [`    ${unused.map((u) => `(void)${u};`).join(" ")}`] : []),
+    ...checks,
     ...(ret === "boxed"
       ? [`    return ${call};`]
       : [`    ${C_TYPE[ret]} r = ${call};`, `    return js_has_exception(ctx) ? JS_EXCEPTION : ${convert("r", ret, "boxed")};`]),
@@ -438,6 +498,8 @@ interface GeneratorPlan {
 class Hosts {
   readonly table: HostPrimitives;
   readonly used = new Set<string>();
+  /** Typed entries of a typed unit this module calls: their prototypes. */
+  readonly typed = new Map<string, string>();
   constructor(table: HostPrimitives) {
     this.table = table;
   }
@@ -448,7 +510,10 @@ class Hosts {
     return host;
   }
   decls(): string[] {
-    return [...this.used].sort().map((c) => `JSValue ${c}(JSContext *, JSValue, JSValue, uint32_t, const JSValue *, JSValue);  /* host primitive */`);
+    return [
+      ...[...this.used].sort().map((c) => `JSValue ${c}(JSContext *, JSValue, JSValue, uint32_t, const JSValue *, JSValue);  /* host primitive */`),
+      ...[...this.typed.values()].sort(),
+    ];
   }
 }
 
@@ -549,6 +614,7 @@ class FunctionEmitter {
       const value = i.lit!.value;
       if (repr === "f64") return cDouble(value as number);
       if (repr === "i32") return value === -2147483648 ? "INT32_MIN" : `${value as number}`;
+      if (repr === "i64") return Number.isSafeInteger(value) ? `INT64_C(${value as number})` : `js_f64_to_i64(${cDouble(value as number)})`;
       if (repr === "bool") return value ? "true" : "false";
       return constant(value, this.strings);
     }
@@ -559,9 +625,36 @@ class FunctionEmitter {
 
   /** A num_* operator on unboxed operands: plain C. Doubles; int32s where both operands are
    *  (an int32 result is one inference proved can't overflow); bitwise ones through ToInt32. */
-  private unboxed(i: Instr): string {
+  private unboxed(i: Instr, repr: Repr = i.repr): string {
     const isInt = (o: Instr) => isSubtype(o.type, T.Int32);
-    if (i.operands.every(isInt) && (i.repr === "i32" || BOOL_OPS.has(i.op))) {
+    /* a typed file's int: C's int64_t arithmetic, wrapping (as unsigned); compares of two ints */
+    const isLong = (o: Instr) => isSubtype(o.type, T.Int64 | T.Int32);
+    if (i.operands.every(isLong) && (repr === "i64" || (BOOL_OPS.has(i.op) && i.operands.some((o) => (o.type & T.Int64) !== 0)))) {
+      const [x, y] = i.operands.map((o) => this.as(o, "i64"));
+      const wrap = (op: string) => `(int64_t)((uint64_t)${x} ${op} (uint64_t)${y})`;
+      switch (i.op) {
+        case "num_add": return wrap("+");
+        case "num_sub": return wrap("-");
+        case "num_mul": return wrap("*");
+        case "num_neg": return `(int64_t)(0 - (uint64_t)${x})`;
+        case "num_inc": return `(int64_t)((uint64_t)${x} + 1)`;
+        case "num_dec": return `(int64_t)((uint64_t)${x} - 1)`;
+        case "num_lt": return `${x} < ${y}`;
+        case "num_le": return `${x} <= ${y}`;
+        case "num_gt": return `${x} > ${y}`;
+        case "num_ge": return `${x} >= ${y}`;
+        case "num_eq": return `${x} == ${y}`;
+        case "num_ne": return `${x} != ${y}`;
+        case "num_bitand": return `${x} & ${y}`;
+        case "num_bitor": return `${x} | ${y}`;
+        case "num_bitxor": return `${x} ^ ${y}`;
+        case "num_bitnot": return `~${x}`;
+        case "num_shl": return `(int64_t)((uint64_t)${x} << (${y} & 63))`;
+        case "num_sar": return `${x} >> (${y} & 63)`;
+        case "num_shr": return `(int64_t)((uint64_t)${x} >> (${y} & 63))`;
+      }
+    }
+    if (i.operands.every(isInt) && (repr === "i32" || BOOL_OPS.has(i.op))) {
       const [x, y] = i.operands.map((o) => this.as(o, "i32"));
       switch (i.op) {
         case "num_add": return `${x} + ${y}`;
@@ -579,7 +672,7 @@ class FunctionEmitter {
     const [a, b] = i.operands.map((o) => this.as(o, "f64"));
     /* ToInt32: an int32 operand as it is */
     const [ia, ib] = i.operands.map((o) => (isInt(o) ? this.as(o, "i32") : `js_f64_to_int32(${this.as(o, "f64")})`));
-    const bits = (expr: string) => (i.repr === "i32" ? expr : `(double)(${expr})`);
+    const bits = (expr: string) => (repr === "i32" ? expr : `(double)(${expr})`);
     switch (i.op) {
       case "num_add": return `${a} + ${b}`;
       case "num_sub": return `${a} - ${b}`;
@@ -673,6 +766,71 @@ class FunctionEmitter {
       ...(out ? [`        ${result}r;`] : ["        js_discard(r);"]),
       "    } }",
     );
+  }
+
+  /** An access of a typed array's view (the typed-arrays pass): the variant for its key's repr
+   *  (_l an int64_t, _i an int32_t, _d a double); a set with `strict`, of a double unboxed. A
+   *  double read (readsDouble) stores into `d`. */
+  private viewAccess(i: Instr, args: string[], strict?: string): string {
+    const key = i.operands[1]!;
+    const [suffix, k] = key.repr === "i64" ? ["_l", this.as(key, "i64")] : key.repr === "i32" ? ["_i", this.as(key, "i32")]
+      : key.repr === "f64" ? ["_d", this.as(key, "f64")] : ["", args[1]!];
+    const view = `&${this.name(i.operands[0]!)}_view`;
+    if (strict === undefined)
+      return readsDouble(i) ? `js_tav_num_f64${suffix}(ctx, ${view}, ${args[0]}, ${k}, &d)` : `js_tav_get_${i.taView}${suffix}(ctx, ${view}, ${args[0]}, ${k})`;
+    const value = i.operands[2]!;
+    return i.taView === "f64" && value.repr === "f64"
+      ? `js_tav_put_f64${suffix}(ctx, ${view}, ${args[0]}, ${k}, ${this.as(value, "f64")}, ${strict})`
+      : `js_tav_set_${i.taView}${suffix}(ctx, ${view}, ${args[0]}, ${k}, ${args[2]}, ${strict})`;
+  }
+
+  /** A double read of a Float64Array's view: false from the access is an exception. */
+  private readDouble(i: Instr, args: string[]) {
+    this.lines.push(`    { double d; if (JS_UNLIKELY(!${this.viewAccess(i, args)})) { ${this.onException(i.block)} }`,
+      this.hasVar(i) ? `    ${this.name(i)} = ${convert("d", "f64", i.repr)}; }` : "    }");
+  }
+
+  /** A call returning a JSValue: its exception checked, its result into i's variable. */
+  private boxedCall(i: Instr, call: string) {
+    const out = this.hasVar(i) ? this.name(i) : null;
+    this.lines.push(`    { JSValue r = ${call};`, `    if (JS_UNLIKELY(js_is_exception(r))) { ${this.onException(i.block)} }`, ...(out ? [`    ${out} = ${convert("r", "boxed", i.repr)}; }`] : ["    js_discard(r); }"]));
+  }
+
+  /** The typed arrays this function holds views of (the typed-arrays pass). */
+  private viewList: Instr[] | null = null;
+  private views(): Instr[] {
+    this.viewList ??= [...new Set([...this.fn.params, ...this.fn.blocks.flatMap((b) => b.instrs)])].filter((v) => v.taView && (v.op === "param" || v.op === "new"));
+    return this.viewList;
+  }
+
+  /** A call of a typed unit's export: its typed entry when the arguments are proven of the
+   *  declared types (as many as it declares); else, for arguments C can test (not typed arrays),
+   *  the typed entry when the tests pass; else its checked entry, called directly. */
+  private typedCall(i: Instr, tc: TypedCall, args: string[]) {
+    const operands = i.operands.slice(2);
+    const fits = typedCallFits(i);
+    if (!fits && (operands.length !== tc.params.length || tc.params.some((p) => p.type & T.Object))) {
+      this.genericCall(i, tc, args);
+      return;
+    }
+    this.hosts.typed.set(tc.direct, `${C_TYPE[tc.returnRepr]} ${tc.direct}(JSContext *${tc.params.map((p) => `, ${C_TYPE[p.repr]}`).join("")});  /* typed entry */`);
+    const tests = fits ? [] : operands.flatMap((o, k) => isSubtype(o.type & ~T.Empty, tc.params[k]!.type) ? [] : [`(${typeTest(tc.params[k]!.type, args[k + 2]!)})`]);
+    const call = `${tc.direct}(ctx${operands.map((o, k) => `, ${tests.length ? convert(args[k + 2]!, "boxed", tc.params[k]!.repr) : this.as(o, tc.params[k]!.repr)}`).join("")})`;
+    if (tests.length) this.lines.push(`    if (${tests.join(" && ")}) {`);
+    if (tc.returnRepr === "boxed") this.boxedCall(i, call);
+    else {
+      const out = this.hasVar(i) ? this.name(i) : null;
+      this.lines.push(`    { ${C_TYPE[tc.returnRepr]} r = ${call};`, `    if (JS_UNLIKELY(js_has_exception(ctx))) { ${this.onException(i.block)} }`, ...(out ? [`    ${out} = ${convert("r", tc.returnRepr, i.repr)}; }`] : ["    (void)r; }"]));
+    }
+    if (!tests.length) return;
+    this.lines.push("    } else {");
+    this.genericCall(i, tc, args);
+    this.lines.push("    }");
+  }
+
+  private genericCall(i: Instr, tc: TypedCall, args: string[]) {
+    this.hosts.used.add(tc.generic);
+    this.boxedCall(i, `${tc.generic}(ctx, JS_UNDEFINED, ${args[1]}, ${args.length - 2}, ${argArray(args.slice(2))}, JS_UNDEFINED)`);
   }
 
   /** The values this function calls, or checks as an inlined call's callee. */
@@ -863,12 +1021,22 @@ class FunctionEmitter {
         break;
       }
       case "get_elem":
+        if (readsDouble(i)) return this.readDouble(i, args);
+        if (i.taView) {
+          expr = this.viewAccess(i, args);
+          break;
+        }
         expr = i.keyedSite ? `js_get_keyed(ctx, ${args[0]}, ${args[1]}, ${this.keyedCache()})` : `js_get_elem(ctx, ${args[0]}, ${args[1]})`;
         break;
       case "get_index":  /* a double key: the variant that takes it unboxed */
-        expr = i.operands[1]!.repr === "f64"
-          ? `js_get_index_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`
-          : `js_get_index(ctx, ${args[0]}, ${args[1]})`;
+        if (readsDouble(i)) return this.readDouble(i, args);
+        if (i.taView) {
+          expr = this.viewAccess(i, args);
+          break;
+        }
+        expr = i.operands[1]!.repr === "f64" || i.operands[1]!.repr === "i64"
+          ? `js_get_index_ta_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`
+          : `js_get_index_ta(ctx, ${args[0]}, ${args[1]})`;
         break;
       case "set_prop":
         status = "name" in i.key!
@@ -876,14 +1044,22 @@ class FunctionEmitter {
           : `js_set_value(ctx, ${args[0]}, ${this.key(i)}, ${args[1]}, ${strict})`;
         break;
       case "set_elem":
+        if (i.taView) {
+          status = this.viewAccess(i, args, strict);
+          break;
+        }
         status = i.keyedSite
           ? `js_set_keyed(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict}, ${this.keyedCache()})`
           : `js_set_elem(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
         break;
       case "set_index":
-        status = i.operands[1]!.repr === "f64"
-          ? `js_set_index_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")}, ${args[2]}, ${strict})`
-          : `js_set_index(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
+        if (i.taView) {
+          status = this.viewAccess(i, args, strict);
+          break;
+        }
+        status = i.operands[1]!.repr === "f64" || i.operands[1]!.repr === "i64"
+          ? `js_set_index_ta_f64(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")}, ${args[2]}, ${strict})`
+          : `js_set_index_ta(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${strict})`;
         break;
       case "delete_prop":
         expr = `js_delete_value(ctx, ${args[0]}, ${this.key(i)}, ${strict})`;
@@ -992,6 +1168,10 @@ class FunctionEmitter {
         expr = `js_construct_spread(ctx, ${args[0]}, ${args[1]}, ${cString(i.target!)})`;
         break;
       case "call":
+        if (i.typedCall) {
+          this.typedCall(i, i.typedCall, args);
+          return;
+        }
         if (i.builtin) {
           expr = `js_call_${i.builtin}(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${cString(i.target!)})`;
           break;
@@ -1000,6 +1180,11 @@ class FunctionEmitter {
         break;
       case "new":
         expr = `js_construct(ctx, ${args[0]}, ${args.length - 1}, ${argArray(args.slice(1))}, JS_UNDEFINED, ${cString(i.target!)})`;
+        if (i.taView && this.hasVar(i)) {  /* a typed array only indexed: its elements, once */
+          this.lines.push(`    ${this.name(i)} = ${expr};`, `    if (JS_UNLIKELY(js_is_exception(${this.name(i)}))) { ${this.onException(i.block)} }`,
+            `    ${this.name(i)}_view = js_ta_view(ctx, ${this.name(i)}, ${TA_TYPE[i.taView]});`);
+          return;
+        }
         break;
       case "check_tdz":
         expr = `js_check_tdz(ctx, ${args[0]}, ${cString(i.name ?? "variable")})`;
@@ -1007,6 +1192,51 @@ class FunctionEmitter {
       case "construct_direct": {
         this.constructDirect(i, args);
         return;
+      }
+      case "math": {  /* typed code: Math's, as C's */
+        const f = { sqrt: "sqrt", abs: "fabs", floor: "floor", ceil: "ceil", trunc: "trunc" }[i.target!];
+        expr = convert(`${f}(${this.as(i.operands[0]!, "f64")})`, "f64", i.repr);
+        break;
+      }
+      case "int_div": case "int_mod": {  /* an int's: C's, a zero divisor a RangeError (BigInt's), INT64_MIN / -1 wrapping */
+        const [x, y] = i.operands.map((o) => this.as(o, "i64"));
+        if (i.mayThrow) this.lines.push(`    if (JS_UNLIKELY(${y} == 0)) { js_discard(js_throw_range_error(ctx, "Division by zero")); ${this.onException(i.block)} }`);
+        const v = i.op === "int_div" ? `(${y} == -1 ? (int64_t)(0 - (uint64_t)${x}) : ${x} / ${y})` : `(${y} == -1 ? INT64_C(0) : ${x} % ${y})`;
+        if (this.hasVar(i)) this.lines.push(`    ${this.name(i)} = ${convert(v, "i64", i.repr)};`);
+        return;
+      }
+      case "to_i32": {  /* an i32's ToInt32: wrapping */
+        const o = i.operands[0]!;
+        const from = reprOf(o.type);
+        const v = from === "i32" ? this.as(o, "i32") : from === "i64" ? `(int32_t)(uint32_t)${this.as(o, "i64")}` : from === "f64" ? `js_f64_to_int32(${this.as(o, "f64")})` : `(int32_t)(uint32_t)js_value_to_i64(${this.as(o, "boxed")})`;
+        expr = convert(v, "i32", i.repr);
+        break;
+      }
+      case "to_i64": {  /* the operand in the narrowest repr its type allows, then C's conversion */
+        const o = i.operands[0]!;
+        const from = reprOf(o.type);
+        expr = convert(convert(this.as(o, from), from, "i64"), "i64", i.repr);
+        break;
+      }
+      case "int_add": case "int_sub": case "int_mul": {  /* typed code's i32: C's arithmetic, wrapping */
+        const [x, y] = i.operands.map((o) => `(uint32_t)${this.as(o, "i32")}`);
+        expr = convert(`(int32_t)(${x} ${i.op === "int_add" ? "+" : i.op === "int_sub" ? "-" : "*"} ${y})`, "i32", i.repr);
+        break;
+      }
+      case "char_code_at":
+        expr = convert(`js_string_char_code_at(ctx, ${args[0]}, ${this.as(i.operands[1]!, "f64")})`, "f64", i.repr);
+        break;
+      case "identical":
+      case "strict_eq_atom":
+      case "strict_eq_num":
+      case "is_type": {
+        const test = i.op === "identical" ? `js_same_bits(${args[0]}, ${args[1]})`
+          : i.op === "strict_eq_num" ? `js_strict_eq_num(${this.v(i.operands[0]!)}, ${cDouble(i.operands[1]!.lit!.value as number)})`
+          : i.op === "strict_eq_atom" ? `js_strict_eq_atom(ctx, ${args[0]}, ${args[1]})`
+          : isTypeTest(i.target!, args[0]!);
+        const cond = i.index ? `!${test}` : test;
+        expr = i.repr === "bool" ? `(${cond})` : `js_bool(${cond})`;
+        break;
       }
       case "same_function": {
         const cond = `js_is_function(${args[0]}) && js_as_function(${args[0]})->info == &${infoName(i.target!, this.strings.prefix)} && js_as_function(${args[0]})->realm == ctx`;
@@ -1024,6 +1254,11 @@ class FunctionEmitter {
         break;
       case "call_direct": {
         const callee = this.callees.get(i.target!);
+        if (callee?.meta?.declared && !declaredCallFits(i, callee)) {  /* a typed function, arguments not proven its types: its checked entry */
+          const hidden = callee.meta.declared.findIndex((t) => t !== undefined);
+          this.boxedCall(i, `${this.strings.prefix}jsf_${ident(i.target!)}__generic(ctx, JS_UNDEFINED, JS_UNDEFINED, ${i.operands.length - hidden}, ${argArray(i.operands.slice(hidden).map((o) => this.as(o, "boxed")))}, JS_UNDEFINED)`);
+          return;
+        }
         const passed = i.operands.map((o, k) => this.as(o, callee?.params[k]?.repr ?? "boxed"));
         const call = `${this.strings.prefix}jsf_${ident(i.target!)}(ctx${passed.map((a) => `, ${a}`).join("")})`;
         const ret = callee?.returnRepr ?? "boxed";
@@ -1051,12 +1286,19 @@ class FunctionEmitter {
           expr = this.unboxed(i);
           break;
         }
+        /* a Number operator with a boxed result: on its operands unboxed, the result boxed once */
+        if (NUM_OPS.has(i.op)) {
+          const raw = BOOL_OPS.has(i.op) ? "bool" : reprOf(i.type);
+          expr = convert(this.unboxed(i, raw), raw, "boxed");
+          break;
+        }
         const [fn, withCtx] = CALLS[i.op]!;
         expr = `${fn}${i.numberFirst ? "_fast" : ""}(${[...(withCtx ? ["ctx"] : []), ...args].join(", ")})`;  /* _fast: Numbers inline */
       }
     }
     if (status !== null) {
       this.lines.push(`    if (JS_UNLIKELY(${status} < 0)) { ${this.onException(i.block)} }`);
+      this.retakeViews(i);
       return;
     }
     expr = expr!;
@@ -1069,6 +1311,15 @@ class FunctionEmitter {
       this.lines.push(`    js_discard(${expr});`);  /* take_exception clears the pending exception */
     }
     /* unused results of pure operations: nothing to emit */
+    this.retakeViews(i);
+  }
+
+  /** After an operation that may run code (a call, a getter, valueOf), a parameter's view again:
+   *  that code may have detached or resized its buffer. A view's own accesses take it again on
+   *  their slow paths. */
+  private retakeViews(i: Instr) {
+    if (!OPS[i.op].callsUser || !i.mayThrow || i.taView) return;  /* can't throw: simplify proved it runs no code */
+    for (const p of this.views()) if (p.op === "param") this.lines.push(`    ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${TA_TYPE[p.taView!]});`);
   }
 
   private terminator(b: Block) {
@@ -1171,8 +1422,12 @@ class FunctionEmitter {
     const locals: string[] = [];
     for (const b of fn.blocks)
       for (const i of [...b.phis, ...b.instrs])
-        if (this.hasVar(i)) locals.push(`    ${C_TYPE[i.repr]} ${this.name(i)} = ${C_ZERO[i.repr]};`);
+        if (this.hasVar(i)) {
+          locals.push(`    ${C_TYPE[i.repr]} ${this.name(i)} = ${C_ZERO[i.repr]};`);
+          if (i.op === "new" && i.taView) locals.push(`    JSTAView ${this.name(i)}_view = { NULL, 0 };`);
+        }
     const unusedParams = fn.params.filter((p) => !this.used.has(p)).map((p) => `    (void)${this.name(p)};`);
+    for (const p of this.views().filter((v) => v.op === "param")) locals.push(`    JSTAView ${this.name(p)}_view = js_ta_view(ctx, ${this.name(p)}, ${TA_TYPE[p.taView!]});`);
     /* non-leaf: anything that can run JS code again (calls, getters, valueOf) checks the stack */
     const calls = fn.blocks.some((b) => b.instrs.some((i) => OPS[i.op].callsUser));
     /* a body that only touches its environment never needs the context */
@@ -1190,7 +1445,7 @@ class FunctionEmitter {
   }
 
   private linkage(): string {
-    return this.shared ? "JS_MAYBE_UNUSED " : "static JS_MAYBE_UNUSED ";
+    return this.shared || this.fn.meta?.declared ? "JS_MAYBE_UNUSED " : "static JS_MAYBE_UNUSED ";  /* declared: a typed unit's, called from the program */
   }
 
   /** The entry's prototype: in program.h when it's shared, else in the function's own file. */
@@ -1327,7 +1582,7 @@ function prepare(m: ModuleIR, p: string, options: EmitOptions): Emission {
 }
 
 function genericPrototype(fn: FunctionIR, p: string): string {
-  return `static JSValue ${cFunctionName(fn, false, p)}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);`;
+  return `${fn.meta!.declared ? "" : "static "}JSValue ${cFunctionName(fn, false, p)}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);`;
 }
 
 /** The module's data, once every function is emitted: globals, literals, caches, tables.

@@ -226,6 +226,12 @@ struct JSRuntime {
     const JSBigIntOps *bigint;  /* set by the bigint component */
     /* A typed array's length now: -1 when out of bounds (detached), -2 for anything else. */
     double  (*typed_array_length)(JSValue v);
+    /* Set by typed arrays: obj[i] and obj[i] = d (a Number) of a typed array, inline, for an index
+     * in bounds and an element that is a Number (not a BigInt): true when done; false for
+     * anything else, which takes the generic path. */
+    bool    (*typed_array_get)(JSValue v, int32_t i, JSValue *out);
+    bool    (*typed_array_set)(JSValue v, int32_t i, double d);
+    const struct JSClass *typed_array_class;  /* set by typed arrays: js_buffer.h's inline element access tests it */
     /* Set by typed arrays: a typed array's or DataView's bytes (its current window), true; false
      * for anything else (an ArrayBuffer too: process.stdout.write takes views only). */
     bool    (*view_bytes)(JSValue v, uint8_t **data, size_t *length);
