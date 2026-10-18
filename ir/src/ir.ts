@@ -313,6 +313,10 @@ export interface FunctionMeta {
   arrow: boolean;
   /** The last parameter is a rest array: the generic entry collects argv beyond the others. */
   hasRest: boolean;
+  /** A "use visaljs" file's function: its parameters' declared types, trusted (as fn.params, the
+   *  hidden ones undefined). Typed callers were checked by tsc; every other call comes through
+   *  the generic entry, which checks them. */
+  declared?: (Type | undefined)[];
   /** The direct entry's hidden leading parameters: the environment it
    *  closes over, the function object (a named expression reading its own name),
    *  and `this` (only when used). */

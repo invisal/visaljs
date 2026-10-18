@@ -9,9 +9,9 @@
 //   the block's handler (after that edge's phi copies) or returns JS_EXCEPTION.
 // - #line directives map back to the JS source (gdb, error locations).
 import type { Loc } from "../frontend/ast.ts";
-import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr } from "@visaljs/ir";
+import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr, Type } from "@visaljs/ir";
 import type { HostPrimitives } from "../frontend/host.ts";
-import { isSubtype, OPS, successors, T } from "@visaljs/ir";
+import { isSubtype, Number_, OPS, successors, T, typeName } from "@visaljs/ir";
 import { liveAfterPauses } from "@visaljs/ir";
 import type { CoreEntry } from "./core.ts";
 import { ATOMS } from "./atoms.ts";
@@ -355,6 +355,21 @@ function instanceSlots(fn: FunctionIR): number {
   return keys.size ? Math.min(keys.size, 16) : 4;
 }
 
+/** A C test that `v` (evaluated more than once) has one of the kinds in `t`. */
+function typeTest(t: Type, v: string): string {
+  const tests: string[] = [];
+  if (t & T.Undefined) tests.push(`js_is_undefined(${v})`);
+  if (t & T.Null) tests.push(`js_is_null(${v})`);
+  if (t & T.Boolean) tests.push(`js_is_bool(${v})`);
+  if ((t & Number_) === Number_) tests.push(`js_is_number(${v})`);
+  else if (t & T.Int32) tests.push(`js_is_int32(${v})`);
+  if (t & T.String) tests.push(`js_is_string(${v})`);
+  if (t & T.Symbol) tests.push(`js_is_symbol(${v})`);
+  if (t & T.BigInt) tests.push(`js_is_bigint(${v})`);
+  if (t & T.Object) tests.push(`js_is_object(${v})`);
+  return tests.length ? tests.join(" || ") : "false";
+}
+
 /** The generic entry: unpacks argv into the direct entry's parameters. */
 function genericEntry(fn: FunctionIR, prefix: string): string {
   const meta = fn.meta!;
@@ -379,9 +394,17 @@ function genericEntry(fn: FunctionIR, prefix: string): string {
   );
   const call = `${direct}(${["ctx", ...args.map((a, k) => convert(a, "boxed", fn.params[k]!.repr))].join(", ")})`;
   const ret = fn.returnRepr ?? "boxed";
+  /* a "use visaljs" function: untyped callers' arguments checked against the declared types */
+  const hidden = fn.params.length - declared - Number(meta.hasRest);
+  const checks = (meta.declared ?? []).flatMap((t, k) => {
+    if (t === undefined) return [];
+    const v = `argc > ${k - hidden} ? argv[${k - hidden}] : JS_UNDEFINED`;
+    return [`    if (!(${typeTest(t, `(${v})`)})) return js_throw_type_error(ctx, ${cString(`${meta.jsName}: argument ${k - hidden + 1} must be ${typeName(t)}`)});`];
+  });
   return [
-    `static JSValue ${direct}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {`,
+    `${meta.declared ? "" : "static "}JSValue ${direct}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {`,
     ...(unused.length ? [`    ${unused.map((u) => `(void)${u};`).join(" ")}`] : []),
+    ...checks,
     ...(ret === "boxed"
       ? [`    return ${call};`]
       : [`    ${C_TYPE[ret]} r = ${call};`, `    return js_has_exception(ctx) ? JS_EXCEPTION : ${convert("r", ret, "boxed")};`]),
@@ -1327,7 +1350,7 @@ function prepare(m: ModuleIR, p: string, options: EmitOptions): Emission {
 }
 
 function genericPrototype(fn: FunctionIR, p: string): string {
-  return `static JSValue ${cFunctionName(fn, false, p)}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);`;
+  return `${fn.meta!.declared ? "" : "static "}JSValue ${cFunctionName(fn, false, p)}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);`;
 }
 
 /** The module's data, once every function is emitted: globals, literals, caches, tables.

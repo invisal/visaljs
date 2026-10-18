@@ -17,6 +17,7 @@ import { compileJobs, compileProgram, describeCompiler, findCompilers, gcCheckFl
 import { evalCalls, evalWarning } from "./eval.ts";
 import { licensesText } from "./licenses.ts";
 import { DEFAULT_HOSTS, hostPrimitives } from "./hosts.ts";
+import { buildTypedUnit, TYPED_PREFIX, typedImports, type TypedUnit } from "./typed.ts";
 import { EntryError } from "./integrations/project.ts";
 import { IntegrationError } from "./pipeline/errors.ts";
 import { type Pipeline, runPipeline } from "./pipeline/index.ts";
@@ -164,7 +165,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   const report = new Report(io.stderr, style);
   const binary = !dump && !options["emit-c"];
   const hosts = DEFAULT_HOSTS;
-  const primitives = hostPrimitives(hosts);
+  let primitives = hostPrimitives(hosts);
   /* a production build, as bundlers make for a server (--node-env= leaves it to the environment) */
   const nodeEnv = options["node-env"] === "" ? undefined : options["node-env"] ?? "production";
 
@@ -209,15 +210,24 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   const script = options.script === true;
   const bundled = !script && options["no-bundle"] !== true;
   let map: string | undefined;
+  const typedFiles = new Set<string>();  /* PROTOTYPE: "use visaljs" files, compiled as their own unit */
+  let typed: TypedUnit | undefined;
   if (bundled) {
     try {
       const b = await report.step("📦", "Rolling the modules into a single file", () => bundle(entry, hosts, (message, where) => report.warn(message, where),
-        { ...pipeline?.extras, nodeEnv, allFeatures: options["all-features"] === true }),
+        { ...pipeline?.extras, nodeEnv, allFeatures: options["all-features"] === true, plugins: [...(pipeline?.extras.plugins ?? []), typedImports(typedFiles)] }),
         (b) => `Rolled ${count(b.modules, "module")} into a single file (${size(Buffer.byteLength(b.code))})` +
           (b.required.length ? `; for a require() at run time: ${b.required.join(", ")}` : ""));
       source = b.code;
       /* a program with no side effects bundles to nothing, and rolldown gives no map */
       if (b.map) map = b.map;
+      if (typedFiles.size) {
+        const files = [...typedFiles];
+        typed = await report.step("🧷", "Compiling the typed files", () => buildTypedUnit(files, primitives),
+          (u) => [`Compiled ${count(files.length, "typed file")}: ${count(Object.keys(u.exports).length, "export")}`,
+            ...formatReport(u.report).map((line) => `      • ${line}`)].join("\n"));
+        primitives = { ...primitives, ...typed.exports };
+      }
     } catch (e) {
       if (!(e instanceof BundleError)) throw e;
       io.stderr(`${e.message}\n`);
@@ -241,7 +251,8 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   }
   const dir = emitDir ?? (binary ? scratchDir() : "");
   try {
-    const c = await compileInWorker({ source, entry, map, options, primitives, compilers, dir, emitDir }, report);
+    const typedLink = typed ? { atoms: [...typed.atoms], prefix: TYPED_PREFIX, names: typed.names } : undefined;
+    const c = await compileInWorker({ source, entry, map, options, primitives, compilers, dir, emitDir, typed: typedLink }, report);
     if ("compileError" in c) {
       io.stderr(`${c.compileError}\n`);
       return 1;
@@ -255,10 +266,15 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
 
     if (emitDir) {
       if (bundled) writeFileSync(join(emitDir, "bundle.js"), source);  /* what was compiled */
+      if (typed) writeFileSync(join(emitDir, "typed.c"), typed.c);
       report.finish("📂", (time) => `Wrote ${written.length > 1 ? `${written.length} files to ${displayPath(resolve(emitDir))}` : displayPath(resolve(emitDir, "program.c"))} in ${time}`);
       return 0;
     }
     const cFiles = written.filter((name) => name.endsWith(".c")).map((name) => join(dir, name));
+    if (typed) {
+      writeFileSync(join(dir, "typed.c"), typed.c);
+      cFiles.push(join(dir, "typed.c"));
+    }
     const opt = [...(options.debug ? ["-O0"] : ["-O2"]), ...gcCheckFlags()];
     const strip = !options.debug && !options.symbols;
     /* measured now, with the compiler's worker and its heap gone */
@@ -306,6 +322,7 @@ interface CompileJob {
   compilers: string[] | undefined;
   dir: string;  // where the C files go
   emitDir: string | undefined;  // --emit-c's, made when the first file goes there
+  typed: { atoms: [string, string][]; prefix: string; names: string[] } | undefined;  // PROTOTYPE: the typed unit the program links to
 }
 
 type CompileResult = { result: string[] | string; compilers: string[] | undefined } | { compileError: string };
@@ -370,7 +387,7 @@ async function runCompileJob(job: CompileJob) {
   let compilers = job.compilers;
   try {
     const map = job.map === undefined ? undefined : new SourceMap(job.map, displayPath);
-    const result = await compileToC(job.source, job.entry, map, job.options, reporter, job.primitives, () => (compilers ??= findCompilers()), (f) => {
+    const result = await compileToC(job.source, job.entry, map, job.options, reporter, job.primitives, () => (compilers ??= findCompilers()), job.typed, (f) => {
       if (job.emitDir) mkdirSync(job.emitDir, { recursive: true });
       writeFileSync(join(job.dir, f.name), f.text);
     });
@@ -386,10 +403,11 @@ if (!isMainThread && (workerData as Record<string, unknown> | null)?.[WORKER]) a
 /** The program's C files' names, or the text --dump-ast or --dump-ir prints. Its own function, as
  *  is toIR, so the syntax tree and then the IR become garbage: a large program's take gigabytes. */
 async function compileToC(source: string, entry: string, map: SourceMap | undefined, options: BuildOptions, report: Reporter,
-  primitives: HostPrimitives, compilers: () => string[], write: (file: CFile) => void): Promise<string[] | string> {
+  primitives: HostPrimitives, compilers: () => string[], typed: CompileJob["typed"], write: (file: CFile) => void): Promise<string[] | string> {
   const program = await toIR(source, entry, map, options, report, primitives, compilers);
   if (typeof program === "string") return program;
-  const { ir, names, regexps } = program;
+  const { ir, regexps } = program;
+  const names = new Set([...program.names, ...(typed?.names ?? [])]);  /* the typed unit's built-ins too */
   const all = options["all-builtins"] === true;
   const emitted = await report.step("📝", "Emitting C code", () => {
     const files = emitProgramFiles(ir, {
@@ -398,6 +416,7 @@ async function compileToC(source: string, entry: string, map: SourceMap | undefi
       core: all ? undefined : namedCore(names),
       regexps,
       hostPrimitives: primitives,
+      ...(typed ? { harness: { atoms: new Map(typed.atoms), register: `${typed.prefix}register`, scripts: [typed.prefix] } } : {}),
       partSize: Number(process.env.VISALJS_PART_SIZE) || PART_SIZE,  /* another: tests that split small programs */
     });
     /* each file written as it comes: only its name and size are kept */

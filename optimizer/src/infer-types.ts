@@ -42,7 +42,8 @@ function inferModule(m: ModuleIR): Set<FunctionIR> {
   const sig: Signatures = { params: new Map(), returns: new Map() };
   for (const fn of m.functions) {
     if (!pauses(fn)) sig.returns.set(fn.name, T.None);
-    for (const p of fn.params) sig.params.set(p, closed.has(fn) ? T.None : Unknown & ~T.Empty);
+    const declared = fn.meta?.declared;
+    fn.params.forEach((p, k) => sig.params.set(p, declared?.[k] ?? (closed.has(fn) ? T.None : Unknown & ~T.Empty)));
   }
   const byName = new Map(m.functions.map((fn) => [fn.name, fn]));
   const callerMap = callers(m);
@@ -64,7 +65,7 @@ function inferModule(m: ModuleIR): Set<FunctionIR> {
     for (const b of fn.blocks)
       for (const i of b.instrs) {
         const callee = i.op === "call_direct" ? byName.get(i.target!) : undefined;
-        if (!callee || !closed.has(callee)) continue;
+        if (!callee || !closed.has(callee) || callee.meta?.declared) continue;  /* declared: as declared */
         callee.params.forEach((p, k) => {
           const old = sig.params.get(p)!;
           const next = old | (i.operands[k]!.type & ~T.Empty);

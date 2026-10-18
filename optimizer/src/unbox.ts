@@ -75,8 +75,8 @@ function unboxModule(m: ModuleIR) {
   const byName = new Map(m.functions.map((fn) => [fn.name, fn]));
   const fns = functionsOf(m).filter((fn) => !pauses(fn));
 
-  /* return values: a closed function's, when every return is one kind */
-  for (const fn of closed) {
+  /* return values: a closed or declared function's, when every return is one kind */
+  for (const fn of m.functions.filter((fn) => closed.has(fn) || (fn.meta?.declared && !pauses(fn)))) {
     const returns = fn.blocks.flatMap((b) => (b.term?.kind === "return" ? [b.term.value] : []));
     const repr = unboxedRepr(returns.reduce<Type>((u, v) => u | v.type, T.None));
     if (repr) fn.returnRepr = repr;
@@ -100,7 +100,8 @@ function unboxModule(m: ModuleIR) {
       if (t?.kind === "branch") use(t.cond, { user: null, block: b, index: 0 });
       if (t?.kind === "return" || t?.kind === "throw") use(t.value, { user: null, block: b, index: t.kind === "return" ? 1 : 0 });
     }
-    const params = closed.has(fn) ? fn.params : [];
+    const declared = fn.meta?.declared;
+    const params = closed.has(fn) ? fn.params : declared ? fn.params.filter((_, k) => declared[k] !== undefined) : [];
     for (const v of [...params, ...fn.blocks.flatMap((b) => b.phis)]) {
       const repr = unboxedRepr(v.type);
       if (repr === "bool") v.repr = "bool";
