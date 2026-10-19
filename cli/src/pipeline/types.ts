@@ -71,7 +71,7 @@ export interface Hooks<S> {
 
   /** 4. Last, once the binary is built: what the report says about it (`ctx.note`), such as how
    *  to run it, or a feature it lacks under visaljs. Not run when the build stops before a binary
-   *  (--emit-c, --dump-ir) or fails. */
+   *  (--emit) or fails. */
   done?(ctx: DoneContext, state: S): void;
 }
 

@@ -1,4 +1,4 @@
-// The IR text dump: `--dump-ir` and golden tests. Deterministic:
+// The IR text dump: `--emit ir` and golden tests. Deterministic:
 // values are numbered in print order, and named after their JS variable when
 // they have one (%s0, %s1, …).
 import { OPS, type Block, type FunctionIR, type Instr, type ModuleIR, type Terminator } from "./ir.ts";

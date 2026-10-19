@@ -99,7 +99,7 @@ describe.runIf(FIRST)("programs split into C files", () => {
 
   it("emits program.h, program.c and the functions' files", async () => {
     const dir = join(OUT, "split-c");
-    const code = await split(() => main(["build", join(DIR, "closures.js"), "--emit-c", dir], { stdout: () => {}, stderr: () => {} }));
+    const code = await split(() => main(["build", join(DIR, "closures.js"), "--emit", "c", "-o", dir], { stdout: () => {}, stderr: () => {} }));
     expect(code).toBe(0);
     const files = readdirSync(dir);
     expect(files).toEqual(expect.arrayContaining(["program.h", "program.c", "program_1.c", "program_2.c"]));
@@ -306,7 +306,7 @@ describe.runIf(FIRST)("generated C", () => {
     for (const file of readdirSync(golden).filter((f) => f.endsWith(".js"))) {
       const out = join(OUT, `c-${file}`);
       let stderr = "";
-      const code = await main(["build", join(golden, file), "--emit-c", out], { stdout: () => {}, stderr: (t) => (stderr += t) });
+      const code = await main(["build", join(golden, file), "--emit", "c", "-o", out], { stdout: () => {}, stderr: (t) => (stderr += t) });
       expect(stderr, file).toBe("");
       expect(code, file).toBe(0);
       /* to an object, not -fsyntax-only: Zig on Windows fails on that */

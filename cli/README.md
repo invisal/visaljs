@@ -75,10 +75,7 @@ TypeScript (.ts, .mts, .cts, .tsx) is compiled too: its types are stripped, not 
 for that), with the nearest tsconfig.json's settings (paths, decorators).
 
 options:
-  -o <file>          output binary
-  --emit-c <dir>     stop after C emission
-  --dump-ast         print the syntax tree and stop
-  --dump-ir          print the IR and stop
+  -o <file>          output binary (with --emit: what to write)
   --debug            build without optimization (-O0), keeping symbols and debug info
   --symbols          keep symbols and debug info in the optimized build (for profilers such as perf)
   --no-optimize      skip the IR optimizer (to compare, or to rule it out)
@@ -96,6 +93,17 @@ options:
   --verbose          list each place a warning is about
   --version          print the version
   --help             print this help
+
+inspecting the build:
+  --emit <stage>     stop after a stage and write what it made:
+                       bundle  the bundle (tree-shaken) and the "use static" files to the directory
+                               -o names, and how much of the bundle each module and package is
+                       ast     the syntax tree, to stdout or the file -o names
+                       ir      the optimized IR, to stdout or the file -o names
+                       c       the C files, to the directory -o names
+  --report <kind>    build the binary, then report on it (repeatable):
+                       size    where its bytes come from: each module, package, Node built-in and
+                               runtime library (macOS for now; --verbose lists every file)
 ```
 
 ## Licenses

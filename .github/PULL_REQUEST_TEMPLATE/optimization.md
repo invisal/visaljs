@@ -32,7 +32,7 @@ has to be measured.
 
 ```
 
-<!-- The IR before and after too, for an optimizer pass (`--dump-ir`, `--no-optimize`). -->
+<!-- The IR before and after too, for an optimizer pass (`--emit ir`, `--no-optimize`). -->
 
 ## Correctness
 
