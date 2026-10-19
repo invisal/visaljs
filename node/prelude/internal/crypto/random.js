@@ -111,6 +111,30 @@ export function randomInt(min, max, callback) {
   }
 }
 
+let hexBytes = null;
+
+/* Node's getUnbufferedUUIDv7: 48 bits of Date.now(), then version 7, the variant and random bits */
+export function randomUUIDv7(options) {
+  if (options !== undefined) validateObject(options, "options");
+  const { disableEntropyCache = false } = options || {};
+  validateBoolean(disableEntropyCache, "options.disableEntropyCache");
+  const b = randomFillSync(new Uint8Array(16), 6);
+  const now = Date.now();
+  const msb = now / 2 ** 32;
+  b[0] = msb >>> 8;
+  b[1] = msb;
+  b[2] = now >>> 24;
+  b[3] = now >>> 16;
+  b[4] = now >>> 8;
+  b[5] = now;
+  b[6] = (b[6] & 0x0f) | 0x70;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  hexBytes ??= Array.from({ length: 256 }, (_, i) => (i < 16 ? "0" : "") + i.toString(16));
+  let out = "";
+  for (let i = 0; i < 16; i++) out += (i === 4 || i === 6 || i === 8 || i === 10 ? "-" : "") + hexBytes[b[i]];
+  return out;
+}
+
 export function randomUUID(options) {
   if (options !== undefined) validateObject(options, "options");
   const { disableEntropyCache = false } = options || {};

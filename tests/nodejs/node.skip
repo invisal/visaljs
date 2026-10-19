@@ -170,3 +170,6 @@ test-process-redirect-warnings-env.js    process.execPath as Node
 # Node's internals and command line: its bindings, and the options a Node takes
 test-process-binding-util.js             process.binding
 test-process-env-allowed-flags.js        process.allowedNodeEnvironmentFlags (Node's options)
+
+# require() of a path built at run time: a compiled program has only the modules its bundle has
+test-crypto-authenticated.js             require(fixtures.path('aead-vectors.js'))
