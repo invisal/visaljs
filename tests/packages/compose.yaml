@@ -1,0 +1,36 @@
+# The servers the packages talk to: `docker compose up -d --wait` (or one: `… --wait redis`), then
+# `docker compose down -v`. Not the apps' ports (tests/apps), so both can run at once.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: pg_isready -U app
+      interval: 2s
+      retries: 30
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app
+      MYSQL_DATABASE: app
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    ports:
+      - "53306:3306"
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1
+      interval: 2s
+      retries: 60
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "56379:6379"
+    healthcheck:
+      test: redis-cli ping
+      interval: 2s
+      retries: 30

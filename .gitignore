@@ -24,4 +24,8 @@ tests/apps/nextjs/next-env.d.ts
 tests/apps/*/*.exe
 tests/apps/*/*.lib
 tests/apps/typescript/sample/dist/
+
+# binaries built from the package tests
+tests/packages/*/test
+tests/packages/*/*.exe
 node_trace.*.log

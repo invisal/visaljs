@@ -1,0 +1,15 @@
+{
+  "name": "@visaljs-packages/mysql2",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A smoke test of mysql2, compiled by visaljs",
+  "type": "module",
+  "main": "test.js",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build test.js -o test",
+    "start": "node test.js"
+  },
+  "dependencies": {
+    "mysql2": "3.24.6"
+  }
+}

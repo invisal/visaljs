@@ -14,8 +14,8 @@ export default tseslint.config(
     },
   },
   {
-    /* the apps are Node programs (they run under node too) */
-    files: ["tests/apps/**/*.js"],
+    /* the apps and package tests are Node programs (they run under node too) */
+    files: ["tests/apps/**/*.js", "tests/packages/**/*.js"],
     languageOptions: { globals: { console: "readonly", process: "readonly", TextEncoder: "readonly", ReadableStream: "readonly", Request: "readonly", Response: "readonly", URL: "readonly" } },
   },
   {

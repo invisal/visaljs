@@ -1,5 +1,6 @@
 # Nightly, on main: what is too slow to run on every pull request commit (ci.yml): the program
-# tests under GC stress, every app (the full tier of tests/apps/check.ts), and the benchmarks
+# tests under GC stress, every app (the full tier of tests/apps/check.ts), the npm packages
+# (tests/packages/check.ts), and the benchmarks
 # (servers, kernels, GC). Skipped when main has no
 # commit since the last night; run it by hand from the Actions tab (workflow_dispatch) to check a
 # branch.
@@ -148,7 +149,7 @@ jobs:
     # (a run by hand on another branch publishes nothing); a job that failed uploads nothing, and its
     # files keep the last night's numbers. Creates the branch when it's missing.
     name: Publish the numbers
-    needs: [changes, bench, kernels, gc-bench]
+    needs: [changes, bench, kernels, gc-bench, packages-report]
     if: always() && needs.changes.outputs.run == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -239,3 +240,62 @@ jobs:
         env:
           VISALJS_POSTGRES_URL: postgres://app:app@localhost:5432/app
           VISALJS_MYSQL_URL: mysql://app:app@127.0.0.1:3306/app
+
+  packages-list:
+    name: List the packages
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.list.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - id: list
+        run: echo "matrix=$(node tests/packages/check.ts --list)" >> "$GITHUB_OUTPUT"
+
+  packages:
+    # Popular npm packages (tests/packages/check.ts), one job each, as they're slow to build: each
+    # compiled, its size and build time recorded, and its test run against Node's with its server
+    # from tests/packages/compose.yaml. Each job's report merges into packages.json
+    # (packages-report). Locally: node tests/packages/check.ts
+    name: Package ${{ matrix.name }}
+    needs: packages-list
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.packages-list.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: docker compose -f tests/packages/compose.yaml up -d --wait ${{ matrix.service }}
+      - run: node tests/packages/check.ts --require-services --json=packages-${{ matrix.name }}.json ${{ matrix.name }}
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: package-${{ matrix.name }}
+          path: packages-${{ matrix.name }}.json
+          if-no-files-found: ignore
+
+  packages-report:
+    # The packages' reports as one packages.json, for gh-pages (the publish job). Runs when a
+    # package failed too: its entry says so.
+    name: Package report
+    needs: packages
+    if: always() && needs.packages.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: package-*
+          path: reports
+          merge-multiple: true
+      - run: |
+          jq -s '.[0] + {packages: (map(.packages) | add | sort_by(.name))}' reports/*.json > packages.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-json
+          path: packages.json
