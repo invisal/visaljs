@@ -32,8 +32,8 @@ C emission. Reviewers judge it by the C it produces, so show that C.
 
 ```
 
-<!-- The IR too, when it changed (`visaljs build --dump-ir`). The C comes from
-     `visaljs build --emit-c <dir>`; trim it to the lines that matter. -->
+<!-- The IR too, when it changed (`visaljs build --emit ir`). The C comes from
+     `visaljs build --emit c -o <dir>`; trim it to the lines that matter. -->
 
 ## Semantics
 

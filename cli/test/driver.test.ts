@@ -72,7 +72,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "@acme/api", main: "index.js", scripts: { start: "NODE_ENV=production node -r dotenv/config server.js --port 80" } }));
     writeFileSync(join(dir, "server.js"), "print(1);\n");
     const plain = { report: { live: false, color: false } };
-    const r = await runWith(plain, "build", dir, "--emit-c", join(dir, "c"));
+    const r = await runWith(plain, "build", dir, "--emit", "c", "-o", join(dir, "c"));
     expect(r.code).toBe(0);
     expect(r.stderr.split("\n").slice(0, 2)).toEqual([
       ' 📄 Entry: server.js (package.json "scripts.start")',
@@ -87,7 +87,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     writeFileSync(join(dir, "a.ts"), '"use static";\nexport function f(n: number): number {\n  return n;\n}\n');
     writeFileSync(join(dir, "b.ts"), '"use static";\nexport function g(n: number): number {\n  return n;\n}\n');
     writeFileSync(join(dir, "main.js"), 'import { g } from "./a.ts";\nprint(g(1));\n');
-    const r = await run("build", join(dir, "main.js"), "--emit-c", join(dir, "c"));
+    const r = await run("build", join(dir, "main.js"), "--emit", "c", "-o", join(dir, "c"));
     expect(r).toMatchObject({ code: 1, stderr: expect.stringContaining('"g" is not exported by "a.ts?static"') });
   });
 
@@ -104,21 +104,65 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     const dir = tempDir();
     const file = join(dir, "a.js");
     writeFileSync(file, "let x = 1 + 2;\n");
-    const r = await run("build", file, "--script", "--dump-ast");
+    const r = await run("build", file, "--script", "--emit", "ast");
     expect(r.code).toBe(0);
     expect(JSON.parse(r.stdout)).toMatchObject({ type: "Program", body: [{ type: "VariableDeclaration", kind: "let" }] });
+  });
+
+  it("writes the tree-shaken bundle, its static files beside it, and its size by module", async () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, "app.js"), 'import { add } from "./math.js";\nimport { twice } from "./fast.ts";\nprint(add(1, twice(2)));\n');
+    writeFileSync(join(dir, "math.js"), "export function add(a, b) { return a + b; }\nexport function unused() {}\n");
+    writeFileSync(join(dir, "fast.ts"), '"use static";\nexport function twice(x: number): number { return x * 2; }\n');
+    const out = join(dir, "bundle");
+    const r = await run("build", join(dir, "app.js"), "--emit", "bundle", "-o", out, "-q");
+    expect(r).toMatchObject({ code: 0, stderr: "" });
+    const bundle = readFileSync(join(out, "bundle.js"), "utf8");
+    expect(bundle).toContain("function add(a, b)");
+    expect(bundle).not.toContain("unused");
+    expect(bundle).not.toContain("x * 2");  /* compiled apart: the bundle has its stub */
+    expect(readFileSync(join(out, "static", "fast.ts"), "utf8")).toContain("x * 2");
+    expect(r.stdout).toMatch(/Your code[\s\S]*math\.js[\s\S]*"use static" files[\s\S]*fast\.ts/);
+  });
+
+  it("writes the IR to the file -o names, and takes the flags --emit replaced", async () => {
+    const dir = tempDir();
+    const file = join(dir, "a.js");
+    writeFileSync(file, "print(1 + 2);\n");
+    expect(await run("build", file, "--emit", "ir", "-o", join(dir, "a.ir"), "-q")).toEqual({ code: 0, stdout: "", stderr: "" });
+    const ir = readFileSync(join(dir, "a.ir"), "utf8");
+    expect((await run("build", file, "--dump-ir")).stdout).toBe(ir);
+    expect(JSON.parse((await run("build", file, "--dump-ast")).stdout)).toMatchObject({ type: "Program" });
+    expect(await run("build", file, "--emit-c", join(dir, "c"), "-q")).toEqual({ code: 0, stdout: "", stderr: "" });
+    expect(existsSync(join(dir, "c", "program.c"))).toBe(true);
+  });
+
+  it("says what's wrong with --emit and --report", async () => {
+    const file = join(tempDir(), "a.js");
+    writeFileSync(file, "print(1);\n");
+    const error = async (...flags: string[]) => {
+      const r = await run("build", file, ...flags);
+      expect(r.code).toBe(2);
+      return r.stderr;
+    };
+    expect(await error("--emit", "asm")).toBe("visaljs: --emit takes bundle, ast, ir, c, not 'asm'\n");
+    expect(await error("--emit", "c")).toBe("visaljs: --emit c writes files: give their directory with -o\n");
+    expect(await error("--emit", "ir", "--dump-ast")).toBe("visaljs: --emit takes one stage: the build stops after it\n");
+    expect(await error("--report", "speed")).toBe("visaljs: --report takes size, not 'speed'\n");
+    if (process.platform === "darwin") expect(await error("--report", "size", "--emit", "ir")).toBe("visaljs: --report reports on the binary: not with --emit ir, which stops before it\n");
+    expect(await error("--emit", "bundle", "-o", "out", "--no-bundle")).toBe("visaljs: --emit bundle writes the bundle: not with --no-bundle\n");
   });
 
   it("reports compile errors with their location", async () => {
     const dir = tempDir();
     const file = join(dir, "bad.js");
     writeFileSync(file, "let ok = 1;\nlet x = ;\n");
-    const r = await run("build", file, "--script", "--dump-ast");
+    const r = await run("build", file, "--script", "--emit", "ast");
     expect(r.code).toBe(1);
     expect(r.stderr).toBe(`${file}:2:9: SyntaxError: Expression expected.\n`);
     expect((await run("build", join(dir, "missing.js"))).stderr).toMatch(/cannot read/);
     /* bundled (the default): the bundler parses first and reports the same location */
-    expect(await run("build", file, "--dump-ast")).toMatchObject({ code: 1, stderr: `${file}:2:9: SyntaxError: Unexpected token\n` });
+    expect(await run("build", file, "--emit", "ast")).toMatchObject({ code: 1, stderr: `${file}:2:9: SyntaxError: Unexpected token\n` });
   });
 
   it("bundles a multi-file program into one module", async () => {
@@ -126,7 +170,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     writeFileSync(join(dir, "app.js"), 'import { add } from "./math.js";\nprint(add(1, 2));\n');
     writeFileSync(join(dir, "math.js"), "export function add(a, b) { return a + b; }\nexport function unused() {}\n");
     const out = join(dir, "c");
-    expect(await run("build", join(dir, "app.js"), "--emit-c", out)).toEqual({ code: 0, stdout: "", stderr: "" });
+    expect(await run("build", join(dir, "app.js"), "--emit", "c", "-o", out)).toEqual({ code: 0, stdout: "", stderr: "" });
     const bundle = readFileSync(join(out, "bundle.js"), "utf8");
     expect(bundle).toContain("function add(a, b)");
     expect(bundle).not.toContain("unused");  /* tree-shaken */
@@ -140,7 +184,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     writeFileSync(join(dir, "lib", "math.ts"), "export enum Op { Add = 1 }\nexport function add(a: number, b: number): number { return a + b; }\n");
     writeFileSync(join(dir, "app.ts"), 'import { add, Op, type Unused } from "@lib/math";\nconst n: number = add(1, 2) satisfies number;\nprint(n, Op.Add);\n');
     const out = join(dir, "c");
-    expect(await run("build", join(dir, "app.ts"), "--emit-c", out)).toEqual({ code: 0, stdout: "", stderr: "" });
+    expect(await run("build", join(dir, "app.ts"), "--emit", "c", "-o", out)).toEqual({ code: 0, stdout: "", stderr: "" });
     const bundle = readFileSync(join(out, "bundle.js"), "utf8");
     expect(bundle).toContain("function add(a, b)");
     expect(bundle).not.toContain(": number");
@@ -155,7 +199,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     writeFileSync(join(dir, "app.js"), 'import { add } from "./math.js";\nprint(add(1, 2), /a+/.test("aa"));\n');
     writeFileSync(join(dir, "math.js"), "export function add(a, b) { return a + b; }\n");
     const plain = { report: { live: false, color: false } };
-    const r = await runWith(plain, "build", join(dir, "app.js"), "--emit-c", join(dir, "c"));
+    const r = await runWith(plain, "build", join(dir, "app.js"), "--emit", "c", "-o", join(dir, "c"));
     expect(r.code).toBe(0);
     const all = r.stderr.replace(/\d+(\.\d+)?m?s\b/g, "T").split("\n");
     /* under the IR step, what each optimizer pass did */
@@ -172,16 +216,16 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     ]);
     expect(lines.at(-2)).toMatch(/^ 📂 Wrote .*program\.c in T$/);
     expect(r.stderr).not.toContain("\x1b");  /* no color, no redraws */
-    expect(await runWith(plain, "build", join(dir, "app.js"), "--emit-c", join(dir, "c"), "-q")).toEqual({ code: 0, stdout: "", stderr: "" });
+    expect(await runWith(plain, "build", join(dir, "app.js"), "--emit", "c", "-o", join(dir, "c"), "-q")).toEqual({ code: 0, stdout: "", stderr: "" });
     /* a dump's output is the point: no report around it */
-    expect((await runWith(plain, "build", join(dir, "app.js"), "--dump-ir")).stderr).toBe("");
+    expect((await runWith(plain, "build", join(dir, "app.js"), "--emit", "ir")).stderr).toBe("");
   });
 
   it("reports imports the bundler cannot resolve", async () => {
     const dir = tempDir();
     const file = join(dir, "app.js");
     writeFileSync(file, 'import { x } from "./nowhere.js";\nprint(x);\n');
-    expect(await run("build", file, "--dump-ast")).toMatchObject({ code: 1, stderr: `${file}:1:19: error: Could not resolve './nowhere.js' in app.js\n` });
+    expect(await run("build", file, "--emit", "ast")).toMatchObject({ code: 1, stderr: `${file}:1:19: error: Could not resolve './nowhere.js' in app.js\n` });
   });
 
   it("resolves node:fs and node:path to the host prelude, and rejects other host modules", async () => {
@@ -189,7 +233,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     const ok = join(dir, "ok.js");
     writeFileSync(ok, 'import { join } from "node:path";\nimport fs from "fs";\nprint(join("a", "b") + fs.existsSync("x"));\n');
     const out = join(dir, "c");
-    expect(await run("build", ok, "--emit-c", out)).toEqual({ code: 0, stdout: "", stderr: "" });
+    expect(await run("build", ok, "--emit", "c", "-o", out)).toEqual({ code: 0, stdout: "", stderr: "" });
     const bundle = readFileSync(join(out, "bundle.js"), "utf8");
     expect(bundle).toContain('from "visaljs:host"');
     expect(bundle).toMatch(/\/\/#region .*node\/prelude\//);  /* the prelude, bundled (an absolute path when tmpdir is on another drive) */
@@ -218,7 +262,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     writeFileSync(join(dir, "app.js"), 'import lib from "lib";\nprint(lib);\n');
     const bundled = async (...flags: string[]) => {
       const out = join(dir, `c${flags.join("")}`);
-      expect(await run("build", join(dir, "app.js"), "--emit-c", out, ...flags)).toEqual({ code: 0, stdout: "", stderr: "" });
+      expect(await run("build", join(dir, "app.js"), "--emit", "c", "-o", out, ...flags)).toEqual({ code: 0, stdout: "", stderr: "" });
       return readFileSync(join(out, "bundle.js"), "utf8");
     };
     let bundle = await bundled();
@@ -237,7 +281,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
   it("defines rolldown's runtime helpers before a dynamically imported node:module uses them", async () => {
     const dir = tempDir();
     writeFileSync(join(dir, "app.js"), 'const { createRequire } = await import("node:module");\nprint(typeof createRequire);\n');
-    expect(await run("build", join(dir, "app.js"), "--emit-c", join(dir, "c"))).toEqual({ code: 0, stdout: "", stderr: "" });
+    expect(await run("build", join(dir, "app.js"), "--emit", "c", "-o", join(dir, "c"))).toEqual({ code: 0, stdout: "", stderr: "" });
     const bundle = readFileSync(join(dir, "c", "bundle.js"), "utf8");
     expect(bundle.indexOf("var __exportAll =")).toBeGreaterThan(-1);
     expect(bundle.indexOf("var __exportAll =")).toBeLessThan(bundle.indexOf("__exportAll({"));
@@ -251,7 +295,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     /* as Vite leaves an external package: a require from createRequire(import.meta.url), renamed */
     writeFileSync(join(dir, "app.js"), 'import { createRequire } from "node:module";\nconst a = createRequire(import.meta.url);\n' +
       'print(a(`fakepkg`).hi);\nconst m = new Map([["fakepkg", 1]]);\nprint(m.get("fakepkg") + notAPackage("other"));\nfunction notAPackage(x) { return x; }\n');
-    const r = await runWith({ report: { live: false, color: false } }, "build", join(dir, "app.js"), "--emit-c", join(dir, "c"));
+    const r = await runWith({ report: { live: false, color: false } }, "build", join(dir, "app.js"), "--emit", "c", "-o", join(dir, "c"));
     expect(r.code).toBe(0);
     expect(r.stderr).toContain("for a require() at run time: fakepkg");
     const bundle = readFileSync(join(dir, "c", "bundle.js"), "utf8");
@@ -263,54 +307,54 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
   it("builds a Next.js project's production server, and says why it can't", async () => {
     const dir = tempDir();
     writeFileSync(join(dir, "package.json"), '{ "dependencies": { "next": "16.4.1", "react": "19.3.1" } }');
-    expect(await run("build", dir, "--emit-c", join(dir, "c"))).toMatchObject({ code: 1, stderr: `visaljs: next isn't installed in ${dir}: run npm install first\n` });
-    expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
+    expect(await run("build", dir, "--emit", "c", "-o", join(dir, "c"))).toMatchObject({ code: 1, stderr: `visaljs: next isn't installed in ${dir}: run npm install first\n` });
+    expect(await run("build", dir, "--no-framework-build", "--emit", "c", "-o", join(dir, "c"))).toMatchObject({
       code: 1,
       stderr: `visaljs: ${dir} has no Next.js build (no .next/required-server-files.json): run \`next build\`, or build without --no-framework-build\n`,
     });
     /* output: "export": static files, no server */
     mkdirSync(join(dir, "out"));
     writeFileSync(join(dir, "out", "index.html"), "<html></html>");
-    expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
+    expect(await run("build", dir, "--no-framework-build", "--emit", "c", "-o", join(dir, "c"))).toMatchObject({
       code: 1,
       stderr: expect.stringContaining(`visaljs: ${dir} is a static export (output: "export" in next.config): it has no server to compile.`),
     });
     /* a build that isn't standalone: its traces leave out start-server's files */
     mkdirSync(join(dir, ".next", "server", "app"), { recursive: true });
     writeFileSync(join(dir, ".next", "required-server-files.json"), '{ "config": {} }');
-    expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
+    expect(await run("build", dir, "--no-framework-build", "--emit", "c", "-o", join(dir, "c"))).toMatchObject({
       code: 1,
       stderr: expect.stringContaining(`visaljs: ${dir}'s .next isn't a standalone build, whose traces visaljs bundles from: build without --no-framework-build`),
     });
     /* a webpack build: no Turbopack runtime among the chunks */
     writeFileSync(join(dir, ".next", "required-server-files.json"), '{ "config": { "output": "standalone" } }');
-    expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
+    expect(await run("build", dir, "--no-framework-build", "--emit", "c", "-o", join(dir, "c"))).toMatchObject({
       code: 1,
       stderr: expect.stringContaining(`visaljs: ${dir}'s .next was built with webpack (next build --webpack): visaljs compiles Turbopack builds`),
     });
     /* a vinext app depends on next too: it's vinext's */
     writeFileSync(join(dir, "package.json"), '{ "dependencies": { "next": "16.4.1", "vinext": "1.0.1" } }');
-    expect((await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).stderr).toContain("has no vinext build");
+    expect((await run("build", dir, "--no-framework-build", "--emit", "c", "-o", join(dir, "c"))).stderr).toContain("has no vinext build");
   });
 
   it("builds a project directory through its framework, and says why it can't", async () => {
     const dir = tempDir();
     expect(await run("build", dir)).toMatchObject({ code: 1, stderr: `visaljs: ${dir}: no entry file: checked a package.json and index.js: give an entry file\n` });
     writeFileSync(join(dir, "package.json"), '{ "dependencies": { "vinext": "1.0.1" } }');
-    expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
+    expect(await run("build", dir, "--no-framework-build", "--emit", "c", "-o", join(dir, "c"))).toMatchObject({
       code: 1,
       stderr: `visaljs: ${dir} has no vinext build (no ${join("dist", "server", "vinext-server.json")}): run \`vite build\`, or build without --no-framework-build\n`,
     });
-    expect(await run("build", dir, "--emit-c", join(dir, "c"))).toMatchObject({ code: 1, stderr: `visaljs: vite isn't installed in ${dir}: run npm install first\n` });
+    expect(await run("build", dir, "--emit", "c", "-o", join(dir, "c"))).toMatchObject({ code: 1, stderr: `visaljs: vite isn't installed in ${dir}: run npm install first\n` });
     /* a build without a Node server: a Worker (create-vinext-app's default), or another setup */
     mkdirSync(join(dir, "dist", "server"), { recursive: true });
     writeFileSync(join(dir, "dist", "server", "vinext-server.json"), "{}");
-    expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
+    expect(await run("build", dir, "--no-framework-build", "--emit", "c", "-o", join(dir, "c"))).toMatchObject({
       code: 1,
       stderr: `visaljs: ${dir}'s vinext build has no Node server (dist/server/index.js, dist/server/entry.js): this vinext setup isn't supported yet\n`,
     });
     writeFileSync(join(dir, "cloudflare.config.ts"), "");
-    expect(await run("build", dir, "--no-framework-build", "--emit-c", join(dir, "c"))).toMatchObject({
+    expect(await run("build", dir, "--no-framework-build", "--emit", "c", "-o", join(dir, "c"))).toMatchObject({
       code: 1,
       stderr: `visaljs: ${dir}'s dist/ is a Cloudflare Workers build, which has no Node server: build without --no-framework-build, and visaljs builds the app for Node\n`,
     });
@@ -334,7 +378,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     const dir = tempDir();
     const bundled = async (name: string, source: string) => {
       writeFileSync(join(dir, `${name}.js`), source);
-      expect(await run("build", join(dir, `${name}.js`), "--emit-c", join(dir, name))).toEqual({ code: 0, stdout: "", stderr: "" });
+      expect(await run("build", join(dir, `${name}.js`), "--emit", "c", "-o", join(dir, name))).toEqual({ code: 0, stdout: "", stderr: "" });
       return readFileSync(join(dir, name, "bundle.js"), "utf8");
     };
     expect(await bundled("plain", 'process.exitCode = 1;\nconsole.log("x");\n')).not.toContain("process_events");
@@ -348,7 +392,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
     const dir = tempDir();
     const bundled = async (name: string, source: string) => {
       writeFileSync(join(dir, `${name}.js`), source);
-      expect(await run("build", join(dir, `${name}.js`), "--emit-c", join(dir, name))).toEqual({ code: 0, stdout: "", stderr: "" });
+      expect(await run("build", join(dir, `${name}.js`), "--emit", "c", "-o", join(dir, name))).toEqual({ code: 0, stdout: "", stderr: "" });
       return readFileSync(join(dir, name, "bundle.js"), "utf8");
     };
     const gzip = await bundled("gzip", 'import zlib from "node:zlib";\nconsole.log(zlib.gzipSync("x").length);\n');
@@ -373,7 +417,7 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
 
     writeFileSync(join(dir, "lib.js"), "export function add(a, b) {\n  return a + b;\n}\nexport const tpl = (v) => 'v=' + v;\n");
     const out = join(dir, "c");
-    expect(await run("build", join(dir, "app.js"), "--emit-c", out)).toEqual({ code: 0, stdout: "", stderr: "" });
+    expect(await run("build", join(dir, "app.js"), "--emit", "c", "-o", out)).toEqual({ code: 0, stdout: "", stderr: "" });
     const c = readFileSync(join(out, "program.c"), "utf8");
     /* the C string's escapes: Windows paths' \ doubled */
     expect(c).toContain(`#line 2 ${JSON.stringify(join(dir, "lib.js"))}`);  /* return a + b */
@@ -394,15 +438,15 @@ describe("visaljs CLI", { timeout: 30_000 }, () => {
       "",
     ].join("\n"));
     const out = join(dir, "c");
-    const r = await run("build", join(dir, "app.js"), "--emit-c", out);
+    const r = await run("build", join(dir, "app.js"), "--emit", "c", "-o", out);
     expect(r.code).toBe(0);
     expect(r.stderr).toContain("warning: the program uses eval() of source text in 1 place and new Function() in 1 place (in fake, your code)");
     expect(r.stderr).toContain("(--verbose lists them)");
     expect(r.stderr).not.toContain("strongly discouraged");  /* rolldown's own eval warning */
 
-    const v = await run("build", join(dir, "app.js"), "--emit-c", out, "--verbose");
+    const v = await run("build", join(dir, "app.js"), "--emit", "c", "-o", out, "--verbose");
     /* on a terminal with color, the label is bold yellow */
-    const color = await runWith({ report: { live: false, color: true } }, "build", join(dir, "app.js"), "--emit-c", out);
+    const color = await runWith({ report: { live: false, color: true } }, "build", join(dir, "app.js"), "--emit", "c", "-o", out);
     expect(color.stderr).toContain("\x1b[1;33mwarning:\x1b[0m the program uses");
 
     const slash = (p: string) => p.replaceAll("\\", "/");  /* source map paths use / on Windows too */

@@ -1,6 +1,7 @@
 // The `visaljs` command line.
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, extname, isAbsolute, join, normalize, relative, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { getHeapStatistics } from "node:v8";
 import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
@@ -13,7 +14,7 @@ import { type ModuleIR, printModule, type TypedCall } from "@visaljs/ir";
 import { formatReport, optimize, type PassReport } from "@visaljs/optimizer";
 
 import { BundleError, bundle } from "./bundle.ts";
-import { compileJobs, compileProgram, describeCompiler, findCompilers, gcCheckFlags, programArchives, scratchDir } from "./cc.ts";
+import { compileJobs, compileProgram, describeCompiler, findCompilers, gcCheckFlags, programArchives, programLibraries, scratchDir } from "./cc.ts";
 import { evalCalls, evalWarning } from "./eval.ts";
 import { licensesText } from "./licenses.ts";
 import { DEFAULT_HOSTS, hostPrimitives } from "./hosts.ts";
@@ -23,6 +24,7 @@ import { EntryError } from "./integrations/project.ts";
 import { IntegrationError } from "./pipeline/errors.ts";
 import { type Pipeline, runPipeline } from "./pipeline/index.ts";
 import { compileRegExps, regexpLiterals } from "./regexp.ts";
+import { bundleSizes, formatBundleSizes, formatSizeReport, measureSizes, type SizeEntry } from "./size.ts";
 import { count, lineCount, Report, type ReportStyle, size, sizeQuip } from "./report.ts";
 
 export const VERSION = "0.0.7";
@@ -45,10 +47,7 @@ TypeScript (.ts, .mts, .cts, .tsx) is compiled too: its types are stripped, not 
 for that), with the nearest tsconfig.json's settings (paths, decorators).
 
 options:
-  -o <file>          output binary
-  --emit-c <dir>     stop after C emission
-  --dump-ast         print the syntax tree and stop
-  --dump-ir          print the IR and stop
+  -o <file>          output binary (with --emit: what to write)
   --debug            build without optimization (-O0), keeping symbols and debug info
   --symbols          keep symbols and debug info in the optimized build (for profilers such as perf)
   --no-optimize      skip the IR optimizer (to compare, or to rule it out)
@@ -67,7 +66,25 @@ options:
   --verbose          list each place a warning is about
   --version          print the version
   --help             print this help
+
+inspecting the build:
+  --emit <stage>     stop after a stage and write what it made:
+                       bundle  the bundle (tree-shaken) and the "use static" files to the directory
+                               -o names, and how much of the bundle each module and package is
+                       ast     the syntax tree, to stdout or the file -o names
+                       ir      the optimized IR, to stdout or the file -o names
+                       c       the C files, to the directory -o names
+  --report <kind>    build the binary, then report on it (repeatable):
+                       size    where its bytes come from: each module, package, Node built-in and
+                               runtime library (macOS for now; --verbose lists every file)
 `;
+
+const STAGES = ["bundle", "ast", "ir", "c"] as const;
+type Stage = (typeof STAGES)[number];
+/* what each writes: files (a directory -o must name), or text (stdout without -o) */
+const WRITES_FILES: ReadonlySet<Stage> = new Set(["bundle", "c"]);
+const REPORTS = ["size"] as const;
+type ReportKind = (typeof REPORTS)[number];
 
 export interface Io {
   stdout(text: string): void;
@@ -85,6 +102,9 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
       allowPositionals: true,
       options: {
         output: { type: "string", short: "o" },
+        emit: { type: "string" },
+        report: { type: "string", multiple: true },
+        /* before --emit: unlisted, kept for scripts */
         "emit-c": { type: "string" },
         "dump-ast": { type: "boolean" },
         "dump-ir": { type: "boolean" },
@@ -128,7 +148,15 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
         io.stderr(`visaljs build: expected one entry file or project directory\n${USAGE}`);
         return 2;
       }
-      return await build(rest[0] ?? ".", values, io);
+    {
+      const inspect = inspectOptions(values);
+      if (typeof inspect === "string") {
+        io.stderr(`visaljs: ${inspect}\n`);
+        return 2;
+      }
+      /* with --emit, -o names what it writes: not the binary's name, which a project's pipeline takes */
+      return await build(rest[0] ?? ".", { ...values, output: inspect.emit ? undefined : values.output, ...inspect }, io);
+    }
     case "licenses":
       if (rest.length) {
         io.stderr(`visaljs licenses: takes no arguments\n${USAGE}`);
@@ -142,11 +170,38 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
   }
 }
 
-interface BuildOptions {
+interface InspectOptions {
+  emit: Stage | undefined;
+  /** --emit's -o. */
+  emitTo: string | undefined;
+  reports: ReportKind[];
+}
+
+/** --emit and --report, with the flags they replace (--emit-c <dir>, --dump-ast, --dump-ir), or
+ *  what's wrong with them. */
+function inspectOptions(values: { output?: string | undefined; emit?: string | undefined; report?: string[] | undefined;
+  "emit-c"?: string | undefined; "dump-ast"?: boolean | undefined; "dump-ir"?: boolean | undefined }): InspectOptions | string {
+  const asked: { stage: string; to: string | undefined }[] = [];
+  if (values.emit !== undefined) asked.push({ stage: values.emit, to: values.output });
+  if (values["emit-c"] !== undefined) asked.push({ stage: "c", to: values["emit-c"] });
+  if (values["dump-ast"]) asked.push({ stage: "ast", to: undefined });
+  if (values["dump-ir"]) asked.push({ stage: "ir", to: undefined });
+  if (asked.length > 1) return "--emit takes one stage: the build stops after it";
+  const reports = values.report ?? [];
+  const unknown = reports.find((r) => !(REPORTS as readonly string[]).includes(r));
+  if (unknown !== undefined) return `--report takes ${REPORTS.join(", ")}, not '${unknown}'`;
+  if (reports.includes("size") && process.platform !== "darwin") return "--report size reads ld64's link map: it needs macOS for now";
+  const [want] = asked;
+  if (!want) return { emit: undefined, emitTo: undefined, reports: reports as ReportKind[] };
+  if (!(STAGES as readonly string[]).includes(want.stage)) return `--emit takes ${STAGES.join(", ")}, not '${want.stage}'`;
+  const stage = want.stage as Stage;
+  if (reports.length) return `--report reports on the binary: not with --emit ${stage}, which stops before it`;
+  if (WRITES_FILES.has(stage) && !want.to) return `--emit ${stage} writes files: give their directory with -o`;
+  return { emit: stage, emitTo: want.to, reports: [] };
+}
+
+interface BuildOptions extends InspectOptions {
   output?: string | undefined;
-  "emit-c"?: string | undefined;
-  "dump-ast"?: boolean | undefined;
-  "dump-ir"?: boolean | undefined;
   debug?: boolean | undefined;
   symbols?: boolean | undefined;
   "no-optimize"?: boolean | undefined;
@@ -164,10 +219,11 @@ interface BuildOptions {
 }
 
 async function build(entry: string, options: BuildOptions, io: Io): Promise<number> {
-  const dump = options["dump-ast"] === true || options["dump-ir"] === true;
+  const dump = options.emit === "ast" || options.emit === "ir";
   const style = options.quiet || dump ? undefined : io.report;  /* none: no report, but warnings and errors */
   const report = new Report(io.stderr, style);
-  const binary = !dump && !options["emit-c"];
+  const emitBundle = options.emit === "bundle" ? options.emitTo : undefined;
+  const binary = options.emit === undefined;
   const hosts = DEFAULT_HOSTS;
   let primitives = hostPrimitives(hosts);
   /* a production build, as bundlers make for a server (--node-env= leaves it to the environment) */
@@ -213,6 +269,10 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
 
   const script = options.script === true;
   const bundled = !script && options["no-bundle"] !== true;
+  if (emitBundle !== undefined && !bundled) {
+    io.stderr(`visaljs: --emit bundle writes the bundle: not with ${script ? "--script" : "--no-bundle"}\n`);
+    return 2;
+  }
   let map: string | undefined;
   const typedFiles = new Set<string>();  /* "use static" files, compiled as their own unit */
   let typed: TypedUnit | undefined;
@@ -225,6 +285,12 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
       source = b.code;
       /* a program with no side effects bundles to nothing, and rolldown gives no map */
       if (b.map) map = b.map;
+      if (emitBundle !== undefined) {
+        writeBundle(emitBundle, b.code, b.map, [...typedFiles]);
+        report.finish("📂", (time) => `Wrote the bundle and ${count(typedFiles.size, "\"use static\" file")} to ${displayPath(resolve(emitBundle))} in ${time}`);
+        io.stdout(formatBundleSizes(bundleSizes(b.code, dirname(resolve(entry)), [...typedFiles], process.cwd()), options.verbose === true));
+        return 0;
+      }
       if (typedFiles.size) {
         const files = [...typedFiles];
         typed = await report.step("🧷", "Compiling the typed files", () => buildTypedUnit(files, primitives),
@@ -242,7 +308,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
     io.stderr(`visaljs: --jobs takes a positive whole number, not '${options.jobs}'\n`);
     return 2;
   }
-  const emitDir = options["emit-c"];
+  const emitDir = options.emit === "c" ? options.emitTo : undefined;
   let output = "";
   if (binary) {
     output = pipeline?.output ?? options.output ?? basename(entry).replace(/\.(?:[cm]?[jt]s|[jt]sx)$/, "");
@@ -254,6 +320,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
     }
   }
   const dir = emitDir ?? (binary ? scratchDir() : "");
+  let sizes: SizeEntry[] | undefined;
   try {
     const typedLink = typed ? { atoms: [...typed.atoms], prefix: TYPED_PREFIX, names: typed.names, calls: typed.calls } : undefined;
     const c = await compileInWorker({ source, entry, map, options, primitives, compilers, dir, emitDir, typed: typedLink }, report);
@@ -263,7 +330,8 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
     }
     compilers = c.compilers;
     if (typeof c.result === "string") {
-      io.stdout(c.result);
+      if (options.emitTo) writeFileSync(options.emitTo, c.result);
+      else io.stdout(c.result);
       return 0;
     }
     const written = c.result;
@@ -280,7 +348,9 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
       cFiles.push(join(dir, "typed.c"));
     }
     const opt = [...(options.debug ? ["-O0"] : ["-O2"]), ...gcCheckFlags()];
-    const strip = !options.debug && !options.symbols;
+    const sizeReport = options.reports.includes("size");
+    const strip = !options.debug && !options.symbols && !sizeReport;  /* --report size strips after measuring */
+    const mapFile = sizeReport ? join(dir, "link.map") : undefined;
     /* measured now, with the compiler's worker and its heap gone */
     const jobs = options.jobs === undefined ? compileJobs(strip ? 0.8e9 : 1.5e9) : Number(options.jobs);
     try {
@@ -296,10 +366,18 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
         const parallel = cFiles.length > 1 ? `${cFiles.length} files, ${Math.min(jobs, cFiles.length)} at a time` : "";
         await report.step("🔨", parallel ? `${compiling} (${parallel})` : compiling, () => compileProgram(tc, cFiles, output, archives, {
           jobs,
+          mapFile,
           compiled: (done, total) => report.relabel(done < total ? `${compiling} (${done}/${total} files, ${Math.min(jobs, total)} at a time)` : `Linking with ${describeCompiler(cc)}`),
         }),
           () => `Compiled the binary with ${describeCompiler(cc)} (${[...opt, ...(parallel ? [parallel] : [])].join(", ")}, ${tc.strip ? "stripped" : "with debug info"})`);
       });
+      if (mapFile) {
+        sizes = await report.step("📏", "Measuring where the binary's bytes come from",
+          () => measureSizes(output, mapFile, join(dir, "program.dSYM"), cFiles.map((f) => f.replace(/\.c$/, ".o")), programLibraries(hosts),
+            bundled ? { code: source, entryDir: dirname(resolve(entry)) } : undefined),
+          (es) => `Measured ${count(es.length, "source")} of the binary's bytes`);
+        if (!options.debug && !options.symbols) execFileSync("strip", ["-S", "-x", output]);  /* what the link strips otherwise */
+      }
     } catch (e) {
       io.stderr(`visaljs: C compilation failed: ${(e as Error).message}\n`);
       return 1;
@@ -309,8 +387,23 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   }
   const bytes = statSync(output).size;
   report.finish("🎉", (time) => `Built ${displayPath(resolve(output))} in ${time}: ${size(bytes)}, ${sizeQuip(bytes)}`);
+  if (sizes) io.stdout(formatSizeReport(sizes, bytes, options.verbose === true));
   pipeline?.done(resolve(output));
   return 0;
+}
+
+/** --emit bundle's files: the bundle, its map, and each "use static" file at its path from the
+ *  current directory under static/ (outside it: by its name). */
+function writeBundle(dir: string, code: string, map: string, staticFiles: readonly string[]) {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "bundle.js"), code);
+  if (map) writeFileSync(join(dir, "bundle.js.map"), map);
+  for (const file of staticFiles) {
+    const rel = relative(process.cwd(), file);
+    const to = join(dir, "static", rel.startsWith("..") || isAbsolute(rel) ? basename(file) : rel);
+    mkdirSync(dirname(to), { recursive: true });
+    copyFileSync(file, to);
+  }
 }
 
 /** What the build report's steps need: the Report, or the compiler's worker's stand-in for it. */
@@ -325,7 +418,7 @@ interface CompileJob {
   primitives: HostPrimitives;
   compilers: string[] | undefined;
   dir: string;  // where the C files go
-  emitDir: string | undefined;  // --emit-c's, made when the first file goes there
+  emitDir: string | undefined;  // --emit c's, made when the first file goes there
   typed: { atoms: [string, string][]; prefix: string; names: string[]; calls: Record<string, TypedCall> } | undefined;  // the typed unit the program links to
 }
 
@@ -404,7 +497,7 @@ async function runCompileJob(job: CompileJob) {
 
 if (!isMainThread && (workerData as Record<string, unknown> | null)?.[WORKER]) await runCompileJob((workerData as Record<string, CompileJob>)[WORKER]!);
 
-/** The program's C files' names, or the text --dump-ast or --dump-ir prints. Its own function, as
+/** The program's C files' names, or the text --emit ast or --emit ir writes. Its own function, as
  *  is toIR, so the syntax tree and then the IR become garbage: a large program's take gigabytes. */
 async function compileToC(source: string, entry: string, map: SourceMap | undefined, options: BuildOptions, report: Reporter,
   primitives: HostPrimitives, compilers: () => string[], typed: CompileJob["typed"], write: (file: CFile) => void): Promise<string[] | string> {
@@ -442,7 +535,7 @@ async function toIR(source: string, entry: string, map: SourceMap | undefined, o
   const ast = await report.step("🌳", "Parsing the JavaScript",
     () => (options.script ? parseScript(source, entry) : parseModule(source, map ? "bundle.js" : entry, map, resolve(entry), primitives)),
     () => `Parsed ${count(lineCount(source), "line")} of JavaScript`);
-  if (options["dump-ast"]) return JSON.stringify(ast, null, 2) + "\n";
+  if (options.emit === "ast") return JSON.stringify(ast, null, 2) + "\n";
   const info = analyze(ast);  /* syntax errors first: they matter even in code we can't compile yet */
   const evalWarn = evalWarning(evalCalls(ast, info), options.verbose === true);
   if (evalWarn) report.warn(evalWarn);
@@ -461,7 +554,7 @@ async function toIR(source: string, entry: string, map: SourceMap | undefined, o
   },
     (ir) => [`Converted ${count(ir.functions.length + 1, "function")} to IR and optimized them`,
       ...formatReport(passes).map((line) => `      • ${line}`)].join("\n"));
-  if (options["dump-ir"]) return printModule(ir);
+  if (options.emit === "ir") return printModule(ir);
   return { ir, names: programNames(ast), regexps };
 }
 

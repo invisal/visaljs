@@ -75,6 +75,8 @@ export const COMMON = ["-std=c11", "-g", "-fno-omit-frame-pointer", "-pthread", 
 const LINK = process.platform === "darwin" ? ["-Wl,-dead_strip"] : ["-Wl,--gc-sections"];
 /* ld64 deprecates -s: -S drops debug info, -x local symbols */
 const STRIP = process.platform === "darwin" ? ["-Wl,-S,-x"] : ["-s"];
+/** The link's flags that write its map to `file`: ld64's, the format size.ts reads. */
+export const linkMapFlags = (file: string) => [`-Wl,-map,${file}`];
 
 /** A compiler's command line, split like make splits $(CC): "zig cc", "ccache gcc". */
 function command(cc: string): [string, ...string[]] {
@@ -279,21 +281,26 @@ export function regexpCompiler(cc: string): string {
 /** A program's archives, in link order: the host packages' libraries, then libjsrt (which they
  *  use), then the system libraries they need (-l…). Each is built the first time; `building`
  *  hears about it. */
+export function programLibraries(hosts: readonly HostPackage[]): CLibrary[] {
+  return [...hosts.flatMap((h) => h.libraries(RUNTIME_INCLUDE)).filter((l) => l.sources.length), ...runtimeLibraries()];
+}
+
 export function programArchives(tc: Toolchain, hosts: readonly HostPackage[], building?: (name: string) => void): string[] {
-  const libraries: CLibrary[] = [...hosts.flatMap((h) => h.libraries(RUNTIME_INCLUDE)).filter((l) => l.sources.length), ...runtimeLibraries()];
+  const libraries = programLibraries(hosts);
   return [...libraries.map((l) => libraryArchive(tc, l, building)), ...libraries.flatMap((l) => l.link ?? []).map((l) => `-l${l}`)];
 }
 
 /** Compiles the program's C files and links them with `archives` (programArchives), stripping at
  *  this link when asked. A split program's files compile `jobs` at once; `compiled` hears as each
- *  is done. Asynchronous, so the build's report keeps drawing. */
+ *  is done. `mapFile`: the link writes its map there (linkMapFlags), and each C file's object stays
+ *  beside it, for the debug info. Asynchronous, so the build's report keeps drawing. */
 export async function compileProgram(tc: Toolchain, cFiles: readonly string[], output: string, archives: readonly string[],
-  { extraFlags = [], jobs = compileJobs(), compiled }: { extraFlags?: readonly string[]; jobs?: number; compiled?: (done: number, total: number) => void } = {}): Promise<void> {
+  { extraFlags = [], jobs = compileJobs(), compiled, mapFile }: { extraFlags?: readonly string[]; jobs?: number; compiled?: (done: number, total: number) => void; mapFile?: string | undefined } = {}): Promise<void> {
   /* a stripped binary drops the debug info -g makes, which takes the compilers half their memory and
    * a fifth of their time; it never changes the code */
   const flags = [...COMMON, ...tc.opt, ...(tc.strip ? ["-g0"] : []), ...extraFlags];
-  const link = [...archives, "-lm", ...LINK, ...(tc.strip ? STRIP : []), "-o", output];
-  if (cFiles.length === 1) return runCompilerAsync(tc.cc, [...flags, `-I${RUNTIME_INCLUDE}`, cFiles[0]!, ...link]);
+  const link = [...archives, "-lm", ...LINK, ...(tc.strip ? STRIP : []), ...(mapFile ? linkMapFlags(mapFile) : []), "-o", output];
+  if (cFiles.length === 1 && !mapFile) return runCompilerAsync(tc.cc, [...flags, `-I${RUNTIME_INCLUDE}`, cFiles[0]!, ...link]);
   /* the biggest first: they take longest, and the small ones fill in around them */
   const objects = cFiles.map((f) => f.replace(/\.c$/, ".o"));
   const order = cFiles.map((_, i) => i).sort((a, b) => statSync(cFiles[b]!).size - statSync(cFiles[a]!).size);
