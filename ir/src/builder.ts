@@ -6,9 +6,19 @@
 // sealed (all its predecessors known). Trivial phis are removed in finish().
 import type { Loc } from "./loc.ts";
 import { OPS, successors, type Block, type FunctionIR, type Instr, type JSConst, type Op, type Terminator } from "./ir.ts";
-import { Any, T } from "./types.ts";
+import { Any, T, type Type } from "./types.ts";
 
 export type VarKey = object;
+
+/** A literal's type. */
+export function literalType(value: JSConst): Type {
+  return value === undefined ? T.Undefined
+    : value === null ? T.Null
+    : typeof value === "boolean" ? T.Boolean
+    : typeof value === "string" ? T.String
+    : Number.isInteger(value) && Math.abs(value) <= 2147483647 && !Object.is(value, -0) ? T.Int32
+    : T.Double;
+}
 
 export class FunctionBuilder {
   readonly fn: FunctionIR;
@@ -85,7 +95,7 @@ export class FunctionBuilder {
 
   // ---- Instructions ------------------------------------------------------
 
-  emit(op: Op, operands: Instr[], extra: Partial<Pick<Instr, "lit" | "index" | "target" | "text" | "name" | "type" | "key" | "slot" | "table" | "template" | "regexp" | "bigint" | "cases">> = {}): Instr {
+  emit(op: Op, operands: Instr[], extra: Partial<Pick<Instr, "lit" | "index" | "target" | "text" | "name" | "type" | "key" | "slot" | "table" | "template" | "regexp" | "bigint" | "cases" | "elem">> = {}): Instr {
     if (this.current.term) throw new Error(`emitting ${op} into terminated bb${this.current.id}`);
     const info = OPS[op];
     if (info.arity !== "any" && operands.length !== info.arity) throw new Error(`${op} takes ${info.arity} operands`);
@@ -115,14 +125,7 @@ export class FunctionBuilder {
   }
 
   const(value: JSConst): Instr {
-    const type =
-      value === undefined ? T.Undefined
-      : value === null ? T.Null
-      : typeof value === "boolean" ? T.Boolean
-      : typeof value === "string" ? T.String
-      : Number.isInteger(value) && Math.abs(value) <= 2147483647 && !Object.is(value, -0) ? T.Int32
-      : T.Double;
-    return this.emit("const", [], { lit: { value }, type });
+    return this.emit("const", [], { lit: { value }, type: literalType(value) });
   }
 
   // ---- SSA variables -----------------------------------------------------

@@ -33,6 +33,17 @@ export const STATIC_TYPES: Record<string, StaticType> = {
   null: { type: T.Null, words: "null" },
 };
 
+/** A static array's element kind: number[] (and i32[], whose code converts what it reads and
+ *  stores), string[], boolean[]. */
+export type ArrayElem = "number" | "string" | "boolean";
+
+/** Each kind's elements' type, and its kind in C (JS_SARRAY_*). */
+export const ARRAY_ELEMS: Record<ArrayElem, { type: Type; c: string }> = {
+  number: { type: T.Int32 | T.Double, c: "JS_SARRAY_NUMBER" },
+  string: { type: T.String, c: "JS_SARRAY_STRING" },
+  boolean: { type: T.Boolean, c: "JS_SARRAY_BOOLEAN" },
+};
+
 /** A declared parameter's type as ERR_INVALID_ARG_TYPE words it: "of type string or undefined",
  *  "an instance of Float64Array". */
 export function expectedText(t: Type, view?: ViewKind): string {

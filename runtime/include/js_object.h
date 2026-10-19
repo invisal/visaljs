@@ -493,6 +493,64 @@ static inline JSValue js_get_length(JSContext *ctx, JSValue obj, JSValue key, JS
     if (js_is_string(obj)) return js_int32((int32_t)js_string_length(obj));  /* below 2^30 */
     return js_get_prop(ctx, obj, key, ic);
 }
+/* ---- Static code's arrays ("use static": number[], string[], boolean[]) ------------------ */
+
+/* An element's kind (an i32[] is a number[] whose reads the code converts). tsc's element types
+ * aren't sound (a cast, an i32[] alias of a number[]), so every read checks it: a read's value is
+ * of the kind or the read throws. An index past the end is a RangeError, never undefined or a hole. */
+enum { JS_SARRAY_NUMBER, JS_SARRAY_STRING, JS_SARRAY_BOOLEAN };
+
+static inline bool js_sarray_is(JSValue v, int kind) {
+    switch (kind) {
+        case JS_SARRAY_NUMBER: return js_is_number(v);
+        case JS_SARRAY_STRING: return !js_is_empty(v) && js_is_string(v);
+        default: return js_is_bool(v);
+    }
+}
+/* A Number key as an index: -1 (past every end) when it isn't one. */
+static inline int64_t js_sarray_index_f64(double key) {
+    return key >= 0 && key < 4294967295.0 && (double)(int64_t)key == key ? (int64_t)key : -1;
+}
+static inline int64_t js_sarray_index(JSValue key) {
+    return js_is_int32(key) ? js_as_int32(key) : js_sarray_index_f64(js_as_number(key));
+}
+JS_WARN_UNUSED JSValue js_sarray_get_slow(JSContext *ctx, JSValue arr, int64_t i, int kind);
+JS_WARN_UNUSED int js_sarray_set_slow(JSContext *ctx, JSValue arr, int64_t i, JSValue v, int kind);
+JS_WARN_UNUSED JSValue js_sarray_length_slow(JSContext *ctx, JSValue arr);
+JS_WARN_UNUSED JSValue js_sarray_push_slow(JSContext *ctx, JSValue arr, JSValue v, int kind);
+
+static JS_FAST_PATH JSValue js_sarray_get(JSContext *ctx, JSValue arr, int64_t i, int kind) {
+    if (JS_LIKELY(js_is_array(arr))) {
+        JSElements *d = js_as_object(arr)->elements;
+        if (JS_LIKELY(d->kind == JS_ELEMENTS_DENSE && (uint64_t)i < d->length && js_sarray_is(d->data[i], kind))) return d->data[i];
+    }
+    return js_sarray_get_slow(ctx, arr, i, kind);
+}
+/* a[i] = v: at the length, a push; past it, a RangeError. */
+static JS_FAST_PATH int js_sarray_set(JSContext *ctx, JSValue arr, int64_t i, JSValue v, int kind) {
+    if (JS_LIKELY(js_is_array(arr) && js_sarray_is(v, kind))) {
+        JSElements *d = js_as_object(arr)->elements;
+        if (JS_LIKELY(d->kind == JS_ELEMENTS_DENSE && (uint64_t)i < d->length && !js_is_empty(d->data[i]))) {
+            js_store(ctx, &d->cell, &d->data[i], v);
+            return 1;
+        }
+    }
+    return js_sarray_set_slow(ctx, arr, i, v, kind);
+}
+/* a.length, an int32 (a longer array is a RangeError). */
+static JS_FAST_PATH JSValue js_sarray_length(JSContext *ctx, JSValue arr) {
+    if (JS_LIKELY(js_is_array(arr) && js_array_length(js_as_object(arr)) <= INT32_MAX)) return js_int32((int32_t)js_array_length(js_as_object(arr)));
+    return js_sarray_length_slow(ctx, arr);
+}
+/* a.push(v): the new length, an int32. */
+static JS_FAST_PATH JSValue js_sarray_push(JSContext *ctx, JSValue arr, JSValue v, int kind) {
+    if (JS_LIKELY(js_is_array(arr) && js_sarray_is(v, kind) && js_array_length(js_as_object(arr)) < INT32_MAX)) {
+        if (JS_UNLIKELY(js_array_push(ctx, js_as_object(arr), v) < 0)) return JS_EXCEPTION;
+        return js_int32((int32_t)js_array_length(js_as_object(arr)));
+    }
+    return js_sarray_push_slow(ctx, arr, v, kind);
+}
+
 /* delete obj[key]: true or false (sloppy), a TypeError when strict and not deletable.
  * `key` is a property key; js_delete_elem converts it first. */
 JS_WARN_UNUSED JSValue js_delete_value(JSContext *ctx, JSValue obj, JSValue key, bool strict);

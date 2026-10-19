@@ -265,6 +265,11 @@ static inline JSValue js_call_call(JSContext *ctx, JSValue m, JSValue f, uint32_
 }
 
 /* String.fromCharCode(c): a unit up to 0xFF is a static one-unit string. */
+/* Static code's String.fromCharCode(c), trusted to be the built-in: c's unit (ToUint16). */
+static inline JSValue js_from_char_code_unit(JSContext *ctx, uint16_t unit) {
+    return unit <= 0xFF ? js_char_string((uint8_t)unit) : js_new_string_utf16(ctx, &unit, 1);
+}
+
 static inline JSValue js_call_from_char_code(JSContext *ctx, JSValue f, JSValue this_val, JSValue c, const char *site) {
     if (JS_LIKELY(js_is_function(f) && js_as_function(f)->entry == js_core_string_from_char_code && js_is_int32(c)
                   && (uint32_t)js_as_int32(c) <= 0xFF))

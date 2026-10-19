@@ -8,7 +8,7 @@ import { CompileError, convertStaticUnit, HOST_MODULE, type HostPrimitives, type
 import type * as A from "@visaljs/compiler/ast";
 import ts from "typescript";
 
-import { intKind } from "./types.ts";
+import { arrayElement, intKind } from "./types.ts";
 
 export interface LinkedUnit {
   ast: A.Program;
@@ -115,6 +115,7 @@ export function linkUnit(program: ts.Program, files: readonly string[], hostPrim
     linked: (node) => importedFile(checker, node, fileSet) !== undefined,
     fileName,
     intKind: (type) => intKind(checker, type),
+    arrayElement: (node) => arrayElement(checker, node),
   };
 
   /* the exports: a function declaration, by its export name (unique across the unit) */

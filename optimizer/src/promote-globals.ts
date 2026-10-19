@@ -10,7 +10,11 @@
 // one value are that value. Exception edges need nothing special: a store can't throw, and in a
 // `try` a throwing instruction ends its block, so the value at the end of a block is the one its
 // handler sees.
-import { Any, T, type Block, type FunctionIR, type Instr, type ModuleIR } from "@visaljs/ir";
+//
+// Static code's constants: a top-level binding main stores once, a literal (an int's or an i32's
+// too), before anything that could run a function, is that literal wherever a function reads it:
+// nothing can read it before the store, and nothing stores it again.
+import { Any, isStatic, literalType, OPS, T, type Block, type FunctionIR, type Instr, type JSConst, type ModuleIR } from "@visaljs/ir";
 
 import { functionsOf, removeInstrs, replaceUses, reversePostorder } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
@@ -18,6 +22,7 @@ import type { Count, Pass } from "./index.ts";
 export const promoteGlobals: Pass = {
   name: "promote-globals",
   run(m: ModuleIR, count: Count) {
+    if (isStatic(m.main)) count("folded", "constant", foldConstants(m));
     /* slots another function uses (or a template / import.meta cache) stay in memory */
     const shared = new Set<number>();
     for (const fn of functionsOf(m))
@@ -110,4 +115,44 @@ function promote(fn: FunctionIR, slots: Set<number>, m: ModuleIR): number {
   replaceUses(fn, replacements);
   removeInstrs(fn, dead);
   return slots.size;
+}
+
+/** A stored value that is a literal: a const, or an integer literal an int (i32) binding converts
+ *  to itself. */
+function literal(v: Instr): JSConst | typeof NOT_LITERAL {
+  if (v.op === "const") return v.lit!.value;
+  const c = v.operands[0];
+  if (c?.op !== "const" || typeof c.lit!.value !== "number") return NOT_LITERAL;
+  const n = c.lit!.value;
+  if (v.op === "to_i64" && Number.isSafeInteger(n)) return n;
+  if (v.op === "to_i32" && (n | 0) === n) return n;
+  return NOT_LITERAL;
+}
+const NOT_LITERAL = Symbol("not a literal");
+
+/** Static code's constant module bindings, as literals in the functions that read them. */
+function foldConstants(m: ModuleIR): number {
+  const stores = new Map<number, number>();
+  for (const fn of functionsOf(m))
+    for (const b of fn.blocks)
+      for (const i of b.instrs)
+        if (i.op === "store_global" && i.operands[0]!.op !== "empty") stores.set(i.index!, (stores.get(i.index!) ?? 0) + 1);
+  /* main's straight-line start, up to the first operation that may run a function */
+  const constants = new Map<number, JSConst>();
+  for (const i of m.main.blocks[0]!.instrs) {
+    if (OPS[i.op].callsUser) break;
+    if (i.op !== "store_global" || stores.get(i.index!) !== 1) continue;
+    const value = literal(i.operands[0]!);
+    if (value !== NOT_LITERAL) constants.set(i.index!, value);
+  }
+  let folded = 0;
+  for (const fn of m.functions)
+    for (const b of fn.blocks)
+      for (const i of b.instrs) {
+        if (i.op !== "load_global" || !constants.has(i.index!)) continue;
+        const value = constants.get(i.index!)!;
+        Object.assign(i, { op: "const", operands: [], lit: { value }, type: literalType(value), index: undefined });
+        folded++;
+      }
+  return folded;
 }
