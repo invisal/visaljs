@@ -18,7 +18,7 @@
 // the argument suits, does its work inline (C's sqrt; reading the unit), else makes the call.
 // Anywhere, not just in loops: a call is big anyway. `f.apply(t, args)` and `f.call(t, …)` the
 // same way: f called directly when the method is the built-in (every emit and once wrapper).
-import { Number_, T, isStatic, isSubtype, type FunctionIR, type Instr, type JSConst, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { Number_, T, isStatic, isStringLength, isSubtype, type FunctionIR, type Instr, type JSConst, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { clearMayThrow, functionsOf, loopDepths, removeInstrs, removeUnreachable, useCounts } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
@@ -164,6 +164,12 @@ export const specialize: Pass = {
               i.operands = [i.operands[2]!];
             }
             count("inlined", "built-in call");
+            continue;
+          }
+          if (isStringLength(i) && i.mayThrow) {
+            edges = true;
+            clearMayThrow(i);
+            count("inlined", "string length");
             continue;
           }
           const builtin = inlineBuiltin(i);

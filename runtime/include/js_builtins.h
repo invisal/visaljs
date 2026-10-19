@@ -222,6 +222,14 @@ static inline double js_string_char_code_at(JSContext *ctx, JSValue s, double i)
     return js_as_number(js_core_string_proto_char_code_at(ctx, JS_UNDEFINED, s, 1, &index, JS_UNDEFINED));
 }
 
+/* s.charCodeAt(i) in typed code for an index the optimizer proved in s: the unit, an int32 (a
+ * rope not yet flattened takes the built-in). */
+static inline int32_t js_string_unit_at(JSContext *ctx, JSValue s, uint32_t i) {
+    JSStrView v;
+    if (JS_LIKELY(js_string_units(s, &v))) return (int32_t)js_view_at(v, i);
+    return (int32_t)js_string_char_code_at(ctx, s, (double)i);
+}
+
 /* Function.prototype.apply and call: generated code tells them by their entry. */
 JSValue js_function_proto_apply(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);
 JSValue js_function_proto_call(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);

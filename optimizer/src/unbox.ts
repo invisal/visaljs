@@ -23,7 +23,7 @@
 // parameters and return value are unboxed like a closed function's.
 //
 // Generator and async functions stay boxed: their frames save JSValues across pauses.
-import { declaredCallFits, isSubtype, Number_, readsDouble, T, typedCallFits, type Block, type Instr, type ModuleIR, type Op, type Repr, type Type } from "@visaljs/ir";
+import { declaredCallFits, isStringLength, isSubtype, Number_, readsDouble, T, typedCallFits, type Block, type Instr, type ModuleIR, type Op, type Repr, type Type } from "@visaljs/ir";
 
 import { closedFunctions, functionsOf, loopDepths, pauses } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
@@ -36,6 +36,8 @@ const F64 = new Set<Op>([
 const BOOL = new Set<Op>(["num_lt", "num_le", "num_gt", "num_ge", "num_eq", "num_ne"]);
 /** Boolean tests of boxed operands: their result is a C bool, their operands stay boxed. */
 const TESTS = new Set<Op>(["same_function", "identical", "strict_eq_atom", "is_type", "strict_eq_num"]);
+
+const isBool = (t: Type) => t !== T.None && isSubtype(t, T.Boolean);
 
 /** How the report names each unboxed repr. */
 const REPR_NOUN: Record<Repr, string> = { boxed: "", f64: "double", i32: "int32", i64: "int64", bool: "bool" };
@@ -114,8 +116,8 @@ function unboxModule(m: ModuleIR) {
     }
     for (const b of fn.blocks)
       for (const i of b.instrs) {
-        if (F64.has(i.op) || readsDouble(i)) candidates.push(i);
-        else if (BOOL.has(i.op) || TESTS.has(i.op)) i.repr = "bool";  /* an inlining guard, a test: a C condition */
+        if (F64.has(i.op) || readsDouble(i) || isStringLength(i)) candidates.push(i);
+        else if (BOOL.has(i.op) || TESTS.has(i.op) || i.op === "not") i.repr = "bool";  /* an inlining guard, a test: a C condition */
         else if (i.op === "call_direct") {
           const callee = byName.get(i.target!);
           i.repr = callee && declaredCallFits(i, callee) ? callee.returnRepr ?? "boxed" : "boxed";  /* else through the checked entry */
@@ -130,6 +132,7 @@ function unboxModule(m: ModuleIR) {
   const wants = (u: Use): Repr => {
     if (!u.user) return u.index === 1 ? (u.block.fn.returnRepr ?? "boxed") : "boxed";  // a branch on a Number tests it boxed (js_truthy)
     if (u.user.op === "phi") return u.user.repr;
+    if (u.user.op === "not") return isBool(u.user.operands[0]!.type) ? "bool" : "boxed";
     if (F64.has(u.user.op) || BOOL.has(u.user.op)) return "f64";  /* computed unboxed whatever its result's repr (C emission boxes that once) */
     if ((u.user.op === "get_index" || u.user.op === "set_index") && u.index === 1) return "f64";  // a double key: js_get_index_f64
     if ((u.user.op === "set_index" || u.user.op === "set_elem") && u.index === 2 && u.user.taView === "f64") return "f64";  // js_tav_put_f64

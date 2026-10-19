@@ -282,6 +282,12 @@ export function typedCallFits(i: Instr, type: (v: Instr) => Type = (v) => v.type
   });
 }
 
+/** Whether i reads a string's length: its own, read-only property, an int32; reading it runs no code. */
+export function isStringLength(i: Instr): boolean {
+  const s = i.operands[0];
+  return i.op === "get_prop" && i.key !== undefined && "name" in i.key && i.key.name === "length" && s !== undefined && s.type !== T.None && isSubtype(s.type, T.String);
+}
+
 /** Whether i reads a Float64Array's element in typed code: a double, past the end undefined as
  *  a number (NaN), as its type, number, says. */
 export function readsDouble(i: Instr): boolean {

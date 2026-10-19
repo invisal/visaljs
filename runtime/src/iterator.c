@@ -236,7 +236,11 @@ JSValue js_iter_next(JSContext *ctx, JSValue rec) {
     if (r->done) return JS_EMPTY;
     JSValue value;
     if (r->mode == MODE_ARRAY) {
-        value = array_step(ctx, r->iterator, r->index, KIND_VALUES);
+        /* a dense array's present element: what array_step's [[Get]] would read */
+        const JSElements *d = js_as_object(r->iterator)->elements;
+        uint32_t i = (uint32_t)r->index;
+        if (JS_LIKELY(d->kind == JS_ELEMENTS_DENSE && r->index < d->length && !js_is_empty(d->data[i]))) value = d->data[i];
+        else value = array_step(ctx, r->iterator, r->index, KIND_VALUES);
         r->index++;
     } else if (r->mode == MODE_STRING) {
         uint32_t i = (uint32_t)r->index;
