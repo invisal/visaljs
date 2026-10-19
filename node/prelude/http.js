@@ -65,7 +65,8 @@ function chunkLength(chunk) {
 /* A request: a Readable of the body's Buffers, pushed as llhttp parses them. */
 export class IncomingMessage extends Readable {
   constructor(socket) {
-    super(socket ? { highWaterMark: socket.readableHighWaterMark } : undefined);
+    const highWaterMark = socket?._readableState?.highWaterMark;
+    super(highWaterMark !== undefined && highWaterMark !== 65536 ? { highWaterMark } : undefined);  /* the socket's, as Node's */
     this.socket = socket;
     this.httpVersionMajor = 1;
     this.httpVersionMinor = 1;
@@ -333,10 +334,6 @@ export class OutgoingMessage extends Stream {
     this._hasBody = true;
     this._contentLength = null;
     this._removedContLen = false;
-    this._removedConnection = false;
-    this._removedTE = false;
-    this.strictContentLength = false;
-    this._uniqueHeaders = null;
     this._trailer = "";
     this._headers = new Map();  /* lowercase name → [name as set, value] */
     this.socket = null;
@@ -697,6 +694,12 @@ export class OutgoingMessage extends Stream {
   }
 }
 
+/* Node's fields that are rarely set: defaults on the prototype keep them off every instance */
+Object.assign(OutgoingMessage.prototype, {
+  _removedConnection: false, _removedTE: false, strictContentLength: false, _uniqueHeaders: null, maxRequestsOnConnectionReached: false,
+  _maxRequestsPerSocket: 0, _rejectNonStandardBodyWrites: false,
+});
+
 /* ---- ServerResponse ------------------------------------------------------------------------- */
 
 export class ServerResponse extends OutgoingMessage {
@@ -714,10 +717,10 @@ export class ServerResponse extends OutgoingMessage {
     /* one made by hand (new ServerResponse(req)) is kept alive, without a Keep-Alive timeout, as Node's */
     this._keepAlive = keepAlive ?? true;
     this._keepAliveTimeout = server ? server.keepAliveTimeout : 0;
-    this._maxRequestsPerSocket = server ? server.maxRequestsPerSocket : 0;
-    this._uniqueHeaders = server ? server._uniqueHeaders : null;
-    this._rejectNonStandardBodyWrites = server ? server.rejectNonStandardBodyWrites : false;
-    this.maxRequestsOnConnectionReached = false;
+    /* only a server that sets them: each field an instance gets costs every response */
+    if (server?.maxRequestsPerSocket) this._maxRequestsPerSocket = server.maxRequestsPerSocket;
+    if (server?._uniqueHeaders) this._uniqueHeaders = server._uniqueHeaders;
+    if (server?.rejectNonStandardBodyWrites) this._rejectNonStandardBodyWrites = true;
     this._head = req.method === "HEAD";
   }
 
@@ -906,10 +909,11 @@ export class ServerResponse extends OutgoingMessage {
       if (status === 204 || status === 304) this._keepAlive = false;
       else if (!noBody) this.chunkedEncoding = true;
     }
+    const hasTrailer = this._headers.has("trailer");
     let framing = "";
     if (!noBody && this._hasBody && !http10 && !this._headers.has("content-length") && te === undefined) {
       if (this._contentLength !== null && this._contentLength !== undefined) length = this._contentLength;
-      if (length !== undefined && !this._removedContLen && !this._headers.has("trailer")) {
+      if (length !== undefined && !this._removedContLen && !hasTrailer) {
         framing = "Content-Length: " + length + "\r\n";
       } else if (!this._removedTE) {
         framing = "Transfer-Encoding: chunked\r\n";
@@ -921,19 +925,16 @@ export class ServerResponse extends OutgoingMessage {
     const connection = this._headers.get("connection");
     if (connection !== undefined && String(connection[1]).toLowerCase().includes("close")) this._keepAlive = false;
     if (connection === undefined && !this._removedConnection) {
-      if (this._keepAlive && this.maxRequestsOnConnectionReached) this._keepAlive = false;
+      const limit = this._maxRequestsPerSocket;
+      if (limit > 0 && this.maxRequestsOnConnectionReached) this._keepAlive = false;
       if (!this._keepAlive) head += "Connection: close\r\n";
-      else {
-        head += "Connection: keep-alive\r\n";
-        if (this._keepAliveTimeout && !this._headers.has("keep-alive")) {
-          const max = ~~this._maxRequestsPerSocket > 0 ? ", max=" + this._maxRequestsPerSocket : "";
-          head += "Keep-Alive: timeout=" + Math.floor(this._keepAliveTimeout / 1000) + max + "\r\n";
-        }
-      }
+      else if (!this._keepAliveTimeout || this._headers.has("keep-alive")) head += "Connection: keep-alive\r\n";
+      else if (limit > 0) head += "Connection: keep-alive\r\nKeep-Alive: timeout=" + Math.floor(this._keepAliveTimeout / 1000) + ", max=" + limit + "\r\n";
+      else head += "Connection: keep-alive\r\nKeep-Alive: timeout=" + Math.floor(this._keepAliveTimeout / 1000) + "\r\n";
     }
-    head += framing;
+    if (framing !== "") head += framing;
     /* as Node's _storeHeader: only a chunked body can have trailers (the head isn't sent) */
-    if (this.chunkedEncoding !== true && this._headers.has("trailer")) {
+    if (this.chunkedEncoding !== true && hasTrailer) {
       throw codeError(Error, "ERR_HTTP_TRAILER_INVALID", "Trailers are invalid with this transfer encoding");
     }
     this.headersSent = true;
@@ -1446,8 +1447,12 @@ class ServerClass extends NetServer {
     }
     if (state.req === req && req.complete) state.req = null;
     if (state.res === res) state.res = null;
-    /* as Node's: a request nobody read has its body discarded */
-    if (!req._consuming && !req._readableState.resumeScheduled) req._dump();
+    /* as Node's: a request nobody read has its body discarded. Not when it's all parsed with
+     * nothing buffered and nobody waits for its 'end' or 'close': a bodiless GET costs ~25k
+     * instructions to drain */
+    const readable = req._readableState, events = req._events;
+    if (!req._consuming && !readable.resumeScheduled &&
+      (!req.complete || readable.length > 0 || events.end !== undefined || events.close !== undefined)) req._dump();
     if (res._last || !res._keepAlive) return;  /* the socket is ending */
     const next = state.outgoing.shift();
     if (next) {
@@ -1455,7 +1460,8 @@ class ServerClass extends NetServer {
       next._activate();
     } else if (this.keepAliveTimeout && state.socket.writable) {
       /* as Node's: past the advertised timeout by keepAliveTimeoutBuffer, so the client closes first */
-      const buffer = Number.isFinite(this.keepAliveTimeoutBuffer) && this.keepAliveTimeoutBuffer >= 0 ? this.keepAliveTimeoutBuffer : 1000;
+      const buffer = typeof this.keepAliveTimeoutBuffer === "number" && this.keepAliveTimeoutBuffer >= 0 && this.keepAliveTimeoutBuffer !== Infinity
+        ? this.keepAliveTimeoutBuffer : 1000;
       state.socket.setTimeout(this.keepAliveTimeout + buffer);
       state.keepAliveTimeoutSet = true;
     }
