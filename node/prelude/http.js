@@ -9,7 +9,7 @@
 // Not yet: the client, headersTimeout and requestTimeout, trailers.
 import { hasInvalidHeaderChar, isHttpToken } from "./internal/http_chars.ts";
 import {
-  httpAttach, httpBusy, httpDate, httpPending, httpWatchDrain, httpDetach, httpExpired, httpFedClose, httpFedOpen, httpFeed, httpFlush, httpParsers, httpWrite, timerUnref,
+  httpAttach, httpBusy, httpDate, httpPending, httpWatchDrain, httpWritten, httpDetach, httpExpired, httpFedClose, httpFedOpen, httpFeed, httpFlush, httpParsers, httpWrite, timerUnref,
 } from "visaljs:host";
 import { bindContext, currentContext, runInContext } from "./internal/async_context.js";
 import { codeError, invalidArgType, invalidArgValue, outOfRange, validateInteger, validateString } from "./internal/errors.js";
@@ -65,7 +65,7 @@ function chunkLength(chunk) {
 /* A request: a Readable of the body's Buffers, pushed as llhttp parses them. */
 export class IncomingMessage extends Readable {
   constructor(socket) {
-    super();
+    super(socket ? { highWaterMark: socket.readableHighWaterMark } : undefined);
     this.socket = socket;
     this.httpVersionMajor = 1;
     this.httpVersionMinor = 1;
@@ -87,6 +87,31 @@ export class IncomingMessage extends Readable {
 
   get connection() {
     return this.socket;
+  }
+
+  set connection(value) {
+    this.socket = value;
+  }
+
+  _addHeaderLine(field, value, dest) {
+    addHeader(dest, field, value, this.joinDuplicateHeaders);
+  }
+
+  /* Node's: each name's values as they came, made when first asked for */
+  get headersDistinct() {
+    return (this._headersDistinct ??= distinct(this.rawHeaders));
+  }
+
+  set headersDistinct(value) {
+    this._headersDistinct = value;
+  }
+
+  get trailersDistinct() {
+    return (this._trailersDistinct ??= distinct(this.rawTrailers));
+  }
+
+  set trailersDistinct(value) {
+    this._trailersDistinct = value;
   }
 
   _read() {
@@ -166,6 +191,16 @@ const SINGLE = new Set(["age", "authorization", "content-length", "content-type"
   "if-modified-since", "if-unmodified-since", "last-modified", "location", "max-forwards", "proxy-authorization", "referer",
   "retry-after", "server", "user-agent"]);
 
+function distinct(raw) {
+  const dest = { __proto__: null };
+  for (let i = 0; i < raw.length; i += 2) {
+    const key = raw[i].toLowerCase();
+    if (dest[key]) dest[key].push(raw[i + 1]);
+    else dest[key] = [raw[i + 1]];
+  }
+  return dest;
+}
+
 function addHeader(headers, name, value, join) {
   const key = name.toLowerCase();
   const existing = headers[key];
@@ -196,6 +231,68 @@ export function validateHeaderValue(name, value) {
   if (hasInvalidHeaderChar(String(value))) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in header content [\"" + name + "\"]");
 }
 
+/* Node's processHeader: an array is a line each, but cookies and the unique headers are one, joined by "; " */
+function processHeader(msg, state, key, value, validate) {
+  if (validate) validateHeaderName(key);
+  if (Array.isArray(value)) {
+    const lower = key.toLowerCase();
+    if ((value.length < 2 || lower !== "cookie") && !msg._uniqueHeaders?.has(lower)) {
+      for (const v of value) storeHeader(msg, state, key, v, validate);
+      return;
+    }
+    value = value.join("; ");
+  }
+  storeHeader(msg, state, key, value, validate);
+}
+
+function storeHeader(msg, state, key, value, validate) {
+  if (validate) validateHeaderValue(key, value);
+  state.header += key + ": " + value + "\r\n";
+  switch (key.toLowerCase()) {
+    case "connection":
+      state.connection = true;
+      msg._removedConnection = false;
+      if (/(?:^|\W)close(?:$|\W)/i.test(value)) msg._last = true;
+      else msg.shouldKeepAlive = true;
+      break;
+    case "transfer-encoding":
+      state.te = true;
+      msg._removedTE = false;
+      if (/(?:^|\W)chunked(?:$|\W)/i.test(value)) msg.chunkedEncoding = true;
+      break;
+    case "content-length":
+      state.contLen = true;
+      msg._contentLength = +value;
+      msg._removedContLen = false;
+      break;
+    case "date":
+    case "expect":
+    case "trailer":
+      state[key.toLowerCase()] = true;
+      break;
+  }
+}
+
+/* Node's parseUniqueHeadersOption */
+function uniqueHeadersOption(headers) {
+  return Array.isArray(headers) ? new Set(headers.map((h) => h.toLowerCase())) : null;
+}
+
+/* Node's validateLinkHeaderValue: one link, or links joined with ", " */
+const linkValue = /^(?:<[^>\r\n]*>)(?:\s*;\s*[^;"\s]+(?:=(")?[^;"\s]*\1)?)*$/;
+function linkHeaderValue(hints) {
+  const check = (link) => {
+    if (typeof link !== "string" || !linkValue.test(link)) {
+      throw invalidArgValue("hints", "must be an array or string of format \"</styles.css>; rel=preload; as=style\"", link);
+    }
+    return link;
+  };
+  if (typeof hints === "string") return check(hints);
+  if (Array.isArray(hints)) return hints.map(check).join(", ");
+  throw invalidArgValue("hints", "must be an array or string of format \"</styles.css>; rel=preload; as=style\"", hints);
+}
+
+const bodyNotAllowed = () => codeError(Error, "ERR_HTTP_BODY_NOT_ALLOWED", "Adding content for this request method or response status is not allowed.");
 const headersSent = (what) => codeError(Error, "ERR_HTTP_HEADERS_SENT", "Cannot " + what + " headers after they are sent to the client");
 
 /* Node's write_: a chunk is a string or bytes */
@@ -236,6 +333,10 @@ export class OutgoingMessage extends Stream {
     this._hasBody = true;
     this._contentLength = null;
     this._removedContLen = false;
+    this._removedConnection = false;
+    this._removedTE = false;
+    this.strictContentLength = false;
+    this._uniqueHeaders = null;
     this._trailer = "";
     this._headers = new Map();  /* lowercase name → [name as set, value] */
     this.socket = null;
@@ -365,14 +466,19 @@ export class OutgoingMessage extends Stream {
   }
 
   hasHeader(name) {
+    validateString(name, "name");
     return this._headers.has(String(name).toLowerCase());
   }
 
   removeHeader(name) {
     validateString(name, "name");
     if (this._header || this.headersSent) throw headersSent("remove");
-    if (name.toLowerCase() === "content-length") this._removedContLen = true;
-    this._headers.delete(String(name).toLowerCase());
+    const key = name.toLowerCase();
+    if (key === "connection") this._removedConnection = true;
+    else if (key === "content-length") this._removedContLen = true;
+    else if (key === "transfer-encoding") this._removedTE = true;
+    else if (key === "date") this.sendDate = false;
+    this._headers.delete(key);
   }
 
   getHeaderNames() {
@@ -391,51 +497,52 @@ export class OutgoingMessage extends Stream {
 
   /* Node's OutgoingMessage, as a ClientRequest (and an OutgoingMessage made by hand) writes: the
    * head stored, then the bytes through the socket (ServerResponse has its own, on llhttp's
-   * connection). _storeHeader: the first line, the headers as set (or as given in an array), then
+   * connection). Node's _storeHeader: the first line, the headers as set (or as given), then Date,
    * Connection and the body's framing */
-  _storeHeader(firstLine, headersArray) {
-    let head = firstLine;
-    let hasConnection = false, hasLength = false, hasTE = false, hasTrailer = false;
-    const add = (name, value) => {
-      const key = String(name).toLowerCase();
-      if (key === "connection") {
-        hasConnection = true;
-        if (/close/i.test(String(value))) this._last = true;
-        else this.shouldKeepAlive = true;
-      } else if (key === "content-length") hasLength = true;
-      else if (key === "transfer-encoding") {
-        hasTE = true;
-        if (/chunked/i.test(String(value))) this.chunkedEncoding = true;
-      } else if (key === "trailer") hasTrailer = true;
-      if (Array.isArray(value)) for (const v of value) head += name + ": " + v + "\r\n";
-      else head += name + ": " + value + "\r\n";
-    };
-    if (headersArray) {
-      if (Array.isArray(headersArray[0])) for (const [name, value] of headersArray) add(name, value);
-      else for (let i = 0; i < headersArray.length; i += 2) add(headersArray[i], headersArray[i + 1]);
+  _storeHeader(firstLine, headers) {
+    const state = { connection: false, contLen: false, te: false, date: false, expect: false, trailer: false, header: firstLine };
+    if (headers) {
+      if (Array.isArray(headers)) {
+        if (headers.length && Array.isArray(headers[0])) for (const [name, value] of headers) processHeader(this, state, name, value, true);
+        else {
+          if (headers.length % 2 !== 0) throw invalidArgValue("headers", "is invalid", headers);
+          for (let i = 0; i < headers.length; i += 2) processHeader(this, state, headers[i], headers[i + 1], true);
+        }
+      } else {
+        for (const key of Object.keys(headers)) processHeader(this, state, key, headers[key], true);
+      }
     } else {
-      for (const [, [name, value]] of this._headers) add(name, value);
+      for (const [, [name, value]] of this._headers) processHeader(this, state, name, value, false);
     }
-    if (!hasConnection) {
-      const shouldSendKeepAlive = this.shouldKeepAlive && (hasLength || this.useChunkedEncodingByDefault || this.agent);
+    let head = state.header;
+    if (this.sendDate && !state.date) head += "Date: " + httpDate() + "\r\n";
+    if (this._removedConnection) {
+      this._last = !this.shouldKeepAlive;
+    } else if (!state.connection) {
+      const shouldSendKeepAlive = this.shouldKeepAlive && (state.contLen || this.useChunkedEncodingByDefault || this.agent);
       if (shouldSendKeepAlive) head += "Connection: keep-alive\r\n";
       else {
         this._last = true;
         head += "Connection: close\r\n";
       }
     }
-    if (!hasLength && !hasTE) {
+    if (!state.contLen && !state.te) {
       if (!this._hasBody) this.chunkedEncoding = false;
       else if (!this.useChunkedEncodingByDefault) this._last = true;
-      else if (!hasTrailer && !this._removedContLen && typeof this._contentLength === "number") head += "Content-Length: " + this._contentLength + "\r\n";
-      else {
+      else if (!state.trailer && !this._removedContLen && typeof this._contentLength === "number") head += "Content-Length: " + this._contentLength + "\r\n";
+      else if (!this._removedTE) {
         head += "Transfer-Encoding: chunked\r\n";
         this.chunkedEncoding = true;
+      } else {
+        this._last = true;  /* neither length nor chunks: the body ends with the connection */
       }
     }
+    if (this.chunkedEncoding !== true && state.trailer) throw codeError(Error, "ERR_HTTP_TRAILER_INVALID", "Trailers are invalid with this transfer encoding");
     this._header = head + "\r\n";
     this._headerSent = false;
     this.headersSent = true;
+    /* as Node's: the head goes now when the server is to answer 100 Continue before the body */
+    if (state.expect) this._send("");
   }
 
   /* bytes for the socket: written now, or kept until it's assigned */
@@ -561,7 +668,6 @@ export class OutgoingMessage extends Stream {
     else process.nextTick(finish);
     this.finished = true;
     this.writableEnded = true;
-    this.writable = false;
     return this;
   }
 
@@ -581,7 +687,8 @@ export class OutgoingMessage extends Stream {
     const entries = Array.isArray(headers) ? headers : Object.keys(headers).map((key) => [key, headers[key]]);
     for (const [field, value] of entries) {
       validateHeaderName(field, "Trailer name");
-      const values = Array.isArray(value) && value.length > 1 ? value : [Array.isArray(value) ? value.join("; ") : value];
+      const several = Array.isArray(value) && value.length > 1 && !this._uniqueHeaders?.has(field.toLowerCase());
+      const values = several ? value : [Array.isArray(value) ? value.join("; ") : value];
       for (const v of values) {
         if (hasInvalidHeaderChar(String(v))) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in trailer content [\"" + field + "\"]");
         this._trailer += field + ": " + v + "\r\n";
@@ -607,13 +714,67 @@ export class ServerResponse extends OutgoingMessage {
     /* one made by hand (new ServerResponse(req)) is kept alive, without a Keep-Alive timeout, as Node's */
     this._keepAlive = keepAlive ?? true;
     this._keepAliveTimeout = server ? server.keepAliveTimeout : 0;
+    this._maxRequestsPerSocket = server ? server.maxRequestsPerSocket : 0;
+    this._uniqueHeaders = server ? server._uniqueHeaders : null;
+    this._rejectNonStandardBodyWrites = server ? server.rejectNonStandardBodyWrites : false;
+    this.maxRequestsOnConnectionReached = false;
     this._head = req.method === "HEAD";
+  }
+
+  /* a 1xx response before the final one, as Node's */
+  writeInformation(statusCode, headers, callback) {
+    if (this.headersSent) throw headersSent("write");
+    validateInteger(statusCode, "statusCode");
+    if (statusCode < 100 || statusCode > 199) throw outOfRange("statusCode", ">= 100 && <= 199", statusCode);
+    if (statusCode === 101) throw codeError(RangeError, "ERR_HTTP_INVALID_STATUS_CODE", `Invalid status code: ${statusCode}`);
+    let head = "HTTP/1.1 " + statusCode + " " + (STATUS_CODES[statusCode] || "unknown") + "\r\n";
+    const line = (name, value) => {
+      validateHeaderName(name);
+      validateHeaderValue(name, value);
+      head += name + ": " + value + "\r\n";
+    };
+    if (Array.isArray(headers)) {
+      if (headers.length && Array.isArray(headers[0])) for (const [name, value] of headers) line(name, value);
+      else {
+        if (headers.length % 2 !== 0) throw invalidArgValue("headers", "is invalid", headers);
+        for (let i = 0; i < headers.length; i += 2) line(headers[i], headers[i + 1]);
+      }
+    } else if (headers !== undefined && headers !== null) {
+      if (typeof headers !== "object") throw invalidArgType("headers", "of type object", headers);
+      for (const name of Object.keys(headers)) line(name, headers[name]);
+    }
+    this._send(head + "\r\n", true);
+    if (typeof callback === "function") queueMicrotask(callback);
+    return true;
+  }
+
+  writeContinue(callback) {
+    this.writeInformation(100, null, callback);
+    this._sent100 = true;
+  }
+
+  writeProcessing(callback) {
+    this.writeInformation(102, null, callback);
+  }
+
+  writeEarlyHints(hints, callback) {
+    if (typeof hints !== "object" || hints === null || Array.isArray(hints)) throw invalidArgType("hints", "of type object", hints);
+    if (hints.link === null || hints.link === undefined) return;
+    const link = linkHeaderValue(hints.link);
+    if (link.length === 0) return;
+    if (hasInvalidHeaderChar(link)) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in header content [\"Link\"]");
+    const headers = { __proto__: null, Link: link };
+    for (const key of Object.keys(hints)) if (key !== "link") headers[key] = hints[key];
+    this.writeInformation(103, headers, callback);
   }
 
   /* the response's bytes: to the connection's parser, which corks them; or, for a response made by
    * hand (new ServerResponse(req), Node's assignSocket), to its socket, kept until it has one */
   _send(data, latin1 = false) {
-    if (this._queued) (this._unsent ??= []).push([data, latin1]);  /* behind the connection's earlier responses */
+    if (this._queued) {  /* behind the connection's earlier responses: Node's outputData */
+      (this._unsent ??= []).push([data, latin1]);
+      this.outputSize += data.length;
+    }
     else if (this._conn !== undefined) httpWrite(this._conn, data, latin1);
     else if (this.socket) this.socket.write(data, latin1 ? "latin1" : undefined);
     else (this._unsent ??= []).push([data, latin1]);
@@ -664,7 +825,6 @@ export class ServerResponse extends OutgoingMessage {
     if (this.destroyed) return this;
     this.destroyed = true;
     this._errored = error;
-    this.writable = false;
     this._closeEmitted = true;
     if (this.socket) this.socket.destroy();
     queueMicrotask(() => {
@@ -679,11 +839,11 @@ export class ServerResponse extends OutgoingMessage {
     if (this._closeEmitted) return;
     this._closeEmitted = true;
     this.destroyed = true;
-    this.writable = false;
     queueMicrotask(() => this.emit("close"));
   }
 
   writeHead(statusCode, statusMessage, headers) {
+    if (this.headersSent) throw headersSent("write");
     /* as Node's: an integer status from 100 to 999 */
     const originalStatusCode = statusCode;
     statusCode |= 0;
@@ -692,12 +852,16 @@ export class ServerResponse extends OutgoingMessage {
       throw codeError(RangeError, "ERR_HTTP_INVALID_STATUS_CODE", `Invalid status code: ${shown}`);
     }
     if (typeof statusMessage !== "string") {
-      headers = statusMessage;
+      headers ??= statusMessage;
       statusMessage = undefined;
     }
     this.statusCode = statusCode;
     if (statusMessage !== undefined) this.statusMessage = statusMessage;
-    if (Array.isArray(headers)) {
+    else this.statusMessage ||= STATUS_CODES[statusCode] || "unknown";
+    if (Array.isArray(headers) && Array.isArray(headers[0]) && this._headers.size === 0) {
+      /* as Node's when only writeHead sets headers: [[name, value], …] too */
+      for (const [name, value] of headers) this.appendHeader(name, value);
+    } else if (Array.isArray(headers)) {
       /* as Node's: they replace the headers set before, and may repeat a name among themselves */
       if (headers.length % 2 !== 0) throw invalidArgValue("headers", "is invalid", headers);
       for (let i = 0; i < headers.length; i += 2) if (this.hasHeader(headers[i])) this.removeHeader(headers[i]);
@@ -707,6 +871,7 @@ export class ServerResponse extends OutgoingMessage {
     }
     /* Node renders the head now (sent with the first write): without a known length, the body
      * is chunked even when end() brings all of it */
+    if (this.statusMessage && hasInvalidHeaderChar(this.statusMessage)) throw codeError(TypeError, "ERR_INVALID_CHAR", "Invalid character in statusMessage");
     if (!this.headersSent) this._pendingHead = this._renderHead(this._implicitLength);
     return this;
   }
@@ -723,36 +888,50 @@ export class ServerResponse extends OutgoingMessage {
   _renderHead(length) {
     const status = this.statusCode;
     const noBody = status === 204 || status === 304 || (status >= 100 && status < 200);
+    if (noBody) this._hasBody = false;
     /* an empty statusMessage gets the standard one, as in Node (Next.js's route handlers set "") */
     let head = "HTTP/1.1 " + status + " " + (this.statusMessage || STATUS_CODES[status] || "unknown") + "\r\n";
-    for (const [, [name, value]] of this._headers) {
-      if (Array.isArray(value)) for (const v of value) head += name + ": " + v + "\r\n";
-      else head += name + ": " + value + "\r\n";
+    for (const [key, [name, value]] of this._headers) {
+      if (!Array.isArray(value)) head += name + ": " + value + "\r\n";
+      else if (this._uniqueHeaders?.has(key)) head += name + ": " + value.join("; ") + "\r\n";
+      else for (const v of value) head += name + ": " + v + "\r\n";
     }
     if (this.sendDate && !this._headers.has("date")) head += "Date: " + httpDate() + "\r\n";
+    /* Node: no length for HEAD; an HTTP/1.0 client gets a body that ends with the connection */
+    const http10 = this.req.httpVersionMajor < 1 || this.req.httpVersionMinor < 1;
+    /* a Transfer-Encoding: chunked the program set: the body is chunk-encoded, as Node does; on a
+     * 204 or 304 there's no body, and the connection closes */
+    const te = this._headers.get("transfer-encoding");
+    if (te !== undefined && /\bchunked\b/i.test(String(te[1]))) {
+      if (status === 204 || status === 304) this._keepAlive = false;
+      else if (!noBody) this.chunkedEncoding = true;
+    }
+    let framing = "";
+    if (!noBody && this._hasBody && !http10 && !this._headers.has("content-length") && te === undefined) {
+      if (this._contentLength !== null && this._contentLength !== undefined) length = this._contentLength;
+      if (length !== undefined && !this._removedContLen && !this._headers.has("trailer")) {
+        framing = "Content-Length: " + length + "\r\n";
+      } else if (!this._removedTE) {
+        framing = "Transfer-Encoding: chunked\r\n";
+        this.chunkedEncoding = true;
+      } else {
+        this._keepAlive = false;  /* neither length nor chunks: the body ends with the connection */
+      }
+    }
     const connection = this._headers.get("connection");
     if (connection !== undefined && String(connection[1]).toLowerCase().includes("close")) this._keepAlive = false;
-    if (connection === undefined) {
+    if (connection === undefined && !this._removedConnection) {
+      if (this._keepAlive && this.maxRequestsOnConnectionReached) this._keepAlive = false;
       if (!this._keepAlive) head += "Connection: close\r\n";
       else {
         head += "Connection: keep-alive\r\n";
-        if (this._keepAliveTimeout) head += "Keep-Alive: timeout=" + Math.floor(this._keepAliveTimeout / 1000) + "\r\n";
+        if (this._keepAliveTimeout && !this._headers.has("keep-alive")) {
+          const max = ~~this._maxRequestsPerSocket > 0 ? ", max=" + this._maxRequestsPerSocket : "";
+          head += "Keep-Alive: timeout=" + Math.floor(this._keepAliveTimeout / 1000) + max + "\r\n";
+        }
       }
     }
-    /* Node: no length for HEAD; an HTTP/1.0 client gets a body that ends with the connection */
-    const http10 = this.req.httpVersionMajor < 1 || this.req.httpVersionMinor < 1;
-    /* a Transfer-Encoding: chunked the program set: the body is chunk-encoded, as Node does */
-    const te = this._headers.get("transfer-encoding");
-    if (te !== undefined && /\bchunked\b/i.test(String(te[1])) && !noBody) this.chunkedEncoding = true;
-    if (!noBody && !this._head && !http10 && !this._headers.has("content-length") && te === undefined) {
-      if (this._contentLength !== null && this._contentLength !== undefined) length = this._contentLength;
-      if (length !== undefined) {
-        head += "Content-Length: " + length + "\r\n";
-      } else {
-        head += "Transfer-Encoding: chunked\r\n";
-        this.chunkedEncoding = true;
-      }
-    }
+    head += framing;
     /* as Node's _storeHeader: only a chunked body can have trailers (the head isn't sent) */
     if (this.chunkedEncoding !== true && this._headers.has("trailer")) {
       throw codeError(Error, "ERR_HTTP_TRAILER_INVALID", "Trailers are invalid with this transfer encoding");
@@ -771,9 +950,11 @@ export class ServerResponse extends OutgoingMessage {
       const e = new Error(ended ? "write after end" : "Cannot call write after a stream was destroyed");
       e.code = ended ? "ERR_STREAM_WRITE_AFTER_END" : "ERR_STREAM_DESTROYED";
       if (!this.destroyed) {
+        /* Node's emitErrorNt asks again on the next tick, but this response is destroyed sooner
+         * than Node's (its 'close' doesn't wait for the socket's write) */
         process.nextTick(() => {
           if (typeof callback === "function") callback(e);
-          if (!this.destroyed) this.emit("error", e);
+          this.emit("error", e);
         });
       } else if (typeof callback === "function") {
         process.nextTick(callback, e);
@@ -781,11 +962,13 @@ export class ServerResponse extends OutgoingMessage {
       return false;
     }
     if (typeof chunk === "string" && typeof encoding === "string" && encoding !== "utf8" && encoding !== "utf-8") chunk = Buffer.from(chunk, encoding);
+    if (this.strictContentLength) this._countStrict(chunk, false);
     /* a writeHead of the response's own (a wrapper) sees the implicit head, as in Node */
     if (!this.headersSent && Object.hasOwn(this, "writeHead")) this._implicitHeader(undefined);
     const head = this._takeHead(undefined);
     if (head) this._send(head, true);
-    if (chunk !== undefined && chunk !== null && chunkLength(chunk) > 0 && !this._head) {
+    if (!this._hasBody && this._rejectNonStandardBodyWrites) throw bodyNotAllowed();
+    if (chunk !== undefined && chunk !== null && chunkLength(chunk) > 0 && this._hasBody) {
       if (this.chunkedEncoding) {
         this._send(chunkLength(chunk).toString(16) + "\r\n");
         this._send(chunk);
@@ -800,6 +983,22 @@ export class ServerResponse extends OutgoingMessage {
 
   get writableLength() {
     return this._pendingBytes();
+  }
+
+  /* Node's strictContentLength: the body's bytes against the Content-Length set, checked as written
+   * and, at end(), for all of it */
+  _countStrict(chunk, fromEnd) {
+    const len = chunk === undefined || chunk === null ? 0 : chunkLength(chunk);
+    const set = this._headers.get("content-length");
+    const declared = set !== undefined ? +set[1] : this._contentLength;
+    const written = this._bytesWritten ?? 0;
+    const strict = declared !== null && declared !== undefined && this._hasBody && !this._removedContLen && !this.chunkedEncoding &&
+      !this._headers.has("transfer-encoding");
+    if (strict && (fromEnd ? written + len !== declared : written + len > declared)) {
+      throw codeError(Error, "ERR_HTTP_CONTENT_LENGTH_MISMATCH",
+        `Response body's content-length of ${written + len} byte(s) does not match the content-length of ${declared} byte(s) set in header`);
+    }
+    if (!fromEnd) this._bytesWritten = written + len;  /* end()'s chunk is counted by the write() it makes */
   }
 
   /* bytes written that haven't gone out: corked in C and in libuv's queue, or a TLS socket's */
@@ -841,31 +1040,40 @@ export class ServerResponse extends OutgoingMessage {
     if (chunk !== undefined && chunk !== null) validateChunk(chunk);
     if (this.writableEnded) return this;
     if (typeof chunk === "string" && typeof encoding === "string" && encoding !== "utf8" && encoding !== "utf-8") chunk = Buffer.from(chunk, encoding);
+    if (this.strictContentLength) this._countStrict(chunk, true);
     if (!this.headersSent && Object.hasOwn(this, "writeHead")) this._implicitHeader(chunk !== undefined && chunk !== null ? chunkLength(chunk) : 0);
     if (!this.headersSent) {
       const hasChunk = chunk !== undefined && chunk !== null;
       const length = hasChunk ? chunkLength(chunk) : 0;
-      if (hasChunk && typeof chunk === "string" && !this._head) {
+      const head = this._renderHead(length);
+      if (this.chunkedEncoding) {  /* Transfer-Encoding or a Trailer set: the one chunk, then the last */
+        this._send(head, true);
+        if (length && this._hasBody) {
+          this._send(length.toString(16) + "\r\n");
+          this._send(chunk);
+          this._send("\r\n");
+        }
+        if (this._hasBody) this._send("0\r\n" + this._trailer + "\r\n", true);
+      } else if (hasChunk && typeof chunk === "string" && this._hasBody) {
         /* the head's bytes are latin1, the body's UTF-8: corked into one write by the parser's
          * connection; a response made by hand writes them as one string, as Node's _send */
         if (this._conn === undefined) {
-          this._send(this._renderHead(length) + chunk);
+          this._send(head + chunk);
         } else {
-          this._send(this._renderHead(length), true);
+          this._send(head, true);
           this._send(chunk);
         }
       } else {
-        this._send(this._renderHead(length), true);
-        if (hasChunk && length && !this._head) this._send(chunk);
+        this._send(head, true);
+        if (hasChunk && length && this._hasBody) this._send(chunk);
       }
     } else {
       if (chunk !== undefined && chunk !== null) this.write(chunk);
       const head = this._takeHead(undefined);
       if (head) this._send(head, true);
-      if (this.chunkedEncoding && !this._head) this._send("0\r\n" + this._trailer + "\r\n", true);
+      if (this.chunkedEncoding && this._hasBody) this._send("0\r\n" + this._trailer + "\r\n", true);
     }
-    this.writableEnded = this.finished = true;
-    this.writable = false;
+    this.writableEnded = this.finished = true;  /* writable stays true, as Node's (nodejs/node#15029) */
     if (this._queued) {  /* finished once it has gone out, after the responses before it */
       this._endCallback = callback;
       return this;
@@ -877,6 +1085,7 @@ export class ServerResponse extends OutgoingMessage {
   /* a response that waited behind the connection's earlier ones: its turn (Node's assignSocket) */
   _activate() {
     this._queued = false;
+    this.outputSize = 0;
     const unsent = this._unsent;
     this._unsent = undefined;
     if (unsent) for (const [data, latin1] of unsent) httpWrite(this._conn, data, latin1);
@@ -886,6 +1095,7 @@ export class ServerResponse extends OutgoingMessage {
   /* the response is all written: the socket ends after the last one (not kept alive, or the client
    * ended its side), then 'finish' and 'close' */
   _afterEnd(callback) {
+    if (this.destroyed) return this;  /* its connection closed: no 'finish', as Node's (the socket's write never completes) */
     /* the response is all written: sent now, so that by 'finish' it has gone to the socket, as Node's */
     if (this._conn !== undefined) httpFlush(this._conn);
     if ((!this._keepAlive || this._last) && this.socket) {  /* the response goes out, then the socket ends */
@@ -954,6 +1164,16 @@ class ServerClass extends NetServer {
     this.insecureHTTPParser = boolean("insecureHTTPParser", undefined);
     this.requireHostHeader = boolean("requireHostHeader", true);
     this.joinDuplicateHeaders = boolean("joinDuplicateHeaders", undefined);
+    this._uniqueHeaders = uniqueHeadersOption(options.uniqueHeaders);
+    this.rejectNonStandardBodyWrites = boolean("rejectNonStandardBodyWrites", false);
+    if (options.shouldUpgradeCallback !== undefined) {
+      if (typeof options.shouldUpgradeCallback !== "function") throw invalidArgType("options.shouldUpgradeCallback", "of type function", options.shouldUpgradeCallback);
+      this.shouldUpgradeCallback = options.shouldUpgradeCallback;
+    } else {
+      this.shouldUpgradeCallback = function () {
+        return this.listenerCount("upgrade") > 0;
+      };
+    }
     /* the classes requests and responses are made of (subclasses of node:http's), as Node's */
     this._IncomingMessage = options.IncomingMessage || IncomingMessage;
     this._ServerResponse = options.ServerResponse || ServerResponse;
@@ -964,6 +1184,7 @@ class ServerClass extends NetServer {
       throw outOfRange("headersTimeout", "<= requestTimeout", this.headersTimeout);
     }
     this.keepAliveTimeout = integer("keepAliveTimeout", 5000);
+    this.keepAliveTimeoutBuffer = integer("keepAliveTimeoutBuffer", 1000);
     this.connectionsCheckingInterval = integer("connectionsCheckingInterval", 30_000);
     this._parsers = -1;
     this._states = new Map();  /* connection → { socket, req, res, keepAliveTimeoutSet } */
@@ -1086,10 +1307,12 @@ class ServerClass extends NetServer {
     const conn = connOf(socket);
     if (conn === null) return;
     socket.server = this;  /* as Node's: the http server, even for a socket another server accepted */
+    socket.setEncoding = socketSetEncoding;
+    if (!isFed(socket)) socket._httpWritten = () => httpWritten(conn);
     /* as Node's connection state: the request being parsed (req); those whose responses aren't
      * finished (incoming); the response writing to the connection (res), and those waiting behind it
      * (outgoing: pipelined requests are answered in order) */
-    const state = { socket, conn, req: null, incoming: [], res: null, outgoing: [], keepAliveTimeoutSet: false, listeners: null };
+    const state = { socket, conn, req: null, incoming: [], res: null, outgoing: [], keepAliveTimeoutSet: false, listeners: null, requestsCount: 0 };
     this._states.set(conn, state);
     if (this.timeout && typeof socket.setTimeout === "function") socket.setTimeout(this.timeout);
     const onTimeout = () => this._onTimeout(state);
@@ -1159,8 +1382,11 @@ class ServerClass extends NetServer {
     req.httpVersionMinor = minor;
     req.httpVersion = major + "." + minor;
     req.rawHeaders = raw;
-    for (let i = 0; i < raw.length; i += 2) addHeader(req.headers, raw[i], raw[i + 1], this.joinDuplicateHeaders);
-    req.upgrade = upgrade && (method === "CONNECT" || this.listenerCount("upgrade") > 0);
+    /* as Node's parser: maxHeadersCount's pairs (2000 entries when not a number, all for 0) */
+    const pairs = typeof this.maxHeadersCount === "number" ? this.maxHeadersCount << 1 : 2000;
+    const n = pairs > 0 && pairs < raw.length ? pairs : raw.length;
+    for (let i = 0; i < n; i += 2) addHeader(req.headers, raw[i], raw[i + 1], this.joinDuplicateHeaders);
+    req.upgrade = upgrade && (method === "CONNECT" || !!this.shouldUpgradeCallback(req));
     if (req.upgrade) {
       state.upgradeReq = req;
       return 2;
@@ -1176,12 +1402,37 @@ class ServerClass extends NetServer {
       state.res = res;
     }
     res.on("finish", () => this._resOnFinish(state, req, res));  /* Node's resOnFinish, an `on` listener too */
-    if (this.requireHostHeader && major === 1 && minor === 1 && !req.headers.host) {  /* Node: a 400, and the connection ends */
+    if (this.requireHostHeader && major === 1 && minor === 1 && req.headers.host === undefined) {  /* Node: a 400, and the connection ends */
       res.writeHead(400, ["Connection", "close"]);
       res.end();
       return 0;
     }
-    this.emit("request", req, res);
+    const limited = typeof this.maxRequestsPerSocket === "number" && this.maxRequestsPerSocket > 0;
+    if (limited) {
+      state.requestsCount++;
+      res.maxRequestsOnConnectionReached = this.maxRequestsPerSocket <= state.requestsCount;
+    }
+    if (limited && this.maxRequestsPerSocket < state.requestsCount) {
+      this.emit("dropRequest", req, socket);
+      res.writeHead(503);
+      res.end();
+    } else if (req.headers.expect !== undefined) {
+      if (/(?:^|\W)100-continue(?:$|\W)/i.test(req.headers.expect)) {
+        res._expect_continue = true;
+        if (this.listenerCount("checkContinue") > 0) this.emit("checkContinue", req, res);
+        else {
+          res.writeContinue();
+          this.emit("request", req, res);
+        }
+      } else if (this.listenerCount("checkExpectation") > 0) {
+        this.emit("checkExpectation", req, res);
+      } else {
+        res.writeHead(417);
+        res.end();
+      }
+    } else {
+      this.emit("request", req, res);
+    }
     return 0;
   }
 
@@ -1195,13 +1446,17 @@ class ServerClass extends NetServer {
     }
     if (state.req === req && req.complete) state.req = null;
     if (state.res === res) state.res = null;
+    /* as Node's: a request nobody read has its body discarded */
+    if (!req._consuming && !req._readableState.resumeScheduled) req._dump();
     if (res._last || !res._keepAlive) return;  /* the socket is ending */
     const next = state.outgoing.shift();
     if (next) {
       state.res = next;
       next._activate();
     } else if (this.keepAliveTimeout && state.socket.writable) {
-      state.socket.setTimeout(this.keepAliveTimeout);
+      /* as Node's: past the advertised timeout by keepAliveTimeoutBuffer, so the client closes first */
+      const buffer = Number.isFinite(this.keepAliveTimeoutBuffer) && this.keepAliveTimeoutBuffer >= 0 ? this.keepAliveTimeoutBuffer : 1000;
+      state.socket.setTimeout(this.keepAliveTimeout + buffer);
       state.keepAliveTimeoutSet = true;
     }
   }
@@ -1265,6 +1520,10 @@ function unfeed(socket) {
   httpFedClose(fed.conn);
 }
 
+function socketSetEncoding() {
+  throw codeError(Error, "ERR_HTTP_SOCKET_ENCODING", "Changing the socket encoding is not allowed per RFC7230 Section 3.");
+}
+
 /* Node's socketOnError: 'clientError', or a 400 (when nothing was written yet) and the end */
 function socketOnError(e) {
   this.removeListener("error", socketOnError);
@@ -1273,8 +1532,8 @@ function socketOnError(e) {
   if (!server.emit("clientError", e, this)) {
     const state = server._states.get(connKey(this));
     const res = state?.res;
+    if (state) httpFlush(state.conn);  /* what the responses wrote goes out first, as Node's socket had it */
     if (this.writable && (!res || !res.headersSent)) {
-      if (state) httpFlush(state.conn);
       this.write(e.code === "HPE_HEADER_OVERFLOW" ? headersTooLargeResponse : e.code === "ERR_HTTP_REQUEST_TIMEOUT" ? requestTimeoutResponse : badRequestResponse);
     }
     this.destroy(e);
@@ -1325,7 +1584,9 @@ function clientParsersId() {
       res.httpVersionMinor = minor;
       res.httpVersion = major + "." + minor;
       res.rawHeaders = raw;
-      for (let i = 0; i < raw.length; i += 2) addHeader(res.headers, raw[i], raw[i + 1], req.joinDuplicateHeaders);
+      const pairs = typeof req.maxHeadersCount === "number" ? req.maxHeadersCount << 1 : 2000;
+      const n = pairs > 0 && pairs < raw.length ? pairs : raw.length;
+      for (let i = 0; i < n; i += 2) addHeader(res.headers, raw[i], raw[i + 1], req.joinDuplicateHeaders);
       res.upgrade = upgrade;
       return parserOnIncomingClient(req, socket, res, keepAlive);
     },
@@ -1614,6 +1875,7 @@ export class ClientRequest extends OutgoingMessage {
     };
     const host = optsWithoutSignal.host = validHost(options.hostname, "hostname") || validHost(options.host, "host") || "localhost";
     const setHost = options.setHost !== undefined ? Boolean(options.setHost) : options.setDefaultHeaders !== false;
+    this._removedConnection = this._removedContLen = this._removedTE = options.setDefaultHeaders === false;
     this.socketPath = options.socketPath;
     if (options.timeout !== undefined) {
       if (typeof options.timeout !== "number") throw invalidArgType("timeout", "of type number", options.timeout);
@@ -1655,6 +1917,7 @@ export class ClientRequest extends OutgoingMessage {
       throw invalidArgType("options.joinDuplicateHeaders", "of type boolean", options.joinDuplicateHeaders);
     }
     this.joinDuplicateHeaders = options.joinDuplicateHeaders;
+    this._uniqueHeaders = uniqueHeadersOption(options.uniqueHeaders);
     this[kPath] = options.path || "/";
     if (cb) this.once("response", cb);
     this.useChunkedEncodingByDefault = !(method === "GET" || method === "HEAD" || method === "DELETE" || method === "OPTIONS" ||
