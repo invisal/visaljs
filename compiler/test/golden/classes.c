@@ -33,8 +33,9 @@ static JS_MAYBE_UNUSED const JSFunctionInfo jsfi_Square_describe = { jsf_Square_
 static JS_MAYBE_UNUSED JSValue jsf_Shape(JSContext *ctx, JSValue v0_this, JSValue v1_name) {
     JS_CHECK_STACK(ctx);
 #line 5 "classes.js"
-    if (JS_UNLIKELY(js_set_prop_add(ctx, v0_this, JS_ATOM(name), v1_name, true, &mod_ics[0]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_set_prop_add(ctx, v0_this, JS_ATOM(name), v1_name, true, &mod_ics[0]) < 0)) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_Shape_describe(JSContext *ctx, JSValue v0_this) {
@@ -43,10 +44,11 @@ static JS_MAYBE_UNUSED JSValue jsf_Shape_describe(JSContext *ctx, JSValue v0_thi
     JS_CHECK_STACK(ctx);
 #line 8 "classes.js"
     v2 = js_get_prop(ctx, v0_this, JS_ATOM(name), &mod_ics[1]);
-    if (JS_UNLIKELY(js_is_exception(v2))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2))) { goto exc_; }
     v3 = js_add(ctx, JS_STATIC_STR(jss_0), v2);
-    if (JS_UNLIKELY(js_is_exception(v3))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3))) { goto exc_; }
     return v3;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_Square(JSContext *ctx, JSValue v0_callee, JSValue v1_this, JSValue v2_newTarget, JSValue v3_side) {
@@ -58,16 +60,17 @@ static JS_MAYBE_UNUSED JSValue jsf_Square(JSContext *ctx, JSValue v0_callee, JSV
     JS_CHECK_STACK(ctx);
 #line 13 "classes.js"
     v6 = js_super_construct(ctx, v0_callee, v2_newTarget, 1, (const JSValue[]){ JS_STATIC_STR(jss_1) });
-    if (JS_UNLIKELY(js_is_exception(v6))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v6))) { goto exc_; }
     v7_this = js_bind_this(ctx, JS_EMPTY, v6);
-    if (JS_UNLIKELY(js_is_exception(v7_this))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v7_this))) { goto exc_; }
 #line 14 "classes.js"
     v8_this = js_check_this(ctx, v7_this);
-    if (JS_UNLIKELY(js_is_exception(v8_this))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_set_prop(ctx, v8_this, JS_STATIC_STR(jss_2), v3_side, true, &mod_ics[2]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v8_this))) { goto exc_; }
+    if (JS_UNLIKELY(js_set_prop(ctx, v8_this, JS_STATIC_STR(jss_2), v3_side, true, &mod_ics[2]) < 0)) { goto exc_; }
     v10_this = js_check_this(ctx, v7_this);
-    if (JS_UNLIKELY(js_is_exception(v10_this))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v10_this))) { goto exc_; }
     return v10_this;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_Square_describe(JSContext *ctx, JSValue v0_callee, JSValue v1_this) {
@@ -79,16 +82,17 @@ static JS_MAYBE_UNUSED JSValue jsf_Square_describe(JSContext *ctx, JSValue v0_ca
     JS_CHECK_STACK(ctx);
 #line 17 "classes.js"
     v2 = js_super_get(ctx, v0_callee, JS_STATIC_STR(jss_3), v1_this);
-    if (JS_UNLIKELY(js_is_exception(v2))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2))) { goto exc_; }
     v3 = js_call_site(ctx, v2, v1_this, 0, NULL, "(intermediate value)");
-    if (JS_UNLIKELY(js_is_exception(v3))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3))) { goto exc_; }
     v5 = js_add(ctx, v3, JS_STATIC_STR(jss_4));
-    if (JS_UNLIKELY(js_is_exception(v5))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v5))) { goto exc_; }
     v6 = js_get_prop(ctx, v1_this, JS_STATIC_STR(jss_2), &mod_ics[3]);
-    if (JS_UNLIKELY(js_is_exception(v6))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v6))) { goto exc_; }
     v7 = js_add(ctx, v5, v6);
-    if (JS_UNLIKELY(js_is_exception(v7))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v7))) { goto exc_; }
     return v7;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
@@ -109,7 +113,7 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
 #line 3 "classes.js"
     v5_Shape = js_new_function(ctx, &jsfi_Shape);
     v7_prototype = js_class_setup(ctx, v5_Shape, JS_EMPTY);
-    if (JS_UNLIKELY(js_is_exception(v7_prototype))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v7_prototype))) { goto exc_; }
 #line 7 "classes.js"
     v8 = js_new_function(ctx, &jsfi_Shape_describe);
     js_set_home_object(ctx, v8, v7_prototype);
@@ -119,7 +123,7 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     v13_Shape = mod_globals[0];
     v14_Square = js_new_function(ctx, &jsfi_Square);
     v15_prototype = js_class_setup(ctx, v14_Square, v13_Shape);
-    if (JS_UNLIKELY(js_is_exception(v15_prototype))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v15_prototype))) { goto exc_; }
 #line 16 "classes.js"
     v16 = js_new_function(ctx, &jsfi_Square_describe);
     js_set_home_object(ctx, v16, v15_prototype);
@@ -128,13 +132,14 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
 #line 20 "classes.js"
     v20_Square = mod_globals[1];
     v22 = js_construct(ctx, v20_Square, 1, (const JSValue[]){ js_int32(2) }, JS_UNDEFINED, "Square");
-    if (JS_UNLIKELY(js_is_exception(v22))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v22))) { goto exc_; }
     v23 = js_get_method(ctx, v22, JS_STATIC_STR(jss_3), &mod_ics[4]);
-    if (JS_UNLIKELY(js_is_exception(v23))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v23))) { goto exc_; }
     v24 = js_call_site(ctx, v23, v22, 0, NULL, "(intermediate value).describe");
-    if (JS_UNLIKELY(js_is_exception(v24))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v24 }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v24))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v24 }, JS_UNDEFINED)))) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_Shape__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

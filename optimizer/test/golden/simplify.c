@@ -80,11 +80,12 @@ bb1:;
 bb3:;
 #line 12 "simplify.js"
     v11 = js_call_site(ctx, v6_read, JS_UNDEFINED, 0, NULL, "read");
-    if (JS_UNLIKELY(js_is_exception(v11))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v11))) { goto exc_; }
     v13_x = js_env_get(v2_env, 0, 0);
     v14 = js_add(ctx, v11, v13_x);
-    if (JS_UNLIKELY(js_is_exception(v14))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v14))) { goto exc_; }
     return v14;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED double jsf_always(JSContext *ctx, JSValue v0_o) {
@@ -95,7 +96,7 @@ static JS_MAYBE_UNUSED double jsf_always(JSContext *ctx, JSValue v0_o) {
     goto bb1;
 bb1:;
 #line 17 "simplify.js"
-    if (JS_UNLIKELY(js_set_prop(ctx, v0_o, JS_STATIC_STR(jss_0), JS_TRUE, true, &mod_ics[0]) < 0)) { return 0; }
+    if (JS_UNLIKELY(js_set_prop(ctx, v0_o, JS_STATIC_STR(jss_0), JS_TRUE, true, &mod_ics[0]) < 0)) { goto exc_; }
     goto bb3;
 bb3:;
 #line 18 "simplify.js"
@@ -114,6 +115,7 @@ bb7:;
 bb8:;
 #line 19 "simplify.js"
     v12_k = v8_k; goto bb4;
+exc_: return 0;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_anonymous(JSContext *ctx, JSValue v0_env) {
@@ -122,8 +124,9 @@ static JS_MAYBE_UNUSED JSValue jsf_anonymous(JSContext *ctx, JSValue v0_env) {
 #line 10 "simplify.js"
     v1_x = js_env_get(v0_env, 0, 0);
     v2_x = js_check_tdz(ctx, v1_x, "x");
-    if (JS_UNLIKELY(js_is_exception(v2_x))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2_x))) { goto exc_; }
     return v2_x;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {

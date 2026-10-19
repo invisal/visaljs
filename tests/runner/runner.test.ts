@@ -158,7 +158,7 @@ describe("running units", () => {
       ["fail", "unsupported"],    // imports wait for the bundler
     ]);
     expect(results[2]!.detail).toBe("Uncaught TypeError: boom");
-  }, 120000);
+  }, 300000);  /* the first to build the test host, and with it the runtime: 100–120 s on CI's 4 cores */
 
   it("runs the harness compiled into the host before the unit", () => {
     const results = run(

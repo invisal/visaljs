@@ -16,6 +16,6 @@ describe("static code that doesn't compile", () => {
       const expected = /^\/\/ error: (.*)$/m.exec(readFileSync(join(DIR, file), "utf8").split("\n")[0]!)?.[1];
       expect(expected, "the first line names the error").toBeDefined();
       expect(() => buildTypedUnit([join(DIR, file)], hostPrimitives(DEFAULT_HOSTS))).toThrow(expected!);
-    });
+    }, 30000);  /* a full tsc check each: 2.5–6.5 s on a busy CI runner */
   }
 });

@@ -74,23 +74,24 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     JS_CHECK_STACK(ctx);
 #line 1 "async.js"
     v0_twice = js_new_function(ctx, &jsfi_twice);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v0_twice) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v0_twice) < 0)) { goto exc_; }
 #line 6 "async.js"
     v2 = js_global_get(ctx, JS_STATIC_STR(jss_1), "Promise");
-    if (JS_UNLIKELY(js_is_exception(v2))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2))) { goto exc_; }
     v3 = js_get_method(ctx, v2, JS_STATIC_STR(jss_2), &mod_ics[0]);
-    if (JS_UNLIKELY(js_is_exception(v3))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3))) { goto exc_; }
     v5 = js_call_site(ctx, v3, v2, 1, (const JSValue[]){ js_int32(21) }, "Promise.resolve");
-    if (JS_UNLIKELY(js_is_exception(v5))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v5))) { goto exc_; }
     v6 = jsf_twice(ctx, v5);
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v6))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v6))) { goto exc_; }
     v7 = js_get_method(ctx, v6, JS_ATOM(then), &mod_ics[1]);
-    if (JS_UNLIKELY(js_is_exception(v7))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v7))) { goto exc_; }
     v8 = js_global_get(ctx, JS_STATIC_STR(jss_3), "print");
-    if (JS_UNLIKELY(js_is_exception(v8))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_call_site(ctx, v7, v6, 1, (const JSValue[]){ v8 }, "twice(...).then")))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v8))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_call_site(ctx, v7, v6, 1, (const JSValue[]){ v8 }, "twice(...).then")))) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_twice__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

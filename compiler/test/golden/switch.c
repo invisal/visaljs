@@ -40,23 +40,23 @@ bb1:;
 bb2:;
 #line 5 "switch.js"
     v10_out = js_add(ctx, js_empty_string(), JS_STATIC_STR(jss_0));
-    if (JS_UNLIKELY(js_is_exception(v10_out))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v10_out))) { goto exc_; }
     v11_out = v10_out; goto bb3;
 bb3:;
 #line 7 "switch.js"
     v13_out = js_add(ctx, v11_out, JS_STATIC_STR(jss_1));
-    if (JS_UNLIKELY(js_is_exception(v13_out))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v13_out))) { goto exc_; }
 #line 8 "switch.js"
     v19_out = v13_out; goto bb1;
 bb4:;
 #line 10 "switch.js"
     v15_out = js_add(ctx, js_empty_string(), JS_STATIC_STR(jss_2));
-    if (JS_UNLIKELY(js_is_exception(v15_out))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v15_out))) { goto exc_; }
     v16_out = v15_out; goto bb5;
 bb5:;
 #line 12 "switch.js"
     v18_out = js_add(ctx, v16_out, JS_STATIC_STR(jss_3));
-    if (JS_UNLIKELY(js_is_exception(v18_out))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v18_out))) { goto exc_; }
     v19_out = v18_out; goto bb1;
 bb6:;
 #line 6 "switch.js"
@@ -69,6 +69,7 @@ bb7:;
 bb8:;
 #line 11 "switch.js"
     goto bb4;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
@@ -79,19 +80,20 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     JS_CHECK_STACK(ctx);
 #line 1 "switch.js"
     v0_describe = js_new_function(ctx, &jsfi_describe);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_4), v0_describe) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_4), v0_describe) < 0)) { goto exc_; }
 #line 16 "switch.js"
     v3 = jsf_describe(ctx, js_int32(1));
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v3))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3))) { goto exc_; }
     v5 = jsf_describe(ctx, js_int32(3));
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v5))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v5))) { goto exc_; }
     v7 = jsf_describe(ctx, js_int32(9));
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v7))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 3, (const JSValue[]){ v3, v5, v7 }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v7))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 3, (const JSValue[]){ v3, v5, v7 }, JS_UNDEFINED)))) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_describe__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

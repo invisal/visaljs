@@ -62,7 +62,8 @@ Not supported:
 ## Requirements
 
 - Node 22 or later, to run the compiler.
-- A C compiler: `cc`, `gcc` or `clang`. Linux and macOS are supported. On Windows, use a
+- A C compiler: `clang` (preferred: it builds faster and its binaries run faster), `cc` or
+  `gcc`. Linux and macOS are supported. On Windows, use a
   clang-family compiler: [Zig](https://ziglang.org/) or LLVM-MinGW (MSVC isn't supported yet).
 
 See [`cli/README.md`](cli/README.md) for the command's options.

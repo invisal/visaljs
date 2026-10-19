@@ -39,17 +39,18 @@ static JS_MAYBE_UNUSED JSValue jsf_read(JSContext *ctx, JSValue v0_o) {
 #line 7 "keys.js"
     v1_kState = mod_globals[0];
     v2_kState = js_check_tdz(ctx, v1_kState, "kState");
-    if (JS_UNLIKELY(js_is_exception(v2_kState))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2_kState))) { goto exc_; }
     v3 = js_get_keyed(ctx, v0_o, v2_kState, &mod_keys[0], &mod_ics[0]);
-    if (JS_UNLIKELY(js_is_exception(v3))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3))) { goto exc_; }
     v4_changing = mod_globals[1];
     v5_changing = js_check_tdz(ctx, v4_changing, "changing");
-    if (JS_UNLIKELY(js_is_exception(v5_changing))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v5_changing))) { goto exc_; }
     v6 = js_get_elem(ctx, v0_o, v5_changing);
-    if (JS_UNLIKELY(js_is_exception(v6))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v6))) { goto exc_; }
     v7 = js_add(ctx, v3, v6);
-    if (JS_UNLIKELY(js_is_exception(v7))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v7))) { goto exc_; }
     return v7;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_write(JSContext *ctx, JSValue v0_o, JSValue v1_v) {
@@ -59,9 +60,10 @@ static JS_MAYBE_UNUSED JSValue jsf_write(JSContext *ctx, JSValue v0_o, JSValue v
 #line 10 "keys.js"
     v2_kState = mod_globals[0];
     v3_kState = js_check_tdz(ctx, v2_kState, "kState");
-    if (JS_UNLIKELY(js_is_exception(v3_kState))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_set_keyed(ctx, v0_o, v3_kState, v1_v, true, &mod_keys[1], &mod_ics[1]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3_kState))) { goto exc_; }
+    if (JS_UNLIKELY(js_set_keyed(ctx, v0_o, v3_kState, v1_v, true, &mod_keys[1], &mod_ics[1]) < 0)) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_literal(JSContext *ctx, JSValue v0_o) {
@@ -70,12 +72,13 @@ static JS_MAYBE_UNUSED JSValue jsf_literal(JSContext *ctx, JSValue v0_o) {
     JS_CHECK_STACK(ctx);
 #line 13 "keys.js"
     v1 = js_get_prop(ctx, v0_o, JS_STATIC_STR(jss_0), &mod_ics[2]);
-    if (JS_UNLIKELY(js_is_exception(v1))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_set_prop(ctx, v0_o, JS_ATOM(name), v1, true, &mod_ics[3]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v1))) { goto exc_; }
+    if (JS_UNLIKELY(js_set_prop(ctx, v0_o, JS_ATOM(name), v1, true, &mod_ics[3]) < 0)) { goto exc_; }
 #line 14 "keys.js"
     v3 = js_get_value(ctx, v0_o, js_int32(0));
-    if (JS_UNLIKELY(js_is_exception(v3))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3))) { goto exc_; }
     return v3;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
@@ -100,21 +103,21 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     mod_globals[1] = JS_EMPTY;
 #line 2 "keys.js"
     v18 = js_global_get(ctx, JS_STATIC_STR(jss_1), "Symbol");
-    if (JS_UNLIKELY(js_is_exception(v18))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v18))) { goto exc_; }
     v21 = js_call_site(ctx, v18, JS_UNDEFINED, 1, (const JSValue[]){ JS_STATIC_STR(jss_2) }, "Symbol");
-    if (JS_UNLIKELY(js_is_exception(v21))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v21))) { goto exc_; }
     mod_globals[0] = v21;
 #line 3 "keys.js"
     v23 = js_global_get(ctx, JS_STATIC_STR(jss_1), "Symbol");
-    if (JS_UNLIKELY(js_is_exception(v23))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v23))) { goto exc_; }
     v26 = js_call_site(ctx, v23, JS_UNDEFINED, 1, (const JSValue[]){ js_char_string(97) }, "Symbol");
-    if (JS_UNLIKELY(js_is_exception(v26))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v26))) { goto exc_; }
     mod_globals[1] = v26;
 #line 4 "keys.js"
     v28 = js_global_get(ctx, JS_STATIC_STR(jss_1), "Symbol");
-    if (JS_UNLIKELY(js_is_exception(v28))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v28))) { goto exc_; }
     v31 = js_call_site(ctx, v28, JS_UNDEFINED, 1, (const JSValue[]){ js_char_string(98) }, "Symbol");
-    if (JS_UNLIKELY(js_is_exception(v31))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v31))) { goto exc_; }
     mod_globals[1] = v31;
 #line 16 "keys.js"
     v33 = js_new_object(ctx);
@@ -127,8 +130,8 @@ bb2:;
 #line 10 "keys.js"
     v44_kState = mod_globals[0];
     v45_kState = js_check_tdz(ctx, v44_kState, "kState");
-    if (JS_UNLIKELY(js_is_exception(v45_kState))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_set_keyed(ctx, v33, v45_kState, js_int32(1), true, &mod_keys[2], &mod_ics[4]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v45_kState))) { goto exc_; }
+    if (JS_UNLIKELY(js_set_keyed(ctx, v33, v45_kState, js_int32(1), true, &mod_keys[2], &mod_ics[4]) < 0)) { goto exc_; }
     goto bb1;
 bb3:;
 #line 19 "keys.js"
@@ -136,10 +139,10 @@ bb3:;
 bb4:;
 #line 13 "keys.js"
     v48 = js_get_prop(ctx, v33, JS_STATIC_STR(jss_0), &mod_ics[5]);
-    if (JS_UNLIKELY(js_is_exception(v48))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_set_prop(ctx, v33, JS_ATOM(name), v48, true, &mod_ics[6]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v48))) { goto exc_; }
+    if (JS_UNLIKELY(js_set_prop(ctx, v33, JS_ATOM(name), v48, true, &mod_ics[6]) < 0)) { goto exc_; }
 #line 14 "keys.js"
-    if (JS_UNLIKELY(js_is_exception(js_get_value(ctx, v33, js_int32(0))))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(js_get_value(ctx, v33, js_int32(0))))) { goto exc_; }
     goto bb3;
 bb5:;
 #line 19 "keys.js"
@@ -148,16 +151,17 @@ bb6:;
 #line 7 "keys.js"
     v51_kState = mod_globals[0];
     v52_kState = js_check_tdz(ctx, v51_kState, "kState");
-    if (JS_UNLIKELY(js_is_exception(v52_kState))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v52_kState))) { goto exc_; }
     v53 = js_get_keyed(ctx, v33, v52_kState, &mod_keys[3], &mod_ics[7]);
-    if (JS_UNLIKELY(js_is_exception(v53))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v53))) { goto exc_; }
     v54_changing = mod_globals[1];
     v55_changing = js_check_tdz(ctx, v54_changing, "changing");
-    if (JS_UNLIKELY(js_is_exception(v55_changing))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v55_changing))) { goto exc_; }
     v56 = js_get_elem(ctx, v33, v55_changing);
-    if (JS_UNLIKELY(js_is_exception(v56))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_add(ctx, v53, v56)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v56))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_add(ctx, v53, v56)))) { goto exc_; }
     goto bb5;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_read__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

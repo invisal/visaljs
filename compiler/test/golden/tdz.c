@@ -24,17 +24,19 @@ static JS_MAYBE_UNUSED JSValue jsf_early(JSContext *ctx) {
 #line 2 "tdz.js"
     v0_late = mod_globals[0];
     v1_late = js_check_tdz(ctx, v0_late, "late");
-    if (JS_UNLIKELY(js_is_exception(v1_late))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v1_late))) { goto exc_; }
     return v1_late;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_write(JSContext *ctx) {
     JSValue v1_late = JS_UNDEFINED;
 #line 11 "tdz.js"
     v1_late = mod_globals[0];
-    if (JS_UNLIKELY(js_is_exception(js_check_tdz(ctx, v1_late, "late")))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(js_check_tdz(ctx, v1_late, "late")))) { goto exc_; }
     mod_globals[0] = js_int32(3);
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
@@ -49,10 +51,10 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     mod_globals[1] = JS_EMPTY;
 #line 1 "tdz.js"
     v4_early = js_new_function(ctx, &jsfi_early);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v4_early) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v4_early) < 0)) { goto exc_; }
 #line 10 "tdz.js"
     v6_write = js_new_function(ctx, &jsfi_write);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_1), v6_write) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_1), v6_write) < 0)) { goto exc_; }
 #line 4 "tdz.js"
     mod_globals[0] = js_int32(1);
 #line 5 "tdz.js"
@@ -62,20 +64,21 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     v13_late = mod_globals[0];
     v14_fixed = mod_globals[1];
     v15_inner = js_add(ctx, v13_late, v14_fixed);
-    if (JS_UNLIKELY(js_is_exception(v15_inner))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v15_inner))) { goto exc_; }
 #line 8 "tdz.js"
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v15_inner }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v15_inner }, JS_UNDEFINED)))) { goto exc_; }
 #line 13 "tdz.js"
     { JSValue r = jsf_write(ctx);
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(r))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(r))) { goto exc_; }
     js_discard(r); }
 #line 14 "tdz.js"
     v18 = jsf_early(ctx);
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v18))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v18 }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v18))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v18 }, JS_UNDEFINED)))) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_early__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

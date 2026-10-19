@@ -74,25 +74,26 @@ bb1:;
 bb2:;
 #line 10 "numbers.js"
     v7 = js_get_length(ctx, v0_s, JS_ATOM(length), &mod_ics[0]);
-    if (JS_UNLIKELY(js_is_exception(v7))) { return 0; }
+    if (JS_UNLIKELY(js_is_exception(v7))) { goto exc_; }
     v8 = v5_i < js_as_int32_value(v7);
     if (v8) { goto bb3; } else { goto bb1; }
 bb3:;
 #line 10 "numbers.js"
     v11 = js_number((double)(v9_h) * 31.0);
     v12 = js_get_method(ctx, v0_s, JS_STATIC_STR(jss_0), &mod_ics[1]);
-    if (JS_UNLIKELY(js_is_exception(v12))) { return 0; }
+    if (JS_UNLIKELY(js_is_exception(v12))) { goto exc_; }
     v13 = js_call_char_code_at(ctx, v12, v0_s, js_int32(v5_i), "s.charCodeAt");
-    if (JS_UNLIKELY(js_is_exception(v13))) { return 0; }
+    if (JS_UNLIKELY(js_is_exception(v13))) { goto exc_; }
     v14 = js_add_fast(ctx, v11, v13);
-    if (JS_UNLIKELY(js_is_exception(v14))) { return 0; }
+    if (JS_UNLIKELY(js_is_exception(v14))) { goto exc_; }
     v16_h = js_bitor_fast(ctx, v14, js_int32(0));
-    if (JS_UNLIKELY(js_is_exception(v16_h))) { return 0; }
+    if (JS_UNLIKELY(js_is_exception(v16_h))) { goto exc_; }
     goto bb4;
 bb4:;
 #line 10 "numbers.js"
     v18_i = v5_i + 1;
     { int32_t t0 = v18_i; int32_t t1 = js_as_int32_value(v16_h); v5_i = t0; v9_h = t1; } goto bb2;
+exc_: return 0;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_label(JSContext *ctx, JSValue v0_x) {
@@ -108,27 +109,27 @@ static JS_MAYBE_UNUSED JSValue jsf_label(JSContext *ctx, JSValue v0_x) {
 #line 15 "numbers.js"
 #line 16 "numbers.js"
     v4 = js_iter_start(ctx, v0_x);
-    if (JS_UNLIKELY(js_is_exception(v4))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v4))) { goto exc_; }
     v7_out = js_empty_string(); goto bb1;
 bb1:;
 #line 16 "numbers.js"
     v5_part = js_iter_next(ctx, v4);
-    if (JS_UNLIKELY(js_is_exception(v5_part))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v5_part))) { goto exc_; }
     v6 = js_not_empty(v5_part);
     if (js_truthy(v6)) { goto bb4; } else { goto bb2; }
 bb2:;
 #line 17 "numbers.js"
     v12 = js_add(ctx, js_char_string(60), v7_out);
-    if (JS_UNLIKELY(js_is_exception(v12))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v12))) { goto exc_; }
     v14 = js_add(ctx, v12, js_char_string(62));
-    if (JS_UNLIKELY(js_is_exception(v14))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v14))) { goto exc_; }
     return v14;
 bb3:;
 #line 16 "numbers.js"
     v9 = js_take_exception(ctx);
     js_iter_close_throw(ctx, v4);
     js_discard(js_throw(ctx, v9));
-    return JS_EXCEPTION;
+    goto exc_;
 bb4:;
 #line 16 "numbers.js"
     v8_out = js_add(ctx, v7_out, v5_part);
@@ -137,6 +138,7 @@ bb4:;
 bb5:;
 #line 16 "numbers.js"
     v7_out = v8_out; goto bb1;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {

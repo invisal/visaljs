@@ -78,15 +78,16 @@ bb15:;
 #line 8 "logical.js"
     v32 = js_typeof(ctx, v26_x);
     v35 = js_add(ctx, v32, JS_UNDEFINED);
-    if (JS_UNLIKELY(js_is_exception(v35))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v35))) { goto exc_; }
     v41 = js_neg(ctx, v0_a);
-    if (JS_UNLIKELY(js_is_exception(v41))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v41))) { goto exc_; }
     v42 = js_add(ctx, v35, v41);
-    if (JS_UNLIKELY(js_is_exception(v42))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v42))) { goto exc_; }
     v48 = js_not(v1_b);
     v49 = js_add(ctx, v42, v48);
-    if (JS_UNLIKELY(js_is_exception(v49))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v49))) { goto exc_; }
     return v49;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
@@ -106,37 +107,38 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     mod_globals[0] = JS_EMPTY;
 #line 1 "logical.js"
     v2_pick = js_new_function(ctx, &jsfi_pick);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v2_pick) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v2_pick) < 0)) { goto exc_; }
 #line 10 "logical.js"
     mod_globals[0] = js_int32(5);
 #line 11 "logical.js"
     v6_n = mod_globals[0];
     v8 = js_add(ctx, v6_n, js_int32(2));
-    if (JS_UNLIKELY(js_is_exception(v8))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v8))) { goto exc_; }
     mod_globals[0] = v8;
 #line 12 "logical.js"
     v10_n = mod_globals[0];
     v12 = js_exp(ctx, v10_n, js_int32(2));
-    if (JS_UNLIKELY(js_is_exception(v12))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v12))) { goto exc_; }
     mod_globals[0] = v12;
 #line 13 "logical.js"
     v16 = jsf_pick(ctx, js_int32(0), js_char_string(98));
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v16))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v16))) { goto exc_; }
     v17_n = mod_globals[0];
     v18 = js_to_numeric(ctx, v17_n);
-    if (JS_UNLIKELY(js_is_exception(v18))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v18))) { goto exc_; }
     v19 = js_inc(ctx, v18);
-    if (JS_UNLIKELY(js_is_exception(v19))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v19))) { goto exc_; }
     mod_globals[0] = v19;
     v21_n = mod_globals[0];
     v22 = js_to_numeric(ctx, v21_n);
-    if (JS_UNLIKELY(js_is_exception(v22))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v22))) { goto exc_; }
     v23 = js_dec(ctx, v22);
-    if (JS_UNLIKELY(js_is_exception(v23))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v23))) { goto exc_; }
     mod_globals[0] = v23;
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 3, (const JSValue[]){ v16, v18, v23 }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 3, (const JSValue[]){ v16, v18, v23 }, JS_UNDEFINED)))) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_pick__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

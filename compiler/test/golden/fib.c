@@ -24,7 +24,7 @@ static JS_MAYBE_UNUSED JSValue jsf_fib(JSContext *ctx, JSValue v0_n) {
     JS_CHECK_STACK(ctx);
 #line 2 "fib.js"
     v2 = js_lt(ctx, v0_n, js_int32(2));
-    if (JS_UNLIKELY(js_is_exception(v2))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2))) { goto exc_; }
     if (js_truthy(v2)) { goto bb1; } else { goto bb3; }
 bb1:;
 #line 2 "fib.js"
@@ -32,18 +32,19 @@ bb1:;
 bb3:;
 #line 3 "fib.js"
     v4 = js_sub(ctx, v0_n, js_int32(1));
-    if (JS_UNLIKELY(js_is_exception(v4))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v4))) { goto exc_; }
     v5 = jsf_fib(ctx, v4);
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v5))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v5))) { goto exc_; }
     v7 = js_sub(ctx, v0_n, js_int32(2));
-    if (JS_UNLIKELY(js_is_exception(v7))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v7))) { goto exc_; }
     v8 = jsf_fib(ctx, v7);
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v8))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v8))) { goto exc_; }
     v9 = js_add(ctx, v5, v8);
-    if (JS_UNLIKELY(js_is_exception(v9))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v9))) { goto exc_; }
     return v9;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
@@ -62,7 +63,7 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     mod_globals[0] = JS_EMPTY;
 #line 1 "fib.js"
     v2_fib = js_new_function(ctx, &jsfi_fib);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v2_fib) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v2_fib) < 0)) { goto exc_; }
 #line 5 "fib.js"
     mod_globals[0] = js_int32(0);
 #line 6 "fib.js"
@@ -70,25 +71,25 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
 bb1:;
 #line 10 "fib.js"
     v22_total = mod_globals[0];
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v22_total }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v22_total }, JS_UNDEFINED)))) { goto exc_; }
     return JS_UNDEFINED;
 bb2:;
 #line 6 "fib.js"
     v10 = js_lt(ctx, v8_i, js_int32(10));
-    if (JS_UNLIKELY(js_is_exception(v10))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v10))) { goto exc_; }
     if (js_truthy(v10)) { goto bb3; } else { goto bb1; }
 bb3:;
 #line 7 "fib.js"
     v12 = js_mod(ctx, v8_i, js_int32(2));
-    if (JS_UNLIKELY(js_is_exception(v12))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v12))) { goto exc_; }
     v14 = js_strict_eq(ctx, v12, js_int32(0));
     if (js_truthy(v14)) { goto bb5; } else { goto bb7; }
 bb4:;
 #line 6 "fib.js"
     v20 = js_to_numeric(ctx, v8_i);
-    if (JS_UNLIKELY(js_is_exception(v20))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v20))) { goto exc_; }
     v21_i = js_inc(ctx, v20);
-    if (JS_UNLIKELY(js_is_exception(v21_i))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v21_i))) { goto exc_; }
     v8_i = v21_i; goto bb2;
 bb5:;
 #line 7 "fib.js"
@@ -98,11 +99,12 @@ bb7:;
     v15_total = mod_globals[0];
     v16 = jsf_fib(ctx, v8_i);
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v16))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v16))) { goto exc_; }
     v17 = js_add(ctx, v15_total, v16);
-    if (JS_UNLIKELY(js_is_exception(v17))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v17))) { goto exc_; }
     mod_globals[0] = v17;
     goto bb4;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_fib__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

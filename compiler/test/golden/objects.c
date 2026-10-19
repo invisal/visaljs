@@ -31,12 +31,13 @@ static JS_MAYBE_UNUSED JSValue jsf_area(JSContext *ctx, JSValue v0_r) {
     JS_CHECK_STACK(ctx);
 #line 3 "objects.js"
     v1 = js_get_prop(ctx, v0_r, js_char_string(119), &mod_ics[0]);
-    if (JS_UNLIKELY(js_is_exception(v1))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v1))) { goto exc_; }
     v2 = js_get_prop(ctx, v0_r, js_char_string(104), &mod_ics[1]);
-    if (JS_UNLIKELY(js_is_exception(v2))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2))) { goto exc_; }
     v3 = js_mul(ctx, v1, v2);
-    if (JS_UNLIKELY(js_is_exception(v3))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3))) { goto exc_; }
     return v3;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_grow(JSContext *ctx, JSValue v0_r, JSValue v1_k) {
@@ -46,16 +47,17 @@ static JS_MAYBE_UNUSED JSValue jsf_grow(JSContext *ctx, JSValue v0_r, JSValue v1
     JS_CHECK_STACK(ctx);
 #line 6 "objects.js"
     v2 = js_get_prop(ctx, v0_r, js_char_string(119), &mod_ics[2]);
-    if (JS_UNLIKELY(js_is_exception(v2))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2))) { goto exc_; }
     v4 = js_add(ctx, v2, js_int32(1));
-    if (JS_UNLIKELY(js_is_exception(v4))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_set_prop(ctx, v0_r, js_char_string(119), v4, false, &mod_ics[3]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v4))) { goto exc_; }
+    if (JS_UNLIKELY(js_set_prop(ctx, v0_r, js_char_string(119), v4, false, &mod_ics[3]) < 0)) { goto exc_; }
 #line 7 "objects.js"
-    if (JS_UNLIKELY(js_set_elem(ctx, v0_r, v1_k, js_int32(0), false) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_set_elem(ctx, v0_r, v1_k, js_int32(0), false) < 0)) { goto exc_; }
 #line 8 "objects.js"
     v8 = js_delete_value(ctx, v0_r, js_char_string(104), false);
-    if (JS_UNLIKELY(js_is_exception(v8))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v8))) { goto exc_; }
     return v8;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
@@ -87,66 +89,67 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     JS_CHECK_STACK(ctx);
 #line 2 "objects.js"
     v0_area = js_new_function(ctx, &jsfi_area);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v0_area) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v0_area) < 0)) { goto exc_; }
 #line 5 "objects.js"
     v2_grow = js_new_function(ctx, &jsfi_grow);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_1), v2_grow) < 0)) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_declare_global_var(ctx, JS_STATIC_STR(jss_2)) < 0)) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_declare_global_var(ctx, JS_STATIC_STR(jss_3)) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_1), v2_grow) < 0)) { goto exc_; }
+    if (JS_UNLIKELY(js_declare_global_var(ctx, JS_STATIC_STR(jss_2)) < 0)) { goto exc_; }
+    if (JS_UNLIKELY(js_declare_global_var(ctx, JS_STATIC_STR(jss_3)) < 0)) { goto exc_; }
 #line 10 "objects.js"
     v6 = js_new_object(ctx);
     js_define_data(ctx, js_as_object(v6), js_char_string(119), js_int32(2), JS_PROP_DEFAULT);
     js_define_data(ctx, js_as_object(v6), js_char_string(104), js_int32(3), JS_PROP_DEFAULT);
     v13 = js_add(ctx, js_int32(1), js_int32(1));
-    if (JS_UNLIKELY(js_is_exception(v13))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v13))) { goto exc_; }
     v14 = js_to_property_key(ctx, v13);
-    if (JS_UNLIKELY(js_is_exception(v14))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v14))) { goto exc_; }
     js_define_data(ctx, js_as_object(v6), v14, JS_STATIC_STR(jss_4), JS_PROP_DEFAULT);
     js_literal_set_proto(ctx, v6, JS_NULL);
     v19 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
-    if (JS_UNLIKELY(js_set_prop(ctx, v19, JS_STATIC_STR(jss_2), v6, false, &mod_ics[4]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_set_prop(ctx, v19, JS_STATIC_STR(jss_2), v6, false, &mod_ics[4]) < 0)) { goto exc_; }
 #line 11 "objects.js"
     v21 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
     v22_box = js_get_prop(ctx, v21, JS_STATIC_STR(jss_2), &mod_ics[5]);
-    if (JS_UNLIKELY(js_is_exception(v22_box))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v22_box))) { goto exc_; }
     v23 = jsf_area(ctx, v22_box);
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v23))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v23 }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v23))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v23 }, JS_UNDEFINED)))) { goto exc_; }
 #line 12 "objects.js"
     v26 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
     v27_box = js_get_prop(ctx, v26, JS_STATIC_STR(jss_2), &mod_ics[6]);
-    if (JS_UNLIKELY(js_is_exception(v27_box))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v27_box))) { goto exc_; }
     v28 = js_in(ctx, js_char_string(119), v27_box);
-    if (JS_UNLIKELY(js_is_exception(v28))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v28 }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v28))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v28 }, JS_UNDEFINED)))) { goto exc_; }
 #line 13 "objects.js"
     v32 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
     v33_box = js_get_prop(ctx, v32, JS_STATIC_STR(jss_2), &mod_ics[7]);
-    if (JS_UNLIKELY(js_is_exception(v33_box))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v33_box))) { goto exc_; }
     v34 = js_new_array_from(ctx, (const JSValue[]){ js_int32(1), JS_EMPTY, v33_box }, 3);
     v35 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
-    if (JS_UNLIKELY(js_set_prop(ctx, v35, JS_STATIC_STR(jss_3), v34, false, &mod_ics[8]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_set_prop(ctx, v35, JS_STATIC_STR(jss_3), v34, false, &mod_ics[8]) < 0)) { goto exc_; }
 #line 14 "objects.js"
     v37 = js_global_get(ctx, JS_STATIC_STR(jss_5), "console");
-    if (JS_UNLIKELY(js_is_exception(v37))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v37))) { goto exc_; }
     v38 = js_get_method(ctx, v37, JS_STATIC_STR(jss_6), &mod_ics[9]);
-    if (JS_UNLIKELY(js_is_exception(v38))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v38))) { goto exc_; }
     v39 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
     v40_list = js_get_prop(ctx, v39, JS_STATIC_STR(jss_3), &mod_ics[10]);
-    if (JS_UNLIKELY(js_is_exception(v40_list))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v40_list))) { goto exc_; }
     v41 = js_get_value(ctx, v40_list, js_int32(2));
-    if (JS_UNLIKELY(js_is_exception(v41))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v41))) { goto exc_; }
     v42 = js_get_prop(ctx, v41, js_char_string(119), &mod_ics[11]);
-    if (JS_UNLIKELY(js_is_exception(v42))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v42))) { goto exc_; }
     v43 = js_global_get(ctx, JS_ATOM(Error), "Error");
-    if (JS_UNLIKELY(js_is_exception(v43))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v43))) { goto exc_; }
     v45 = js_construct(ctx, v43, 1, (const JSValue[]){ js_char_string(101) }, JS_UNDEFINED, "Error");
-    if (JS_UNLIKELY(js_is_exception(v45))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v45))) { goto exc_; }
     v46 = js_get_prop(ctx, v45, JS_ATOM(message), &mod_ics[12]);
-    if (JS_UNLIKELY(js_is_exception(v46))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_call_site(ctx, v38, v37, 2, (const JSValue[]){ v42, v46 }, "console.log")))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v46))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_call_site(ctx, v38, v37, 2, (const JSValue[]){ v42, v46 }, "console.log")))) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_area__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
