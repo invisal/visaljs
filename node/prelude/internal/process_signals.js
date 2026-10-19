@@ -28,6 +28,12 @@ p.on("removeListener", (type) => {
   watched[type] = false;
 });
 
+/* the system call, as Node's binding: 0 or -errno */
+p._kill = function _kill(pid, signum) {
+  return processKill(pid, signum);
+};
+
+/* through process._kill, as Node's: a program (or a test) that replaces it sends no signal */
 p.kill = function kill(pid, sig) {
   if (pid != (pid | 0)) throw invalidArgType("pid", "of type number", pid);
   let signum;
@@ -37,7 +43,7 @@ p.kill = function kill(pid, sig) {
     signum = signals[sig];
     if (signum === undefined) throw codeError(TypeError, "ERR_UNKNOWN_SIGNAL", "Unknown signal: " + sig);
   }
-  const err = processKill(pid, signum);
-  if (err < 0) throw errnoException(err, "kill");
+  const err = p._kill(pid, signum);
+  if (err) throw errnoException(err, "kill");
   return true;
 };
