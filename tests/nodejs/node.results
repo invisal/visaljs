@@ -902,7 +902,12 @@ test-process-default.js
 test-process-dlopen-undefined-exports.js
 test-process-domain-segfault.js
 test-process-emit.js
+test-process-env-delete.js
+test-process-env-ignore-getter-setter.js
+test-process-env-symbols.js
+test-process-env-tz.js
 test-process-env-windows-error-reset.js
+test-process-env.js
 test-process-euid-egid.js
 test-process-exception-capture-errors.js
 test-process-exception-capture-should-abort-on-uncaught-setflagsfromstring.js
