@@ -1,6 +1,6 @@
 {
   "name": "visaljs",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Ahead-of-time JavaScript to C compiler: the command line",
   "license": "MIT",
   "type": "module",
