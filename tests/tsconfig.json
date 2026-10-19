@@ -12,5 +12,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["runner", "progress", "differential", "compat", "nodejs/*.ts", "apps/*.ts"]
+  "include": ["runner", "progress", "differential", "compat", "nodejs/*.ts", "apps/*.ts", "packages/*.ts"]
 }

@@ -1,0 +1,15 @@
+{
+  "name": "@visaljs-packages/redis",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A smoke test of redis, compiled by visaljs",
+  "type": "module",
+  "main": "test.js",
+  "scripts": {
+    "build": "node ../../../cli/src/cli.ts build test.js -o test",
+    "start": "node test.js"
+  },
+  "dependencies": {
+    "redis": "6.3.0"
+  }
+}
