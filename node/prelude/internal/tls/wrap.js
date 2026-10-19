@@ -12,7 +12,7 @@ import {
   tlsRootCertificates, tlsRun, tlsSession, tlsSetNoRenegotiation, tlsShutdown, tlsVerifyError,
 } from "visaljs:host";
 import { codeError, invalidArgType, outOfRange, validateFunction, validateString } from "../errors.js";
-import { features } from "../features.js";
+import { callableClass, features } from "../features.js";
 import { isIP } from "../net.js";
 import { Server as NetServer, Socket } from "../../net.js";
 import { createSecureContext, SecureContext, sslError, tlsFailure, VERSION_NAMES, verifyError } from "./common.js";
@@ -897,7 +897,7 @@ function SNICallback(servername, callback) {
   callback(null, undefined);
 }
 
-export class Server extends NetServer {
+class ServerClass extends NetServer {
   constructor(options, listener) {
     if (typeof options === "function") {
       listener = options;
@@ -960,6 +960,8 @@ export class Server extends NetServer {
     if (!ArrayBuffer.isView(keys)) throw invalidArgType("buffer", "an instance of Buffer, TypedArray, or DataView", keys);
   }
 }
+
+export const Server = callableClass(ServerClass, "Server");  /* Server(…) without new, as Node's */
 
 export function createServer(options, listener) {
   return new Server(options, listener);

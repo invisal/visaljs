@@ -5,6 +5,7 @@
 test-buffer-alloc.js                     vm.runInNewContext (a cross-realm ArrayBuffer)
 test-buffer-bytelength.js                vm.runInNewContext (a cross-realm ArrayBuffer)
 test-buffer-from.js                      vm.runInNewContext (cross-realm objects)
+test-crypto-subtle-cross-realm.js        vm.runInNewContext (another realm's crypto.subtle)
 
 # no threads: SharedArrayBuffer and transferring between workers
 test-buffer-sharedarraybuffer.js         SharedArrayBuffer (no threads)
@@ -16,9 +17,11 @@ test-zlib-brotli-kmaxlength-rangeerror.js  patches buffer.kMaxLength before requ
 test-zlib-zstd-kmaxlength-rangeerror.js  patches buffer.kMaxLength before require('zlib')
 
 # domain (deprecated, DEP0032): its binding to timers and errors isn't provided
+test-crypto-domain.js                    domain
+test-crypto-domains.js                   domain
 test-http-client-response-domain.js      domain
-test-timers-reset-process-domain-on-throw.js  domain
 test-timers-immediate-queue-throw.js     domain
+test-timers-reset-process-domain-on-throw.js  domain
 
 # no eval: Function() and vm compile source text
 test-stream-ispaused.js                  Function() constructor
@@ -77,6 +80,9 @@ test-net-socket-constructor.js           cluster.fork (a worker given descriptor
 test-net-child-process-connect-reset.js  child_process.spawn of node with an 'ipc' channel
 
 # no threads: a socket or server moved to a worker (worker_threads, MessageChannel)
+test-crypto-key-objects-messageport.js   MessageChannel
+test-crypto-keyobject-clone-transfer.js  MessageChannel transfer lists
+test-crypto-worker-thread.js             worker_threads.Worker
 test-net-server-transfer-worker.js       worker_threads.Worker
 test-net-socket-transfer-worker-http.js  worker_threads.Worker
 test-net-socket-transfer-worker.js       worker_threads.Worker
@@ -84,6 +90,8 @@ test-net-transfer-guards.js              MessageChannel transfer lists
 test-process-exec-argv.js                worker_threads.Worker
 test-process-execve-worker-threads.js    worker_threads.Worker
 test-process-threadCpuUsage-worker-threads.js  worker_threads.Worker
+test-webcrypto-cryptokey-clone-transfer.js  MessageChannel transfer lists
+test-webcrypto-cryptokey-workers.js      worker_threads.Worker
 
 # process.report (Node's diagnostic report)
 test-http-agent-reuse-drained-socket-only.js  process.report.getReport()

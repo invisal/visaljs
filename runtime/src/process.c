@@ -601,6 +601,9 @@ static JSValue new_process(JSContext *ctx) {
     if (js_is_exception(versions)) return versions;
     js_define_data(ctx, js_as_object(versions), js_atom_from_cstr(ctx, "node"), js_new_string_cstr(ctx, JS_NODE_VERSION), JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
     js_define_data(ctx, js_as_object(versions), js_atom_from_cstr(ctx, "visaljs"), js_new_string_cstr(ctx, JS_VISALJS_VERSION), JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
+    /* what a Node built with BoringSSL reports: the version in its OPENSSL_VERSION_TEXT, "OpenSSL 1.1.1
+       (compatible; BoringSSL)". Node's own check for crypto is Boolean(process.versions.openssl). */
+    js_define_data(ctx, js_as_object(versions), js_atom_from_cstr(ctx, "openssl"), js_new_string_cstr(ctx, "1.1.1"), JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
     js_define_data(ctx, p, js_atom_from_cstr(ctx, "versions"), versions, JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
     /* features: what this build has, in Node 24's names. No inspector, TLS from
        BoringSSL without OCSP stapling, require() of ES modules, no QUIC, no type stripping */

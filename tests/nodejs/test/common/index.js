@@ -166,8 +166,12 @@ function getBufferSources(buf) {
   return [...getArrayBufferViews(buf), new Uint8Array(buf).buffer];
 }
 
-function skip(msg) {
+function printSkipMessage(msg) {
   console.log(`1..0 # Skipped: ${msg}`);
+}
+
+function skip(msg) {
+  printSkipMessage(msg);
   process.exit(0);
 }
 
@@ -318,6 +322,7 @@ module.exports = {
   mustNotCall,
   mustSucceed,
   platformTimeout,
+  printSkipMessage,
   skip,
   get localhostIPv4() { return '127.0.0.1'; },
   get PORT() { return 12346; },

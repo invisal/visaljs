@@ -51,6 +51,7 @@ function fixturesOf(source: string): string[] {
     out.add(join(...parts));
   }
   for (const m of source.matchAll(/require\(\s*['"]\.\.\/fixtures\/([^'"]+)['"]\s*\)/g)) out.add(m[1]!);
+  for (const m of source.matchAll(/(?:from|import\()\s*['"]\.\.\/fixtures\/([^'"]+)['"]/g)) out.add(m[1]!);
   return [...out];
 }
 
