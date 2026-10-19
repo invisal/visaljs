@@ -66,13 +66,14 @@ static JS_MAYBE_UNUSED JSValue jsf_anonymous(JSContext *ctx, JSValue v0_env) {
     v1_n = js_env_get(v0_env, 0, 0);
     v2_step = js_env_get(v0_env, 0, 1);
     v3_step = js_check_tdz(ctx, v2_step, "step");
-    if (JS_UNLIKELY(js_is_exception(v3_step))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3_step))) { goto exc_; }
     v4 = js_add(ctx, v1_n, v3_step);
-    if (JS_UNLIKELY(js_is_exception(v4))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v4))) { goto exc_; }
     js_env_set(ctx, v0_env, 0, 0, v4);
 #line 7 "closures.js"
     v6_n = js_env_get(v0_env, 0, 0);
     return v6_n;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_anonymous_2(JSContext *ctx, JSValue v0_env) {
@@ -81,8 +82,9 @@ static JS_MAYBE_UNUSED JSValue jsf_anonymous_2(JSContext *ctx, JSValue v0_env) {
 #line 11 "closures.js"
     v1_i = js_env_get(v0_env, 0, 0);
     v2_i = js_check_tdz(ctx, v1_i, "i");
-    if (JS_UNLIKELY(js_is_exception(v2_i))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2_i))) { goto exc_; }
     return v2_i;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_anonymous_3(JSContext *ctx, JSValue v0_env) {
@@ -132,15 +134,15 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     JS_CHECK_STACK(ctx);
 #line 3 "closures.js"
     v0_counter = js_new_function(ctx, &jsfi_counter);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v0_counter) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v0_counter) < 0)) { goto exc_; }
 #line 12 "closures.js"
     v2_outer = js_new_function(ctx, &jsfi_outer);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_1), v2_outer) < 0)) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_declare_global_var(ctx, JS_STATIC_STR(jss_2)) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_1), v2_outer) < 0)) { goto exc_; }
+    if (JS_UNLIKELY(js_declare_global_var(ctx, JS_STATIC_STR(jss_2)) < 0)) { goto exc_; }
 #line 10 "closures.js"
     v5 = js_new_array_from(ctx, NULL, 0);
     v6 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
-    if (JS_UNLIKELY(js_set_prop(ctx, v6, JS_STATIC_STR(jss_2), v5, false, &mod_ics[0]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_set_prop(ctx, v6, JS_STATIC_STR(jss_2), v5, false, &mod_ics[0]) < 0)) { goto exc_; }
 #line 11 "closures.js"
     v9_env = js_new_env(ctx, JS_UNDEFINED, 1);
     js_env_set(ctx, v9_env, 0, 0, js_int32(0));
@@ -150,55 +152,56 @@ bb1:;
 #line 17 "closures.js"
     v28 = jsf_counter(ctx, js_int32(1));
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v28))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v28))) { goto exc_; }
     v30 = js_call_site(ctx, v28, JS_UNDEFINED, 0, NULL, "counter(...)");
-    if (JS_UNLIKELY(js_is_exception(v30))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v30))) { goto exc_; }
     v31 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
     v32_fns = js_get_prop(ctx, v31, JS_STATIC_STR(jss_2), &mod_ics[1]);
-    if (JS_UNLIKELY(js_is_exception(v32_fns))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v32_fns))) { goto exc_; }
     v33 = js_get_value(ctx, v32_fns, js_int32(1));
-    if (JS_UNLIKELY(js_is_exception(v33))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v33))) { goto exc_; }
     v34 = js_call_site(ctx, v33, v32_fns, 0, NULL, "fns[1]");
-    if (JS_UNLIKELY(js_is_exception(v34))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v34))) { goto exc_; }
     v35 = js_add(ctx, v30, v34);
-    if (JS_UNLIKELY(js_is_exception(v35))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v35))) { goto exc_; }
     v37 = jsf_outer(ctx, js_int32(5));
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v37))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v37))) { goto exc_; }
     v39 = js_call_site(ctx, v37, JS_UNDEFINED, 0, NULL, "outer(...)");
-    if (JS_UNLIKELY(js_is_exception(v39))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v39))) { goto exc_; }
     v41 = js_call_site(ctx, v39, JS_UNDEFINED, 0, NULL, "outer(...)(...)");
-    if (JS_UNLIKELY(js_is_exception(v41))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v41))) { goto exc_; }
     v42 = js_add(ctx, v35, v41);
-    if (JS_UNLIKELY(js_is_exception(v42))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v42 }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v42))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v42 }, JS_UNDEFINED)))) { goto exc_; }
     return JS_UNDEFINED;
 bb2:;
 #line 11 "closures.js"
     v14_i = js_env_get(v13_env, 0, 0);
     v16 = js_lt(ctx, v14_i, js_int32(2));
-    if (JS_UNLIKELY(js_is_exception(v16))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v16))) { goto exc_; }
     if (js_truthy(v16)) { goto bb3; } else { goto bb1; }
 bb3:;
 #line 11 "closures.js"
     v17 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
     v18_fns = js_get_prop(ctx, v17, JS_STATIC_STR(jss_2), &mod_ics[2]);
-    if (JS_UNLIKELY(js_is_exception(v18_fns))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v18_fns))) { goto exc_; }
     v19 = js_get_method(ctx, v18_fns, JS_STATIC_STR(jss_3), &mod_ics[3]);
-    if (JS_UNLIKELY(js_is_exception(v19))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v19))) { goto exc_; }
     v20 = js_new_closure(ctx, &jsfi_anonymous_2, v13_env);
-    if (JS_UNLIKELY(js_is_exception(js_call_site(ctx, v19, v18_fns, 1, (const JSValue[]){ v20 }, "fns.push")))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(js_call_site(ctx, v19, v18_fns, 1, (const JSValue[]){ v20 }, "fns.push")))) { goto exc_; }
     goto bb4;
 bb4:;
 #line 11 "closures.js"
     v22_env = js_env_copy(ctx, v13_env);
     v23_i = js_env_get(v22_env, 0, 0);
     v24 = js_to_numeric(ctx, v23_i);
-    if (JS_UNLIKELY(js_is_exception(v24))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v24))) { goto exc_; }
     v25 = js_inc(ctx, v24);
-    if (JS_UNLIKELY(js_is_exception(v25))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v25))) { goto exc_; }
     js_env_set(ctx, v22_env, 0, 0, v25);
     v13_env = v22_env; goto bb2;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_counter__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

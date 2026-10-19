@@ -23,8 +23,9 @@ static JS_MAYBE_UNUSED JSValue jsf_readShared(JSContext *ctx) {
 #line 10 "top-level.js"
     v0_shared = mod_globals[1];
     v1_shared = js_check_tdz(ctx, v0_shared, "shared");
-    if (JS_UNLIKELY(js_is_exception(v1_shared))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v1_shared))) { goto exc_; }
     return v1_shared;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
@@ -83,9 +84,9 @@ bb7:;
 bb8:;
 #line 17 "top-level.js"
     v39 = js_global_get(ctx, JS_STATIC_STR(jss_0), "console");
-    if (JS_UNLIKELY(js_is_exception(v39))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v39))) { goto exc_; }
     v40 = js_get_method(ctx, v39, JS_STATIC_STR(jss_1), &mod_ics[0]);
-    if (JS_UNLIKELY(js_is_exception(v40))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v40))) { goto exc_; }
     goto bb13;
 bb9:;
 #line 14 "top-level.js"
@@ -104,14 +105,15 @@ bb11:;
     v48_sum = v33; goto bb8;
 bb12:;
 #line 17 "top-level.js"
-    if (JS_UNLIKELY(js_is_exception(js_call_site(ctx, v40, v39, 2, (const JSValue[]){ v48_sum, v52_shared }, "console.log")))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(js_call_site(ctx, v40, v39, 2, (const JSValue[]){ v48_sum, v52_shared }, "console.log")))) { goto exc_; }
     return JS_UNDEFINED;
 bb13:;
 #line 10 "top-level.js"
     v51_shared = mod_globals[1];
     v52_shared = js_check_tdz(ctx, v51_shared, "shared");
-    if (JS_UNLIKELY(js_is_exception(v52_shared))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v52_shared))) { goto exc_; }
     goto bb12;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_readShared__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

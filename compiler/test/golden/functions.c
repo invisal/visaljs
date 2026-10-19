@@ -28,8 +28,9 @@ static JS_MAYBE_UNUSED JSValue jsf_Point(JSContext *ctx, JSValue v0_this, JSValu
     JS_CHECK_STACK(ctx);
     v2_this = js_sloppy_this(ctx, v0_this);
 #line 4 "functions.js"
-    if (JS_UNLIKELY(js_set_prop(ctx, v2_this, js_char_string(120), v1_x, false, &mod_ics[0]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_set_prop(ctx, v2_this, js_char_string(120), v1_x, false, &mod_ics[0]) < 0)) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_anonymous(JSContext *ctx, JSValue v0_this) {
@@ -39,8 +40,9 @@ static JS_MAYBE_UNUSED JSValue jsf_anonymous(JSContext *ctx, JSValue v0_this) {
     v1_this = js_sloppy_this(ctx, v0_this);
 #line 7 "functions.js"
     v2 = js_get_prop(ctx, v1_this, js_char_string(120), &mod_ics[1]);
-    if (JS_UNLIKELY(js_is_exception(v2))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2))) { goto exc_; }
     return v2;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_f(JSContext *ctx, JSValue v0_callee, JSValue v1_n) {
@@ -52,7 +54,7 @@ static JS_MAYBE_UNUSED JSValue jsf_f(JSContext *ctx, JSValue v0_callee, JSValue 
     JS_CHECK_STACK(ctx);
 #line 10 "functions.js"
     v3 = js_le(ctx, v1_n, js_int32(1));
-    if (JS_UNLIKELY(js_is_exception(v3))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3))) { goto exc_; }
     if (js_truthy(v3)) { goto bb1; } else { goto bb2; }
 bb1:;
 #line 10 "functions.js"
@@ -60,15 +62,16 @@ bb1:;
 bb2:;
 #line 10 "functions.js"
     v7 = js_sub(ctx, v1_n, js_int32(1));
-    if (JS_UNLIKELY(js_is_exception(v7))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v7))) { goto exc_; }
     v8 = js_call_site(ctx, v0_callee, JS_UNDEFINED, 1, (const JSValue[]){ v7 }, "f");
-    if (JS_UNLIKELY(js_is_exception(v8))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v8))) { goto exc_; }
     v9 = js_mul(ctx, v1_n, v8);
-    if (JS_UNLIKELY(js_is_exception(v9))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v9))) { goto exc_; }
     v10 = v9; goto bb3;
 bb3:;
 #line 10 "functions.js"
     return v10;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
@@ -90,48 +93,49 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     JS_CHECK_STACK(ctx);
 #line 3 "functions.js"
     v0_Point = js_new_function(ctx, &jsfi_Point);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v0_Point) < 0)) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_declare_global_var(ctx, JS_STATIC_STR(jss_1)) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v0_Point) < 0)) { goto exc_; }
+    if (JS_UNLIKELY(js_declare_global_var(ctx, JS_STATIC_STR(jss_1)) < 0)) { goto exc_; }
 #line 6 "functions.js"
     v3 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
     v4_Point = js_get_prop(ctx, v3, JS_STATIC_STR(jss_0), &mod_ics[2]);
-    if (JS_UNLIKELY(js_is_exception(v4_Point))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v4_Point))) { goto exc_; }
     v5 = js_get_prop(ctx, v4_Point, JS_ATOM(prototype), &mod_ics[3]);
-    if (JS_UNLIKELY(js_is_exception(v5))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v5))) { goto exc_; }
     v6 = js_new_function(ctx, &jsfi_anonymous);
-    if (JS_UNLIKELY(js_set_prop(ctx, v5, JS_ATOM(get), v6, false, &mod_ics[4]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_set_prop(ctx, v5, JS_ATOM(get), v6, false, &mod_ics[4]) < 0)) { goto exc_; }
 #line 9 "functions.js"
     v8 = js_new_function(ctx, &jsfi_f);
     v9 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
-    if (JS_UNLIKELY(js_set_prop(ctx, v9, JS_STATIC_STR(jss_1), v8, false, &mod_ics[5]) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_set_prop(ctx, v9, JS_STATIC_STR(jss_1), v8, false, &mod_ics[5]) < 0)) { goto exc_; }
 #line 12 "functions.js"
     v11 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
     v12_Point = js_get_prop(ctx, v11, JS_STATIC_STR(jss_0), &mod_ics[6]);
-    if (JS_UNLIKELY(js_is_exception(v12_Point))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v12_Point))) { goto exc_; }
     v13 = ctx->intrinsics[JS_INTRINSIC_GLOBAL_OBJECT];
     v14_fact = js_get_method(ctx, v13, JS_STATIC_STR(jss_1), &mod_ics[7]);
-    if (JS_UNLIKELY(js_is_exception(v14_fact))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v14_fact))) { goto exc_; }
     v17 = js_call_site(ctx, v14_fact, JS_UNDEFINED, 1, (const JSValue[]){ js_int32(3) }, "fact");
-    if (JS_UNLIKELY(js_is_exception(v17))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v17))) { goto exc_; }
     { JSValue c = v12_Point;
     if (JS_LIKELY(js_is_function(c) && js_as_function(c)->info == &jsfi_Point && js_as_function(c)->realm == ctx)) {
         JSValue t = js_new_instance(ctx, c, 4, &mod_ics[8]);
-        if (JS_UNLIKELY(js_is_exception(t))) { return JS_EXCEPTION; }
+        if (JS_UNLIKELY(js_is_exception(t))) { goto exc_; }
         JSValue r = jsf_Point(ctx, t, v17);
         JS_NO_TAIL_CALL();
-        if (JS_UNLIKELY(js_is_exception(r))) { return JS_EXCEPTION; }
+        if (JS_UNLIKELY(js_is_exception(r))) { goto exc_; }
         v18 = js_is_object(r) ? r : t;
     } else {
         JSValue r = js_construct(ctx, c, 1, (const JSValue[]){ v17 }, JS_UNDEFINED, "Point");
-        if (JS_UNLIKELY(js_is_exception(r))) { return JS_EXCEPTION; }
+        if (JS_UNLIKELY(js_is_exception(r))) { goto exc_; }
         v18 = r;
     } }
     v19 = js_get_method(ctx, v18, JS_ATOM(get), &mod_ics[9]);
-    if (JS_UNLIKELY(js_is_exception(v19))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v19))) { goto exc_; }
     v20 = js_call_site(ctx, v19, v18, 0, NULL, "(intermediate value).get");
-    if (JS_UNLIKELY(js_is_exception(v20))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v20 }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v20))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v20 }, JS_UNDEFINED)))) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_Point__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

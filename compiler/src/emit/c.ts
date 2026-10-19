@@ -546,6 +546,9 @@ class FunctionEmitter {
   /** Values something needs: instructions and terminators, and the phis feeding them. */
   private readonly used = new Set<Instr>();
   private readonly labels = new Set<Block>();
+  /** An exception leaves the function: through one shared return, which GCC compiles faster than
+   *  a return at each check (4% of a large program's compile time). */
+  private exits = false;
   private readonly lines: string[] = [];
   private lastLoc: Loc | null = null;
 
@@ -850,7 +853,10 @@ class FunctionEmitter {
   }
 
   private onException(b: Block): string {
-    return b.handler ? this.goto(b, b.handler) : `return ${C_FAIL[this.fn.returnRepr ?? "boxed"]};`;
+    if (b.handler) return this.goto(b, b.handler);
+    if (this.gen) return `return ${C_FAIL[this.fn.returnRepr ?? "boxed"]};`;
+    this.exits = true;
+    return "goto exc_;";
   }
 
   private key(i: Instr): string {
@@ -1455,6 +1461,7 @@ class FunctionEmitter {
       ...unusedParams,
       ...(calls ? [ret === "boxed" ? "    JS_CHECK_STACK(ctx);" : `    JS_CHECK_STACK_OR(ctx, ${C_FAIL[ret]});`] : []),
       ...body,
+      ...(this.exits ? [`exc_: return ${C_FAIL[ret]};`] : []),
       "}",
     ].join("\n");
   }

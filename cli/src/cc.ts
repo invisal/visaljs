@@ -38,14 +38,16 @@ export function findCompiler(): string {
 }
 
 /** $CC alone, else each usual C compiler on the PATH that runs, in order of preference: a build
- *  falls back to the next. Zig's clang comes last: it brings its own libc headers and linker. */
+ *  falls back to the next. Clang first: it compiles a large program's C in half GCC's time and
+ *  memory, and its code ran faster (7% fewer instructions per HTTP request). Zig's clang comes
+ *  last: it brings its own libc headers and linker. */
 export function findCompilers(): string[] {
   if (process.env.CC) {
     if (!compilerVersion(process.env.CC)) throw new Error(`$CC (${process.env.CC}) doesn't run`);
     return [process.env.CC];
   }
   const found = new Map<string, string>();
-  for (const cc of ["cc", "clang", "gcc", "zig cc"]) {
+  for (const cc of ["clang", "cc", "gcc", "zig cc"]) {
     const path = onPath(command(cc)[0]);
     if (path && !found.has(path) && compilerVersion(cc)) found.set(path, cc);
   }

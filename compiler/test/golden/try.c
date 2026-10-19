@@ -24,15 +24,16 @@ static JS_MAYBE_UNUSED JSValue jsf_risky(JSContext *ctx, JSValue v0_n) {
     JS_CHECK_STACK(ctx);
 #line 2 "try.js"
     v2 = js_gt(ctx, v0_n, js_int32(2));
-    if (JS_UNLIKELY(js_is_exception(v2))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2))) { goto exc_; }
     if (js_truthy(v2)) { goto bb1; } else { goto bb3; }
 bb1:;
 #line 2 "try.js"
     js_discard(js_throw(ctx, JS_STATIC_STR(jss_0)));
-    return JS_EXCEPTION;
+    goto exc_;
 bb3:;
 #line 3 "try.js"
     return v0_n;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_guarded(JSContext *ctx, JSValue v0_n) {
@@ -71,7 +72,7 @@ bb1:;
 bb2:;
 #line 7 "try.js"
     v9 = js_lt(ctx, v7_i, v0_n);
-    if (JS_UNLIKELY(js_is_exception(v9))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v9))) { goto exc_; }
     if (js_truthy(v9)) { goto bb3; } else { v61_log = v10_log; goto bb1; }
 bb3:;
 #line 8 "try.js"
@@ -79,9 +80,9 @@ bb3:;
 bb4:;
 #line 7 "try.js"
     v52 = js_to_numeric(ctx, v7_i);
-    if (JS_UNLIKELY(js_is_exception(v52))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v52))) { goto exc_; }
     v53_i = js_inc(ctx, v52);
-    if (JS_UNLIKELY(js_is_exception(v53_i))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v53_i))) { goto exc_; }
     { JSValue t0 = v53_i; JSValue t1 = v31_log; JSValue t2 = v37_exc; JSValue t3 = v44_ret; v7_i = t0; v10_log = t1; v38_exc = t2; v45_ret = t3; } goto bb2;
 bb5:;
 #line 16 "try.js"
@@ -89,7 +90,7 @@ bb5:;
 bb6:;
 #line 16 "try.js"
     v31_log = js_add(ctx, v28_log, js_char_string(59));
-    if (JS_UNLIKELY(js_is_exception(v31_log))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v31_log))) { goto exc_; }
     v34 = js_strict_eq(ctx, v32_completion, js_int32(0));
     if (js_truthy(v34)) { goto bb20; } else { goto bb21; }
 bb7:;
@@ -149,7 +150,7 @@ bb21:;
 bb22:;
 #line 16 "try.js"
     js_discard(js_throw(ctx, v37_exc));
-    return JS_EXCEPTION;
+    goto exc_;
 bb23:;
 #line 16 "try.js"
     v41 = js_strict_eq(ctx, v32_completion, js_int32(2));
@@ -167,6 +168,7 @@ bb26:;
 bb27:;
 #line 16 "try.js"
     v61_log = v31_log; goto bb1;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
@@ -176,16 +178,17 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     JS_CHECK_STACK(ctx);
 #line 1 "try.js"
     v0_risky = js_new_function(ctx, &jsfi_risky);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_1), v0_risky) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_1), v0_risky) < 0)) { goto exc_; }
 #line 5 "try.js"
     v2_guarded = js_new_function(ctx, &jsfi_guarded);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_2), v2_guarded) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_2), v2_guarded) < 0)) { goto exc_; }
 #line 21 "try.js"
     v5 = jsf_guarded(ctx, js_int32(5));
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v5))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v5 }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v5))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v5 }, JS_UNDEFINED)))) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_risky__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

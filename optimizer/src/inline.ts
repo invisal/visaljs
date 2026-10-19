@@ -23,8 +23,9 @@ import { OPS, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, T
 import { functionsOf, pauses } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
 
-/** A callee's largest size, in instructions. */
-const INLINE_SIZE = 40;
+/** A callee's largest size, in instructions. 40 made a large program's C 10% bigger than 20 did
+ *  (each copy is C to compile) and ran no faster. */
+const INLINE_SIZE = 20;
 /** A caller's largest size it grows to, in instructions. */
 const CALLER_SIZE = 3000;
 const ROUNDS = 2;

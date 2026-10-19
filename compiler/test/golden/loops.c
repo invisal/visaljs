@@ -44,7 +44,7 @@ bb1:;
 bb2:;
 #line 3 "loops.js"
     v7 = js_lt(ctx, v5_i, v0_n);
-    if (JS_UNLIKELY(js_is_exception(v7))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v7))) { goto exc_; }
     if (js_truthy(v7)) { goto bb3; } else { v34_hits = v22_hits; goto bb1; }
 bb3:;
 #line 3 "loops.js"
@@ -54,9 +54,9 @@ bb3:;
 bb4:;
 #line 3 "loops.js"
     v24 = js_to_numeric(ctx, v5_i);
-    if (JS_UNLIKELY(js_is_exception(v24))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v24))) { goto exc_; }
     v25_i = js_inc(ctx, v24);
-    if (JS_UNLIKELY(js_is_exception(v25_i))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v25_i))) { goto exc_; }
     { JSValue t0 = v25_i; JSValue t1 = v19_hits; v5_i = t0; v22_hits = t1; } goto bb2;
 bb5:;
 #line 9 "loops.js"
@@ -67,12 +67,12 @@ bb6:;
 bb7:;
 #line 6 "loops.js"
     v12 = js_to_numeric(ctx, v11_j);
-    if (JS_UNLIKELY(js_is_exception(v12))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v12))) { goto exc_; }
     v13_j = js_inc(ctx, v12);
-    if (JS_UNLIKELY(js_is_exception(v13_j))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v13_j))) { goto exc_; }
 #line 7 "loops.js"
     v15 = js_gt(ctx, v13_j, v5_i);
-    if (JS_UNLIKELY(js_is_exception(v15))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v15))) { goto exc_; }
     if (js_truthy(v15)) { goto bb8; } else { goto bb10; }
 bb8:;
 #line 7 "loops.js"
@@ -80,9 +80,9 @@ bb8:;
 bb10:;
 #line 8 "loops.js"
     v16 = js_mul(ctx, v5_i, v13_j);
-    if (JS_UNLIKELY(js_is_exception(v16))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v16))) { goto exc_; }
     v18 = js_gt(ctx, v16, js_int32(20));
-    if (JS_UNLIKELY(js_is_exception(v18))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v18))) { goto exc_; }
     if (js_truthy(v18)) { goto bb11; } else { goto bb13; }
 bb11:;
 #line 8 "loops.js"
@@ -90,9 +90,9 @@ bb11:;
 bb13:;
 #line 9 "loops.js"
     v20 = js_to_numeric(ctx, v19_hits);
-    if (JS_UNLIKELY(js_is_exception(v20))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v20))) { goto exc_; }
     v21_hits = js_inc(ctx, v20);
-    if (JS_UNLIKELY(js_is_exception(v21_hits))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v21_hits))) { goto exc_; }
     { JSValue t0 = v13_j; JSValue t1 = v21_hits; v11_j = t0; v19_hits = t1; } goto bb6;
 bb14:;
 #line 15 "loops.js"
@@ -100,15 +100,16 @@ bb14:;
 bb15:;
 #line 13 "loops.js"
     v30 = js_to_numeric(ctx, v29_hits);
-    if (JS_UNLIKELY(js_is_exception(v30))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v30))) { goto exc_; }
     v31_hits = js_dec(ctx, v30);
-    if (JS_UNLIKELY(js_is_exception(v31_hits))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v31_hits))) { goto exc_; }
     goto bb16;
 bb16:;
 #line 14 "loops.js"
     v33 = js_gt(ctx, v31_hits, js_int32(100));
-    if (JS_UNLIKELY(js_is_exception(v33))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v33))) { goto exc_; }
     if (js_truthy(v33)) { v29_hits = v31_hits; goto bb15; } else { goto bb14; }
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
@@ -117,13 +118,14 @@ static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
     JS_CHECK_STACK(ctx);
 #line 1 "loops.js"
     v0_count = js_new_function(ctx, &jsfi_count);
-    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v0_count) < 0)) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_declare_global_function(ctx, JS_STATIC_STR(jss_0), v0_count) < 0)) { goto exc_; }
 #line 17 "loops.js"
     v3 = jsf_count(ctx, js_int32(8));
     JS_NO_TAIL_CALL();
-    if (JS_UNLIKELY(js_is_exception(v3))) { return JS_EXCEPTION; }
-    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v3 }, JS_UNDEFINED)))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3))) { goto exc_; }
+    if (JS_UNLIKELY(js_is_exception(js_print(ctx, JS_UNDEFINED, JS_UNDEFINED, 1, (const JSValue[]){ v3 }, JS_UNDEFINED)))) { goto exc_; }
     return JS_UNDEFINED;
+exc_: return JS_EXCEPTION;
 }
 
 static JSValue jsf_count__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {

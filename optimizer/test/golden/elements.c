@@ -41,14 +41,14 @@ static JS_MAYBE_UNUSED double jsf_sieve(JSContext *ctx, JSValue v0_n) {
     JS_CHECK_STACK_OR(ctx, 0);
 #line 4 "elements.js"
     v3 = js_global_get(ctx, JS_STATIC_STR(jss_0), "Array");
-    if (JS_UNLIKELY(js_is_exception(v3))) { return 0; }
+    if (JS_UNLIKELY(js_is_exception(v3))) { goto exc_; }
     v5 = js_add(ctx, v0_n, js_int32(1));
     v6 = js_construct(ctx, v3, 1, (const JSValue[]){ v5 }, JS_UNDEFINED, "Array");
-    if (JS_UNLIKELY(js_is_exception(v6))) { return 0; }
+    if (JS_UNLIKELY(js_is_exception(v6))) { goto exc_; }
     v7 = js_get_method(ctx, v6, JS_STATIC_STR(jss_1), &mod_ics[0]);
-    if (JS_UNLIKELY(js_is_exception(v7))) { return 0; }
+    if (JS_UNLIKELY(js_is_exception(v7))) { goto exc_; }
     v9_composite = js_call_site(ctx, v7, v6, 1, (const JSValue[]){ JS_FALSE }, "(intermediate value).fill");
-    if (JS_UNLIKELY(js_is_exception(v9_composite))) { return 0; }
+    if (JS_UNLIKELY(js_is_exception(v9_composite))) { goto exc_; }
 #line 5 "elements.js"
 #line 6 "elements.js"
     { double t0 = 2.0; double t1 = 0.0; v13_i = t0; v18_count = t1; } goto bb2;
@@ -62,7 +62,7 @@ bb2:;
 bb3:;
 #line 7 "elements.js"
     v17 = js_get_index_ta_f64(ctx, v9_composite, v13_i);
-    if (JS_UNLIKELY(js_is_exception(v17))) { return 0; }
+    if (JS_UNLIKELY(js_is_exception(v17))) { goto exc_; }
     if (js_truthy(v17)) { goto bb5; } else { goto bb7; }
 bb4:;
 #line 6 "elements.js"
@@ -86,12 +86,13 @@ bb9:;
     if (js_truthy(v25)) { goto bb10; } else { goto bb8; }
 bb10:;
 #line 9 "elements.js"
-    if (JS_UNLIKELY(js_set_index_ta_f64(ctx, v9_composite, v23_j, JS_TRUE, true) < 0)) { return 0; }
+    if (JS_UNLIKELY(js_set_index_ta_f64(ctx, v9_composite, v23_j, JS_TRUE, true) < 0)) { goto exc_; }
     goto bb11;
 bb11:;
 #line 9 "elements.js"
     v30_j = v23_j + v13_i;
     v23_j = v30_j; goto bb9;
+exc_: return 0;
 }
 
 static JS_MAYBE_UNUSED JSValue jsf_byKey(JSContext *ctx, JSValue v0_o, JSValue v1_k) {
@@ -101,12 +102,13 @@ static JS_MAYBE_UNUSED JSValue jsf_byKey(JSContext *ctx, JSValue v0_o, JSValue v
     JS_CHECK_STACK(ctx);
 #line 15 "elements.js"
     v2 = js_get_index_ta(ctx, v0_o, v1_k);
-    if (JS_UNLIKELY(js_is_exception(v2))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v2))) { goto exc_; }
     v3 = js_get_length(ctx, v0_o, JS_ATOM(length), &mod_ics[1]);
-    if (JS_UNLIKELY(js_is_exception(v3))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v3))) { goto exc_; }
     v4 = js_add(ctx, v2, v3);
-    if (JS_UNLIKELY(js_is_exception(v4))) { return JS_EXCEPTION; }
+    if (JS_UNLIKELY(js_is_exception(v4))) { goto exc_; }
     return v4;
+exc_: return JS_EXCEPTION;
 }
 
 static JS_MAYBE_UNUSED JSValue js_script(JSContext *ctx) {
