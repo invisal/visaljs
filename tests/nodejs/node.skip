@@ -36,9 +36,12 @@ test-fs-cp-async-file-url.mjs            a path relative to Node's checkout (./t
 
 # Node's internal handle list
 test-fs-watch-recursive-assert-leaks.js  process._getActiveHandles (Node's internal handle list)
+test-process-getactivehandles.js         process._getActiveHandles
+test-process-getactiverequests.js        process._getActiveRequests
 
 # Node's libuv handle objects (socket._handle), which a compiled program's sockets don't have
 test-http-client-spurious-aborted.js     patches res.socket._handle.close
+test-child-process-pipe-dataflow.js      patches stdout._handle.readStart
 test-net-connect-keepalive.js            patches client._handle.setKeepAlive
 test-net-connect-nodelay.js              patches client._handle.setNoDelay
 test-net-keepalive-interval-count.js     patches client._handle.setKeepAlive
@@ -68,9 +71,87 @@ test-net-child-process-connect-reset.js  child_process.spawn of node with an 'ip
 
 # no threads: a socket or server moved to a worker (worker_threads, MessageChannel)
 test-net-server-transfer-worker.js       worker_threads.Worker
-test-net-socket-transfer-worker.js       worker_threads.Worker
 test-net-socket-transfer-worker-http.js  worker_threads.Worker
+test-net-socket-transfer-worker.js       worker_threads.Worker
 test-net-transfer-guards.js              MessageChannel transfer lists
+test-process-exec-argv.js                worker_threads.Worker
+test-process-execve-worker-threads.js    worker_threads.Worker
+test-process-threadCpuUsage-worker-threads.js  worker_threads.Worker
 
 # process.report (Node's diagnostic report)
 test-http-agent-reuse-drained-socket-only.js  process.report.getReport()
+
+# child_process.fork() and IPC: forking starts a Node on a module, which a compiled program doesn't have
+test-child-process-disconnect.js         child_process.fork
+test-child-process-fork-abort-signal.js  child_process.fork
+test-child-process-fork-advanced-header-serialization.js  child_process.fork
+test-child-process-fork-and-spawn.js     child_process.fork
+test-child-process-fork-args.js          child_process.fork
+test-child-process-fork-close.js         child_process.fork
+test-child-process-fork-closed-channel-segfault.js  child_process.fork
+test-child-process-fork-detached.js      child_process.fork
+test-child-process-fork-dgram.js         child_process.fork
+test-child-process-fork-exec-argv.js     child_process.fork
+test-child-process-fork-getconnections.js  child_process.fork
+test-child-process-fork-net-server.js    child_process.fork
+test-child-process-fork-net-socket.js    child_process.fork
+test-child-process-fork-net.js           child_process.fork
+test-child-process-fork-no-shell.js      child_process.fork
+test-child-process-fork-ref.js           child_process.fork
+test-child-process-fork-ref2.js          child_process.fork
+test-child-process-fork-stdio-string-variant.js  child_process.fork
+test-child-process-fork-stdio.js         child_process.fork
+test-child-process-fork-timeout-kill-signal.js  child_process.fork
+test-child-process-fork-url.mjs          child_process.fork
+test-child-process-fork3.js              child_process.fork
+test-child-process-internal.js           child_process.fork
+test-child-process-ipc-next-tick.js      child_process.fork
+test-child-process-net-reuseport.js      child_process.fork
+test-child-process-prototype-tampering.mjs  child_process.fork
+test-child-process-send-after-close.js   child_process.fork
+test-child-process-send-cb.js            child_process.fork
+test-child-process-send-keep-open.js     child_process.fork
+test-child-process-send-returns-boolean.js  child_process.fork
+test-child-process-send-type-error.js    child_process.fork
+test-child-process-send-utf8.js          child_process.fork
+test-child-process-server-close.js       child_process.fork
+test-child-process-silent.js             child_process.fork
+test-child-process-spawn-typeerror.js    child_process.fork
+test-process-external-stdio-close.js     child_process.fork
+test-process-redirect-warnings.js        child_process.fork
+
+# the 'ipc' stdio and child.send(): no IPC channel between processes (it comes with fork)
+test-child-process-advanced-serialization-largebuffer.js  stdio 'ipc'
+test-child-process-advanced-serialization-splitted-length-field.js  stdio 'ipc'
+test-child-process-advanced-serialization.js  stdio 'ipc'
+test-child-process-constructor.js        stdio 'ipc'
+test-child-process-stdin-ipc.js          stdio 'ipc'
+test-child-process-stdout-ipc.js         stdio 'ipc'
+test-process-external-stdio-close-spawn.js  stdio 'ipc'
+
+# a child that runs Node (-e code, or a fixture script) through process.execPath
+test-child-process-can-write-to-stdout.js  process.execPath as Node
+test-child-process-detached.js           process.execPath as Node
+test-child-process-exec-maxbuf.js        process.execPath as Node
+test-child-process-execfile-maxbuf.js    process.execPath as Node
+test-child-process-execfile.js           process.execPath as Node
+test-child-process-execfilesync-maxbuf.js  process.execPath as Node
+test-child-process-execsync-maxbuf.js    process.execPath as Node
+test-child-process-exit-code.js          process.execPath as Node
+test-child-process-ipc.js                process.execPath as Node
+test-child-process-kill-sigwinch.js      process.execPath as Node
+test-child-process-kill.js               process.execPath as Node
+test-child-process-no-deprecation.js     process.execPath as Node
+test-child-process-promisified.js        process.execPath as Node
+test-child-process-spawn-controller.js   process.execPath as Node
+test-child-process-spawn-shell.js        process.execPath as Node
+test-child-process-spawnsync-input.js    process.execPath as Node
+test-child-process-spawnsync-maxbuf.js   process.execPath as Node
+test-child-process-spawnsync-non-string-args.js  process.execPath as Node
+test-child-process-stdout-flush-exit.js  process.execPath as Node
+test-child-process-stdout-flush.js       process.execPath as Node
+test-process-redirect-warnings-env.js    process.execPath as Node
+
+# Node's internals and command line: its bindings, and the options a Node takes
+test-process-binding-util.js             process.binding
+test-process-env-allowed-flags.js        process.allowedNodeEnvironmentFlags (Node's options)

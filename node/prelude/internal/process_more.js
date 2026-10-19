@@ -10,7 +10,7 @@ import {
 } from "visaljs:host";
 import { isBuiltin, REQUIRE_TABLE } from "../module.js";
 import { parseDotenv } from "./dotenv.js";
-import { codeError, invalidArgType, notSupported, systemError } from "./errors.js";
+import { codeError, invalidArgType, invalidArgValue, notSupported, outOfRange, systemError } from "./errors.js";
 import "./process_events.js";
 
 const p = globalThis.process;
@@ -66,13 +66,13 @@ define("uptime", function uptime() {
 function cpuUsageOf(thread, prevValue) {
   const usage = procCpuUsage(thread);
   const [user, system] = typeof usage === "number" ? [0, 0] : usage;
-  if (prevValue === undefined) return { user, system };
+  if (!prevValue) return { user, system };  /* as Node's: any falsy prevValue */
   for (const key of ["user", "system"]) {
-    const value = prevValue?.[key];
+    const value = prevValue[key];
+    if (typeof value === "number" && value >= 0 && Number.isFinite(value)) continue;
+    if (key === "user" && (typeof prevValue !== "object" || Array.isArray(prevValue))) throw invalidArgType("prevValue", "of type object", prevValue);
     if (typeof value !== "number") throw invalidArgType(`prevValue.${key}`, "of type number", value);
-    if (!(value >= 0) || !Number.isFinite(value)) {
-      throw codeError(RangeError, "ERR_INVALID_ARG_VALUE", `The property 'prevValue.${key}' is invalid. Received ${value}`);
-    }
+    throw codeError(RangeError, "ERR_INVALID_ARG_VALUE", `The property 'prevValue.${key}' is invalid. Received ${value}`);
   }
   return { user: user - prevValue.user, system: system - prevValue.system };
 }
@@ -140,28 +140,36 @@ if (posix) {
     return groups;
   });
 
+  /* Node's validateId: a uint32 or a name; all checked before any is looked up */
+  const validateId = (id, name) => {
+    if (typeof id === "number") {
+      if (!Number.isInteger(id)) throw outOfRange(name, "an integer", id);
+      if (id < 0 || id > 4294967295) throw outOfRange(name, ">= 0 && <= 4294967295", id);
+    } else if (typeof id !== "string") {
+      throw invalidArgType(name, "one of type number or string", id);
+    }
+  };
+
   define("setgroups", function setgroups(groups) {
     if (!Array.isArray(groups)) throw invalidArgType("groups", "an instance of Array", groups);
-    const ids = groups.map((group, i) => {
-      if (typeof group !== "number" && typeof group !== "string") throw invalidArgType(`groups[${i}]`, "one of type number or string", group);
-      return idOf(group, "Group");
-    });
+    groups.forEach((group, i) => validateId(group, `groups[${i}]`));
+    const ids = groups.map((group) => idOf(group, "Group"));
     const err = procSetGroups(ids);
     if (err < 0) throw errnoException(err, "setgroups");
   });
 
   define("initgroups", function initgroups(user, extraGroup) {
+    validateId(user, "user");
+    validateId(extraGroup, "extraGroup");
+    const group = idOf(extraGroup, "Group");  /* as Node's: an unknown group is reported before an unknown user */
     let name = user;
     if (typeof user === "number") {
       name = procUserName(user);
       if (name === null) throw codeError(Error, "ERR_UNKNOWN_CREDENTIAL", `User identifier does not exist: ${user}`);
-    } else if (typeof user !== "string") {
-      throw invalidArgType("user", "one of type number or string", user);
     } else if (procUserId(user) === -1) {
       throw codeError(Error, "ERR_UNKNOWN_CREDENTIAL", `User identifier does not exist: ${user}`);
     }
-    if (typeof extraGroup !== "number" && typeof extraGroup !== "string") throw invalidArgType("extraGroup", "one of type number or string", extraGroup);
-    const err = procInitGroups(name, idOf(extraGroup, "Group"));
+    const err = procInitGroups(name, group);
     if (err < 0) throw errnoException(err, "initgroups");
   });
 }
@@ -183,9 +191,16 @@ define("execve", function execve(execPath, args = [], env = p.env) {
   if (!posix) throw codeError(Error, "ERR_FEATURE_UNAVAILABLE_ON_PLATFORM", `process.execve is not available on ${p.platform}`);
   validateString(execPath, "execPath");
   if (!Array.isArray(args)) throw invalidArgType("args", "an instance of Array", args);
-  args.forEach((arg, i) => validateString(arg, `args[${i}]`));
-  if (env === null || typeof env !== "object") throw invalidArgType("env", "of type object", env);
-  const pairs = Object.entries(env).map(([key, value]) => `${key}=${value}`);
+  args.forEach((arg, i) => {
+    if (typeof arg !== "string" || arg.includes("\u0000")) throw invalidArgValue(`args[${i}]`, "must be a string without null bytes", arg);
+  });
+  if (env === null || typeof env !== "object" || Array.isArray(env)) throw invalidArgType("env", "of type object", env);
+  const pairs = Object.entries(env).map(([key, value]) => {
+    if (typeof value !== "string" || key.includes("\u0000") || value.includes("\u0000")) {
+      throw invalidArgValue("env", "must be an object with string keys and values without null bytes", env);
+    }
+    return `${key}=${value}`;
+  });
   const err = procExecve(execPath, args, pairs);
   p.stderr.write(`process.execve failed with error code ${errnoName(err)}\n`);
   procAbort();

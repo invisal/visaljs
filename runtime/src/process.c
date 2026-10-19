@@ -197,7 +197,7 @@ static JSValue specific_type(JSContext *ctx, JSValue v) {
         JSValue s = js_concat(ctx, prefix, quoted);
         return js_is_exception(s) ? s : js_concat(ctx, s, suffix);
     }
-    const char *type = js_is_number(v) ? "number" : js_is_bool(v) ? "boolean" : "symbol";
+    const char *type = js_is_number(v) ? "number" : js_is_bool(v) ? "boolean" : js_is_symbol(v) ? "symbol" : "bigint";
     JSValue shown = js_is_symbol(v) ? js_symbol_descriptive_string(ctx, v) : js_inspect(ctx, v);
     if (js_is_exception(shown)) return shown;
     snprintf(buf, sizeof buf, "type %s (", type);
