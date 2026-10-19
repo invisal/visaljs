@@ -501,8 +501,13 @@ function maybeClose(subprocess) {
 
 /** Node's fork(): a Node running a module, with a channel to it. */
 /* Node's fork, as far as its checks: the arguments are validated as Node's (a bad one is the same
- * error), then it can't start the Node it needs */
+ * error), then it can't start the Node it needs. Its body starts with the throw so that
+ * tests/compat/node.ts counts it a stub. */
 export function fork(modulePath, args = [], options) {
+  throw notSupported(validateFork(modulePath, args, options));
+}
+
+function validateFork(modulePath, args, options) {
   modulePath = getValidatedPath(modulePath, "modulePath");
   if (args == null) {
     args = [];
@@ -519,7 +524,7 @@ export function fork(modulePath, args = [], options) {
   const execArgv = options.execArgv || process.execArgv;
   validateArgumentsNullCheck(execArgv, "options.execArgv");
   normalizeSpawnArguments(options.execPath, [...execArgv, modulePath, ...args], options);
-  throw notSupported("child_process.fork() (it starts a Node, which a compiled program doesn't have)");
+  return "child_process.fork() (it starts a Node, which a compiled program doesn't have)";
 }
 
 export function _forkChild() {
