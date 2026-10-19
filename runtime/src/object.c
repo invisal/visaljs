@@ -544,7 +544,8 @@ int js_ordinary_set(JSContext *ctx, JSObject *o, JSValue key, JSValue v, JSValue
         /* not for classes that intercept indices (mapped arguments); arrays only guard length */
         bool plain = !o->shape->cls->define_own_property || o->shape->cls == &js_class_array;
         if (plain && js_elements_try_store(ctx, o, js_key_index(key), v)) return 1;
-    } else if (js_is_object(receiver) && js_as_object(receiver) == o) {
+    } else if (js_is_object(receiver) && js_as_object(receiver) == o &&
+               (!o->shape->cls->define_own_property || o->shape->cls == &js_class_array)) {  /* a class that intercepts writes (process.env) sees each */
         uint8_t attrs;
         int32_t slot = find_own(o, key, &attrs);
         if (slot >= 0 && (attrs & (JS_PROP_WRITABLE | JS_PROP_ACCESSOR)) == JS_PROP_WRITABLE) {
@@ -1083,7 +1084,8 @@ int js_set_prop_slow(JSContext *ctx, JSValue obj, JSValue key, JSValue v, bool s
     lookup(ctx, o, key, &l);
     JSShape *before = o->shape;
     bool cacheable = l.cacheable && !l.exotic;
-    if (cacheable && l.holder == o && (l.attrs & (JS_PROP_WRITABLE | JS_PROP_ACCESSOR)) == JS_PROP_WRITABLE) {
+    bool intercepts = before->cls->define_own_property && before->cls != &js_class_array;
+    if (cacheable && !intercepts && l.holder == o && (l.attrs & (JS_PROP_WRITABLE | JS_PROP_ACCESSOR)) == JS_PROP_WRITABLE) {
         JSPropCache c = with_fast_path((JSPropCache){ .kind = JS_IC_OWN, .slot = (uint32_t)l.slot, .shape = before });
         *ic = c;
         m->key = key;

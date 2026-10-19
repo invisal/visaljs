@@ -56,5 +56,7 @@ size_t js_os_peak_rss(void);
 double js_os_time_ms(void);
 int32_t js_os_local_offset(int64_t seconds, bool *dst);
 const char *js_os_timezone_id(void);
+/* TZ changed (process.env.TZ): local time and the zone's id are looked up again. */
+void js_os_timezone_changed(void);
 
 #endif /* JS_OS_H */

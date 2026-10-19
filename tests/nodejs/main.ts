@@ -180,7 +180,8 @@ async function build(entry: string): Promise<{ binary: string; seconds: number }
  *  binary marks its environment, which children inherit, and a child exits at once with an
  *  error: the test fails, as one that needs Node should. Except a test that runs itself again
  *  (`execPath, [__filename, ...args]`, the usual way to test in a fresh process): its child runs
- *  that test, with process.argv as Node's, [execPath, the file, ...args]. */
+ *  that test, with process.argv as Node's, [execPath, the file, ...args]; the test's own argv[1]
+ *  is its file too, as under Node, so `[process.argv[1], ...args]` starts it again as well. */
 function batchEntry(files: string[]): string {
   const entry = join(out, `batch-${entries++}.cjs`);
   const cases = files.map((f) => {
@@ -198,6 +199,8 @@ function batchEntry(files: string[]): string {
     '    console.error("a compiled test started as a child process: it can\'t run another program as Node does");',
     "    process.exit(1);",
     "  }",
+    "} else if (process.env.VISALJS_NODEJS_TEST) {",
+    "  process.argv[1] = parallel + process.env.VISALJS_NODEJS_TEST;  // as Node's: the script, which a child started with it runs",
     "}",
     'process.env.VISALJS_NODEJS_CHILD = "1";',
     "switch (process.env.VISALJS_NODEJS_TEST) {", ...cases, "}", ""].join("\n"));

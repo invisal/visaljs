@@ -197,7 +197,7 @@ static JSValue specific_type(JSContext *ctx, JSValue v) {
         JSValue s = js_concat(ctx, prefix, quoted);
         return js_is_exception(s) ? s : js_concat(ctx, s, suffix);
     }
-    const char *type = js_is_number(v) ? "number" : js_is_bool(v) ? "boolean" : "symbol";
+    const char *type = js_is_number(v) ? "number" : js_is_bool(v) ? "boolean" : js_is_symbol(v) ? "symbol" : "bigint";
     JSValue shown = js_is_symbol(v) ? js_symbol_descriptive_string(ctx, v) : js_inspect(ctx, v);
     if (js_is_exception(shown)) return shown;
     snprintf(buf, sizeof buf, "type %s (", type);
@@ -467,6 +467,88 @@ static const char *arch(void) {
 #endif
 }
 
+/* ---- process.env ------------------------------------------------------------------------------ */
+
+/* Node's process.env interceptors (src/node_env_var.cc): a value is stored as a string and set in
+ * the C environment, a delete unsets it, and only plain data properties are accepted. Reads are
+ * ordinary (no get_own_property hook), so they stay as fast as a plain object's; writes aren't
+ * cached, so each reaches env_define. */
+static bool env_populating;  /* new_process copying environ in: nothing to set */
+
+static char *env_utf8(JSContext *ctx, JSValue s) {
+    JSStrView v = js_string_view(ctx, s);
+    size_t n = js_view_to_utf8(v, NULL, 0);
+    char *out = malloc(n + 1);
+    if (!out) js_fatal("out of memory in process.env");
+    js_view_to_utf8(v, out, n + 1);
+    out[n] = '\0';
+    return out;
+}
+
+static void env_apply(JSContext *ctx, JSValue key, JSValue value) {
+    char *k = env_utf8(ctx, key);
+    if (js_is_undefined(value)) {
+#ifdef _WIN32
+        _putenv_s(k, "");
+#else
+        unsetenv(k);
+#endif
+    } else {
+        char *v = env_utf8(ctx, value);
+#ifdef _WIN32
+        _putenv_s(k, v);
+#else
+        setenv(k, v, 1);
+#endif
+        free(v);
+    }
+    if (strcmp(k, "TZ") == 0) js_os_timezone_changed();
+    free(k);
+}
+
+static int env_define(JSContext *ctx, JSObject *o, JSValue key, const JSPropertyDescriptor *desc, bool throw_on_fail) {
+    (void)throw_on_fail;
+    if (env_populating) return JS_ORDINARY;
+    if (js_is_symbol(key)) {
+        js_discard(js_throw_type_error(ctx, "Cannot convert a Symbol value to a string"));
+        return -1;
+    }
+    if (desc->has & (JS_DESC_GET | JS_DESC_SET)) {
+        js_discard(throw_with_code(ctx, JS_TYPE_ERROR, "ERR_INVALID_OBJECT_DEFINE_PROPERTY",
+                                   js_new_string_cstr(ctx, "'process.env' does not accept an accessor(getter/setter) descriptor")));
+        return -1;
+    }
+    const uint8_t all = JS_DESC_WRITABLE | JS_DESC_ENUMERABLE | JS_DESC_CONFIGURABLE;
+    bool full = (desc->has & JS_DESC_VALUE) && (desc->has & all) == all && (desc->attrs & JS_PROP_DEFAULT) == JS_PROP_DEFAULT;
+    /* an assignment to a variable already set: [[Set]] redefines it with the value alone */
+    JSPropertyDescriptor existing;
+    bool assign = (desc->has & JS_DESC_VALUE) && !(desc->has & all) && js_ordinary_get_own_property(ctx, o, key, &existing) == 1;
+    if (!full && !assign) {
+        js_discard(throw_with_code(ctx, JS_TYPE_ERROR, "ERR_INVALID_OBJECT_DEFINE_PROPERTY",
+                                   js_new_string_cstr(ctx, "'process.env' only accepts a configurable, writable, and enumerable data descriptor")));
+        return -1;
+    }
+    JSValue value = js_to_string(ctx, desc->value);
+    if (js_is_exception(value)) return -1;
+    JSValue name = js_to_string(ctx, key);
+    if (js_is_exception(name)) return -1;
+    if (js_string_length(name) == 0) return 1;  /* as Node's: setenv refuses an empty name, nothing is stored */
+    env_apply(ctx, name, value);
+    JSPropertyDescriptor d = js_data_descriptor(value, JS_PROP_DEFAULT);
+    return js_ordinary_define_own_property(ctx, o, key, &d, true);
+}
+
+static int env_delete(JSContext *ctx, JSObject *o, JSValue key, bool throw_on_fail) {
+    (void)o, (void)throw_on_fail;
+    if (env_populating || js_is_symbol(key)) return JS_ORDINARY;
+    JSValue name = js_to_string(ctx, key);
+    if (js_is_exception(name)) return -1;
+    env_apply(ctx, name, JS_UNDEFINED);
+    return JS_ORDINARY;
+}
+
+static const JSClass env_class = { "Object", sizeof(JSObject), NULL, env_define, env_delete, NULL, NULL, NULL, NULL };
+
 static JSValue new_process(JSContext *ctx) {
     JSValue process = js_new_object(ctx);
     if (js_is_exception(process)) return process;
@@ -494,9 +576,11 @@ static JSValue new_process(JSContext *ctx) {
     define(ctx, p, "execArgv", js_new_array(ctx, 0));  /* Node's own options: a compiled program has none */
     define(ctx, p, "execPath", exec);
 
-    /* env: a snapshot (writes don't reach the C environment) */
-    JSValue env = js_new_object(ctx);
-    if (js_is_exception(env)) return env;
+    /* env: the environment as it was at startup, in an object whose writes and deletes reach the C
+     * environment (env_class) */
+    JSValue env = js_object_value(js_alloc_object(ctx, JS_CELL_OBJECT, js_shape_root(ctx, &env_class,
+                                                  ctx->intrinsics[JS_INTRINSIC_OBJECT_PROTOTYPE], JS_DEFAULT_INLINE_SLOTS)));
+    env_populating = true;
     for (size_t i = 0; environ && environ[i]; i++) {
         const char *eq = strchr(environ[i] + 1, '=');
         if (!eq) continue;
@@ -507,6 +591,7 @@ static JSValue new_process(JSContext *ctx) {
         if (js_is_exception(key)) return key;
         js_define_data(ctx, js_as_object(env), key, value, JS_PROP_DEFAULT);
     }
+    env_populating = false;
     define(ctx, p, "env", env);
     define(ctx, p, "pid", js_int32((int32_t)getpid()));
     /* version and versions: the Node API implemented, and visaljs's own; read-only, as Node's,

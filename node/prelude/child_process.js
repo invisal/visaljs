@@ -27,7 +27,7 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 import {
-  errnoName, netOpen, osConstants, processClose, processKillChild, processRef, processSpawn, processSpawnSync,
+  errnoName, netOpen, netReadStop, osConstants, processClose, processKillChild, processRef, processSpawn, processSpawnSync,
   utilInspect as inspect,
 } from "visaljs:host";
 import { Buffer } from "./buffer.js";
@@ -218,7 +218,7 @@ function getValidStdio(stdio, sync) {
       acc.push({ type: "fd", fd: typeof stdio === "number" ? stdio : stdio.fd });
     } else if (socketHandle(stdio) !== undefined || socketHandle(stdio.handle) !== undefined || socketHandle(stdio._handle) !== undefined) {
       const socket = socketHandle(stdio) !== undefined ? stdio : socketHandle(stdio.handle) !== undefined ? stdio.handle : stdio._handle;
-      acc.push({ type: "wrap", handle: socket._handle, socket, _stdio: stdio });
+      acc.push({ type: "wrap", handle: socket._handle, wrapped: socket, _stdio: stdio });  /* not the child's own stream: stdin… stay null, as Node's */
     } else if (isArrayBufferView(stdio) || typeof stdio === "string") {
       if (!sync) {
         cleanup();
@@ -393,6 +393,10 @@ ChildProcess.prototype.spawn = function spawn(options) {
     // otherwise we might attempt to read from the stream when at the same time
     // the child process does.
     if (stream.type === "wrap") {
+      if (stream.wrapped._handle !== null) {
+        stream.wrapped._reading = false;
+        netReadStop(stream.wrapped._handle);
+      }
       stream._stdio.pause();
       stream._stdio.readableFlowing = false;
       stream._stdio._readableState.reading = false;
@@ -496,8 +500,31 @@ function maybeClose(subprocess) {
 // ---- The module (lib/child_process.js) ----------------------------------------------------
 
 /** Node's fork(): a Node running a module, with a channel to it. */
-export function fork() {
-  throw notSupported("child_process.fork() (it starts a Node, which a compiled program doesn't have)");
+/* Node's fork, as far as its checks: the arguments are validated as Node's (a bad one is the same
+ * error), then it can't start the Node it needs. Its body starts with the throw so that
+ * tests/compat/node.ts counts it a stub. */
+export function fork(modulePath, args = [], options) {
+  throw notSupported(validateFork(modulePath, args, options));
+}
+
+function validateFork(modulePath, args, options) {
+  modulePath = getValidatedPath(modulePath, "modulePath");
+  if (args == null) {
+    args = [];
+  } else if (typeof args === "object" && !Array.isArray(args)) {
+    options = args;
+    args = [];
+  } else {
+    validateArray(args, "args");
+  }
+  if (options != null) validateObject(options, "options");
+  options = { __proto__: null, ...options, shell: false };
+  options.execPath ||= process.execPath;
+  validateArgumentNullCheck(options.execPath, "options.execPath");
+  const execArgv = options.execArgv || process.execArgv;
+  validateArgumentsNullCheck(execArgv, "options.execArgv");
+  normalizeSpawnArguments(options.execPath, [...execArgv, modulePath, ...args], options);
+  return "child_process.fork() (it starts a Node, which a compiled program doesn't have)";
 }
 
 export function _forkChild() {
