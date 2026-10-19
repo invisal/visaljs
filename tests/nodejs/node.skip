@@ -58,10 +58,17 @@ test-net-connect-immediate-finish.js     ../common/internet (an unresolvable nam
 # Node's HTTPParser on the socket (socket.parser): ours parses in C, without one
 test-http-server-keepalive-end.js        req.socket.parser.incoming
 test-http-server-connection-list-when-close.js  req.socket.parser.free
+test-http-parser.js                      _http_common's HTTPParser
+test-http-parser-max-header-pairs-cache.js  _http_common's HTTPParser
+test-http-parser-memory-retention.js     _http_common's HTTPParser
+test-http-header-value-relaxed.js        _http_common's HTTPParser
+test-http-set-max-idle-http-parser.js    _http_common's parsers (HTTPParser's free list)
+test-http-dump-req-when-res-ends.js      the socket's 'data' listener (Node's parser reads through one)
 
 # another Node process: a compiled program has no Node to fork (child_process.fork, cluster)
 test-http-server-stale-close.js          child_process.fork
 test-http-server-drop-connections-in-cluster.js  cluster.fork
+test-http-max-header-size.js             node --max-http-header-size (Node's command line)
 test-net-listen-exclusive-random-ports.js  cluster.fork
 test-net-listen-handle-in-cluster-1.js   cluster.fork
 test-net-listen-twice.js                 cluster.fork

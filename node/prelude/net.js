@@ -381,6 +381,7 @@ class SocketClass extends Duplex {
     if (!writableBuffer) return undefined;
     let bytes = this._bytesDispatched;
     for (const el of writableBuffer) bytes += typeof el.chunk === "string" ? Buffer.byteLength(el.chunk, el.encoding) : el.chunk.length;
+    if (this._httpWritten) bytes += this._httpWritten();  /* a server's responses, written through llhttp's connection */
     const data = this._pendingData;
     if (Array.isArray(data)) {
       for (const el of data) bytes += typeof el.chunk === "string" ? Buffer.byteLength(el.chunk, el.encoding) : el.chunk.length;

@@ -58,6 +58,7 @@ export const modules: Readonly<Record<string, string>> = {
   sea: join(preludeDir, "sea.js"),
   stream: join(preludeDir, "stream.js"),
   _http_agent: join(preludeDir, "_http_agent.js"),
+  _http_common: join(preludeDir, "_http_common.js"),
   _http_server: join(preludeDir, "_http_server.js"),
   _stream_duplex: join(preludeDir, "_stream_duplex.js"),
   _stream_passthrough: join(preludeDir, "_stream_passthrough.js"),
@@ -394,6 +395,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   httpBusy: { c: "js_host_http_busy", length: 1 },
   httpGuard: { c: "js_host_http_guard", length: 2 },          // (conn, onData) → an idle client socket's reads call onData(conn)
   httpPending: { c: "js_host_http_pending", length: 1 },      // (conn) → bytes written, not yet sent
+  httpWritten: { c: "js_host_http_written", length: 1 },      // (conn) → bytes written, sent or not
   httpWatchDrain: { c: "js_host_http_watch_drain", length: 1 },  // (conn) → drained already | onDrain later            // (conn) → a message under way on it
   httpExpired: { c: "js_host_http_expired", length: 3 },      // (parsers, headersTimeout, requestTimeout) → [conn, …] over time
   httpWrite: { c: "js_host_http_write", length: 3 },          // (conn, string | Uint8Array, latin1) → written (corked)
