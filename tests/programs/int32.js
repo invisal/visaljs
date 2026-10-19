@@ -94,3 +94,17 @@ function caught(n) {
   return k;
 }
 console.log(caught(6));
+
+/* a product past 2^53 rounds before the bitwise operator truncates it: not C's wrapping multiply */
+function fnv(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = h * 16777619 >>> 0;
+  }
+  return h;
+}
+function product(a, b) {
+  return (a * b) | 0;
+}
+console.log(fnv('["/","/"]'), product(-2128831001, 16777619), product(2147483647, 2147483647), product(-7, 1 << 22) >>> 0);

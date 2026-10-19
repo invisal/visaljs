@@ -75,6 +75,14 @@ const TRUNCATING = new Set<Op>(["num_bitor", "num_bitand", "num_bitxor", "num_sh
 /** Wrapping int32 arithmetic (`(a + b) | 0` of int32s), by the Number operator. */
 const INT_FORM: Partial<Record<Op, Op>> = { num_add: "int_add", num_sub: "int_sub", num_mul: "int_mul", num_inc: "int_add", num_dec: "int_sub" };
 
+/** Whether the Number operator `x` of int32s gives an exact double, whose low 32 bits are then
+ *  the wrapping int32 operation's: a sum always; a product only when it stays within 2^53, as
+ *  against a constant of at most 2^22 (`h * 16777619 >>> 0`, FNV's prime, rounds). */
+function exactInDouble(x: Instr): boolean {
+  if (x.op !== "num_mul") return true;
+  return x.operands.some((o) => o.op === "const" && Math.abs(o.lit!.value as number) <= 2 ** 22);
+}
+
 /** A constant 1 before `i`, for x++ as x + 1. */
 function one(i: Instr): Instr {
   const b = i.block;
@@ -209,7 +217,7 @@ export const specialize: Pass = {
              wrapping in an int32 gives it the same bits */
           if (TRUNCATING.has(form))
             for (const x of i.operands)
-              if (INT_FORM[x.op] && uses.get(x) === 1 && x.operands.every((o) => isSubtype(o.type, T.Int32))) {
+              if (INT_FORM[x.op] && uses.get(x) === 1 && x.operands.every((o) => isSubtype(o.type, T.Int32)) && exactInDouble(x)) {
                 if (x.op === "num_inc" || x.op === "num_dec") x.operands = [x.operands[0]!, one(x)];
                 x.op = INT_FORM[x.op]!;
                 count("wrapped", "int operation");
