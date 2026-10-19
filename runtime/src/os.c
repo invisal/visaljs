@@ -151,6 +151,10 @@ const char *js_os_timezone_id(void) {
     return tz && *tz ? tz : "";  /* Windows zone names aren't IANA ids: the offset fallback */
 }
 
+void js_os_timezone_changed(void) {
+    _tzset();
+}
+
 
 double js_os_thread_cpu_ms(void) {
     FILETIME created, exited, kernel, user;
@@ -331,11 +335,18 @@ double js_os_time_ms(void) {
     return (double)ts.tv_sec * 1000.0 + (double)(ts.tv_nsec / 1000000);
 }
 
+static bool tz_initialized, tz_id_done;
+
+void js_os_timezone_changed(void) {
+    tzset();
+    tz_initialized = true;
+    tz_id_done = false;
+}
+
 int32_t js_os_local_offset(int64_t seconds, bool *dst) {
-    static bool initialized;
-    if (!initialized) {
+    if (!tz_initialized) {
         tzset();
-        initialized = true;
+        tz_initialized = true;
     }
     time_t t = (time_t)seconds;
     struct tm tm;
@@ -351,9 +362,8 @@ int32_t js_os_local_offset(int64_t seconds, bool *dst) {
  * points. */
 const char *js_os_timezone_id(void) {
     static char id[512];
-    static bool done;
-    if (done) return id;
-    done = true;
+    if (tz_id_done) return id;
+    tz_id_done = true;
     const char *tz = getenv("TZ");
     char path[512] = "";
     if (tz && *tz) {
