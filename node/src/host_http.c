@@ -85,6 +85,7 @@ struct Conn {
     JSValue  headers;    /* the head's or the trailers' [k, v, …] being parsed (a root) */
     bool     in_value;
     bool     queued;     /* in `pending`: `out` goes out at the next flush */
+    double   written;    /* the bytes JS has written to it, for the socket's bytesWritten */
     Buf      out;        /* written but not sent: corked, as Node corks a response */
 };
 
@@ -141,6 +142,8 @@ static JSValue bytes_value(JSContext *ctx, const char *at, size_t n) {
 static void push_header(Conn *c) {
     JSContext *ctx = ctx_();
     if (js_is_undefined(c->headers)) c->headers = js_new_array(ctx, 0);  /* the first trailer */
+    /* as Node's parser: trailing whitespace off the value (llhttp leaves it when a read splits it) */
+    while (c->value.n > 0 && (c->value.v[c->value.n - 1] == ' ' || c->value.v[c->value.n - 1] == '\t')) c->value.n--;
     JSValue k = latin1(ctx, &c->field), v = latin1(ctx, &c->value);
     if (js_array_push(ctx, js_as_object(c->headers), k) < 0 || js_array_push(ctx, js_as_object(c->headers), v) < 0) js_fatal("out of memory in http");
     c->field.n = c->value.n = 0;
@@ -500,6 +503,13 @@ JSValue js_host_http_pending(JSContext *ctx, JSValue callee, JSValue this_val, u
     return js_number(c ? (double)pending_bytes(c) : 0);
 }
 
+/* httpWritten(conn) → the bytes written to it, sent or not */
+JSValue js_host_http_written(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
+    (void)ctx, (void)callee, (void)this_val, (void)new_target;
+    Conn *c = argc > 0 && js_is_int32(argv[0]) ? conn_of(js_as_int32(argv[0])) : NULL;
+    return js_number(c ? c->written : 0);
+}
+
 /* httpWatchDrain(conn) → true when nothing is pending (drained already), else the parsers' onDrain
  * is called once it all has gone out */
 JSValue js_host_http_watch_drain(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target) {
@@ -615,6 +625,7 @@ JSValue js_host_http_write(JSContext *ctx, JSValue callee, JSValue this_val, uin
     (void)callee, (void)this_val, (void)new_target;
     Conn *c = argc > 0 && js_is_int32(argv[0]) ? conn_of(js_as_int32(argv[0])) : NULL;
     if (!c || argc < 2 || (c->id >= 0 && !js_net_stream(c->id))) return JS_FALSE;
+    size_t before = c->out.n;
     if (js_is_string(argv[1]) && argc > 2 && js_truthy(argv[2])) {
         JSStrView v = js_string_view(ctx, argv[1]);
         if (v.length == 0) return JS_TRUE;
@@ -636,6 +647,7 @@ JSValue js_host_http_write(JSContext *ctx, JSValue callee, JSValue this_val, uin
         if (n == 0) return JS_TRUE;
         buf_append(&c->out, (const char *)bytes, n);
     }
+    c->written += (double)(c->out.n - before);
     if (!c->queued) {
         if (npending == pending_cap) {
             pending_cap = pending_cap ? pending_cap * 2 : 64;
