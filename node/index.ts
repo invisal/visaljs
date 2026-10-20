@@ -12,6 +12,7 @@ const LLHTTP = join(DIR, "third_party", "llhttp");
 const ZLIB = join(DIR, "third_party", "zlib");
 const BROTLI = join(DIR, "third_party", "brotli");
 const ZSTD = join(DIR, "third_party", "zstd");
+const CARES = join(DIR, "third_party", "c-ares");
 const INCLUDE = join(DIR, "include");
 
 const files = (dir: string, ext: string) => readdirSync(dir).filter((f) => f.endsWith(ext)).map((f) => join(dir, f));
@@ -163,6 +164,9 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
    * fs.open(…)`: the bundle renames fs) */
   { file: join(preludeDir, "internal", "fs_filehandle.js"), reached: (_code, program) =>
       FS_OPEN.test(program) || /\bFileHandle\b/.test(program) || (/\bpromises\b/.test(program) && /\.\s*open\s*\(/.test(program)) },
+  /* dns.Resolver and the resolve* functions (c-ares): named, or a dns program's resolve(…) or reverse(…) */
+  { file: join(preludeDir, "internal", "dns_resolver.js"), reached: (_code, program) =>
+      DNS_RESOLVER.test(program) || (/\bdns\b/.test(program) && /\.\s*(?:resolve|reverse)\s*\(/.test(program)) },
   /* crypto.X509Certificate, and the TLS sockets' getters that give one */
   { file: join(preludeDir, "internal", "crypto_x509.js"), reached: (_code, program) => /\b(?:X509Certificate|get(?:Peer)?X509Certificate)\b/.test(program) },
   /* process's other members (some link libuv): named as process's, or by a distinctive name */
@@ -192,6 +196,7 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
 const FETCH = /(?<![.\w$#])fetch\s*\(|[=(,]\s*fetch\s*[;,)\n]|\btypeof\s+fetch\b|\b(?:globalThis|global|self)\s*(?:\.\s*fetch\b|\[\s*["'`]fetch["'`])/;
 /* a Readable's operators: the distinctive ones by name, the others with node:stream named */
 const STREAM_OPERATORS = /\.\s*(?:flatMap|toArray|drop|take|asIndexedPairs)\s*\(|\bReadable\b[\s\S]*\.\s*(?:map|filter|forEach|reduce|some|every|find)\s*\(/;
+const DNS_RESOLVER = /\b(?:Resolver|resolve(?:4|6|Any|Caa|Cname|Mx|Naptr|Ns|Ptr|Soa|Srv|Tlsa|Txt)|getServers|setServers|setLocalAddress)\b/;
 const STDIO_WRITE_REPLACED = /\.\s*write\s*=(?![=>])|\b_std(?:out|err)\s*=(?!=)/;
 const STDIO_STREAM_USE = /\.\s*(?:pipe|on|once|end|cork|uncork|destroy|removeListener|addListener|prependListener)\s*\(|\b(?:pipeline|finished)\b|\bwritable(?:Length|HighWaterMark|NeedDrain|Ended|Finished)\b/;
 const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";
@@ -470,6 +475,17 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   ttyOpen: { c: "js_host_tty_open", length: 2 },              // (fd, cb) → id | -errno: a terminal's, read as a net handle
   ttySetRawMode: { c: "js_host_tty_set_raw_mode", length: 2 }, // (id, raw) → 0 | -errno
   dnsLookup: { c: "js_host_dns_lookup", length: 3 },          // (host, family, cb) → 0 | -errno; cb(errno, code, [[address, family], …])
+  dnsLookupService: { c: "js_host_dns_lookup_service", length: 3 },  // (ip, port, cb) → 0 | -errno; cb(errno, hostname, service)
+  /* dns.Resolver: c-ares channels on libuv (src/host_dns.c) */
+  dnsChannel: { c: "js_host_dns_channel", length: 3 },        // (timeoutMs, tries, maxTimeoutMs) → channel
+  dnsQuery: { c: "js_host_dns_query", length: 4 },            // (channel, name, type, cb) → 0; cb(status, answer | null)
+  dnsReverse: { c: "js_host_dns_reverse", length: 3 },        // (channel, ip, cb) → 0 | -EINVAL; cb(status, [name, …] | null)
+  dnsParse: { c: "js_host_dns_parse", length: 2 },            // (answer, kind) → [status, records, ttls, cname]
+  dnsGetServers: { c: "js_host_dns_get_servers", length: 1 }, // (channel) → [[ip, port], …]
+  dnsSetServers: { c: "js_host_dns_set_servers", length: 2 }, // (channel, [[family, ip, port], …]) → 0 | status
+  dnsSetLocalAddress: { c: "js_host_dns_set_local_address", length: 3 },  // (channel, ip4 | null, ip6 | null)
+  dnsCancel: { c: "js_host_dns_cancel", length: 1 },
+  dnsStrerror: { c: "js_host_dns_strerror", length: 1 },      // (status) → message
   /* node:zlib: Chromium's zlib, as Node has it (src/host_zlib.c); a stream is a handle. Failures are
    * [message, errno, code], as Node's binding passes them to its onerror */
   zlibNew: { c: "js_host_zlib_new", length: 1 },              // (mode) → handle
@@ -507,6 +523,10 @@ const UV_PLATFORM: Record<string, { sources: string[]; defines: string[]; link?:
   },
 };
 
+/* c-ares's source directories, and its configured headers by platform (Node's cares.gyp; Windows needs none) */
+const CARES_DIRS = ["", "dsa", "event", "legacy", "record", "str", "util"].map((d) => join(CARES, "src", "lib", d));
+const CARES_CONFIG: Record<string, string> = { linux: "linux", darwin: "darwin", freebsd: "freebsd", openbsd: "openbsd" };
+
 /* Brotli's platform macro, as Node's brotli.gyp defines it */
 const BROTLI_OS: Record<string, string> = { linux: "OS_LINUX", darwin: "OS_MACOSX", freebsd: "OS_FREEBSD" };
 
@@ -518,14 +538,18 @@ export function libraries(runtimeInclude: string, platform: NodeJS.Platform = pr
   const zlibHeaders = [...files(ZLIB, ".h"), ...files(join(ZLIB, "contrib", "optimizations"), ".h")];
   const brotliHeaders = ["common", "dec", "enc", join("include", "brotli")].flatMap((d) => files(join(BROTLI, d), ".h"));
   const zstdHeaders = ["", "common", "compress", "decompress"].flatMap((d) => files(join(ZSTD, d), ".h"));
+  const caresHeaders = [...files(join(CARES, "include"), ".h"), ...CARES_DIRS.flatMap((d) => files(d, ".h")), ...files(join(CARES, "src", "lib", "include"), ".h"),
+    ...files(join(CARES, "src", "lib", "thirdparty", "apple"), ".h"), ...(CARES_CONFIG[platform] ? files(join(CARES, "config", CARES_CONFIG[platform]), ".h") : [])];
   const uvHeaders = [join(UV, "include"), join(UV, "include", "uv"), join(UV, "src"), join(UV, "src", "unix"), join(UV, "src", "win")].flatMap((d) => files(d, ".h"));
   return [
     {
       name: "jsnode",
       sources: [...files(join(DIR, "src"), ".c"), ...files(LLHTTP, ".c")],
       /* the runtime's headers too: the host code is compiled against its structs (JSRuntime, …) */
-      headers: [...files(INCLUDE, ".h"), ...files(runtimeInclude, ".h"), ...files(LLHTTP, ".h"), ...uvHeaders, ...zlibHeaders, ...brotliHeaders, ...zstdHeaders],
-      flags: [`-I${INCLUDE}`, `-I${runtimeInclude}`, `-I${LLHTTP}`, `-I${join(UV, "include")}`, `-I${ZLIB}`, `-I${join(BROTLI, "include")}`, `-I${ZSTD}`],
+      headers: [...files(INCLUDE, ".h"), ...files(runtimeInclude, ".h"), ...files(LLHTTP, ".h"), ...uvHeaders, ...zlibHeaders, ...brotliHeaders, ...zstdHeaders,
+        ...caresHeaders],
+      flags: [`-I${INCLUDE}`, `-I${runtimeInclude}`, `-I${LLHTTP}`, `-I${join(UV, "include")}`, `-I${ZLIB}`, `-I${join(BROTLI, "include")}`, `-I${ZSTD}`,
+        `-I${join(CARES, "include")}`, "-DCARES_STATICLIB", "-DCARES_NO_DEPRECATED"],
     },
     {
       /* Chromium's zlib, as Node vendors it (deps/zlib): its portable C, whose output is the same
@@ -550,6 +574,17 @@ export function libraries(runtimeInclude: string, platform: NodeJS.Platform = pr
       flags: ["-w", "-DXXH_NAMESPACE=ZSTD_", "-DZSTD_MULTITHREAD", "-DZSTD_DISABLE_ASM", `-I${ZSTD}`],
     },
     {
+      /* c-ares 1.34.8, as Node vendors it (deps/cares): dns.Resolver's queries, on libuv's loop (src/host_dns.c) */
+      name: "cares",
+      sources: CARES_DIRS.flatMap((d) => files(d, ".c")),
+      headers: caresHeaders,
+      flags: ["-std=gnu11", "-w", "-DCARES_STATICLIB", "-D_LARGEFILE_SOURCE", "-D_FILE_OFFSET_BITS=64",
+        ...(platform === "win32" ? ["-DCARES_PULL_WS2TCPIP_H=1", "-D_WINSOCK_DEPRECATED_NO_WARNINGS"] : ["-DHAVE_CONFIG_H", "-D_GNU_SOURCE", "-D_DARWIN_USE_64_BIT_INODE=1"]),
+        ...(CARES_CONFIG[platform] ? [`-I${join(CARES, "config", CARES_CONFIG[platform])}`] : []),
+        `-I${join(CARES, "include")}`, `-I${join(CARES, "src", "lib")}`, `-I${join(CARES, "src", "lib", "include")}`],
+      link: platform === "win32" ? ["ws2_32", "iphlpapi", "advapi32"] : [],
+    },
+    {
       name: "uv",
       sources: uvSources,
       headers: uvHeaders,
@@ -570,6 +605,7 @@ export const notices = [
     files: [join(ZLIB, "LICENSE"), join(ZLIB, "LICENSE.chromium")] },
   { name: "Brotli", what: "Brotli compression", license: "MIT", files: [join(BROTLI, "LICENSE")] },
   { name: "Zstandard", what: "zstd compression", license: "BSD-3-Clause", files: [join(ZSTD, "LICENSE")] },
+  { name: "c-ares", what: "dns.Resolver's DNS queries", license: "MIT", files: [join(CARES, "LICENSE.md")] },
   { name: "punycode.js", what: "node:punycode", license: "MIT", files: [join(DIR, "third_party", "punycode", "LICENSE")] },
   { name: "parseargs", what: "util.parseArgs", license: "MIT", files: [join(DIR, "third_party", "parseargs", "LICENSE")] },
   { name: "HdrHistogram", what: "perf_hooks' histograms", license: "CC0-1.0 OR BSD-2-Clause", files: [join(DIR, "third_party", "hdrhistogram", "LICENSE")] },

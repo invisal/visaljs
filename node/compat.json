@@ -3,16 +3,16 @@
   "node": "v24.21.0",
   "summary": {
     "modules": {
-      "complete": 32,
-      "partial": 24,
+      "complete": 34,
+      "partial": 22,
       "stub": 1,
       "missing": 1,
       "total": 58
     },
     "exports": {
-      "implemented": 1150,
+      "implemented": 1192,
       "stubbed": 38,
-      "missing": 96,
+      "missing": 54,
       "total": 1284
     }
   },
@@ -539,7 +539,7 @@
       "notes": "Channels and TracingChannel as Node has them, bindStore and runStores with AsyncLocalStorage."
     },
     "dns": {
-      "status": "partial",
+      "status": "complete",
       "implemented": [
         "ADDRCONFIG",
         "ADDRGETNETWORKPARAMS",
@@ -565,18 +565,15 @@
         "NOTIMP",
         "NOTINITIALIZED",
         "REFUSED",
+        "Resolver",
         "SERVFAIL",
         "TIMEOUT",
         "V4MAPPED",
-        "lookup",
-        "promises"
-      ],
-      "stubbed": [],
-      "missing": [
-        "Resolver",
         "getDefaultResultOrder",
         "getServers",
+        "lookup",
         "lookupService",
+        "promises",
         "resolve",
         "resolve4",
         "resolve6",
@@ -595,10 +592,12 @@
         "setDefaultResultOrder",
         "setServers"
       ],
+      "stubbed": [],
+      "missing": [],
       "notes": "lookup only (getaddrinfo) and the constants. Not yet: the resolve* queries, lookupService and Resolver."
     },
     "dns/promises": {
-      "status": "partial",
+      "status": "complete",
       "implemented": [
         "ADDRGETNETWORKPARAMS",
         "BADFAMILY",
@@ -622,15 +621,12 @@
         "NOTIMP",
         "NOTINITIALIZED",
         "REFUSED",
+        "Resolver",
         "SERVFAIL",
         "TIMEOUT",
-        "lookup"
-      ],
-      "stubbed": [],
-      "missing": [
-        "Resolver",
         "getDefaultResultOrder",
         "getServers",
+        "lookup",
         "lookupService",
         "resolve",
         "resolve4",
@@ -649,7 +645,9 @@
         "reverse",
         "setDefaultResultOrder",
         "setServers"
-      ]
+      ],
+      "stubbed": [],
+      "missing": []
     },
     "domain": {
       "status": "complete",

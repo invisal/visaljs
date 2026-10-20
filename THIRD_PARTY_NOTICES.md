@@ -27,6 +27,7 @@ visaljs licenses > THIRD_PARTY_LICENSES
 | [zlib](https://zlib.net), Chromium's copy | Deflate and gzip | 1.3.1 | Zlib, BSD-3-Clause (Chromium's parts) | [`zlib`](node/third_party/zlib/LICENSE), [Chromium](node/third_party/zlib/LICENSE.chromium) |
 | [Brotli](https://github.com/google/brotli) | Brotli compression | 1.1.0 | MIT | [`brotli`](node/third_party/brotli/LICENSE) |
 | [Zstandard](https://facebook.github.io/zstd/) | zstd compression | 1.5.7 | BSD-3-Clause | [`zstd`](node/third_party/zstd/LICENSE) |
+| [c-ares](https://c-ares.org) | `dns.Resolver`'s DNS queries, as Node v24.21.0 vendors it | 1.34.8 | MIT | [`c-ares`](node/third_party/c-ares/LICENSE.md) |
 | [punycode.js](https://github.com/mathiasbynens/punycode.js) | `node:punycode` (`node/prelude/punycode.js`, ported) | 2.1.0 | MIT | [`punycode`](node/third_party/punycode/LICENSE) |
 | [parseargs](https://github.com/pkgjs/parseargs) | `util.parseArgs` (`node/prelude/internal/parse_args.js`, ported) | as in Node v22.22.2 | MIT | [`parseargs`](node/third_party/parseargs/LICENSE) |
 | [HdrHistogram_c](https://github.com/HdrHistogram/HdrHistogram_c) | `perf_hooks`' histograms (`node/prelude/internal/perf_histogram.js`, ported) | | CC0-1.0 or BSD-2-Clause | [`hdrhistogram`](node/third_party/hdrhistogram/LICENSE) |

@@ -607,3 +607,47 @@ HOST_FN(js_host_dns_lookup) {
     return js_int32(r);
 }
 
+/* ---- dns.lookupService --------------------------------------------------------------------- */
+
+typedef struct NameInfo {
+    uv_getnameinfo_t req;
+    JSValue          cb;  /* a root */
+} NameInfo;
+
+static void on_nameinfo(uv_getnameinfo_t *req, int status, const char *hostname, const char *service) {
+    NameInfo *n = (NameInfo *)req;
+    JSContext *ctx = js_uv_context();
+    JSValue args[3] = { js_int32(status), JS_NULL, JS_NULL };
+    if (status == 0) {
+        args[1] = js_new_string_cstr(ctx, hostname);
+        args[2] = js_new_string_cstr(ctx, service);
+    }
+    JSValue cb = n->cb;
+    js_remove_root(ctx->rt, &n->cb);
+    free(n);
+    (void)js_uv_call(cb, 3, args, NULL);
+}
+
+/* dnsLookupService(ip, port, cb) → 0 | -errno; cb(errno, hostname | null, service | null): getnameinfo, a
+ * name required (NI_NAMEREQD), as Node's */
+HOST_FN(js_host_dns_lookup_service) {
+    UNUSED;
+    if (argc < 3 || !js_is_string(argv[0]) || !js_is_number(argv[1])) return js_throw_type_error(ctx, "dnsLookupService: (ip, port, cb) expected");
+    char ip[64];
+    size_t len = js_view_to_utf8(js_string_view(ctx, argv[0]), ip, sizeof ip - 1);
+    ip[len] = '\0';
+    int port = (int)js_as_number(argv[1]);
+    struct sockaddr_storage addr;
+    if (uv_ip4_addr(ip, port, (struct sockaddr_in *)&addr) != 0 && uv_ip6_addr(ip, port, (struct sockaddr_in6 *)&addr) != 0) return js_int32(UV_EINVAL);
+    NameInfo *n = malloc(sizeof *n);
+    if (!n) js_fatal("out of memory in dns");
+    n->cb = argv[2];
+    js_add_root(ctx->rt, &n->cb);
+    int r = uv_getnameinfo(js_uv_loop(ctx), &n->req, on_nameinfo, (const struct sockaddr *)&addr, NI_NAMEREQD);
+    if (r < 0) {
+        js_remove_root(ctx->rt, &n->cb);
+        free(n);
+    }
+    return js_int32(r);
+}
+

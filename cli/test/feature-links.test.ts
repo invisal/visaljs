@@ -82,6 +82,8 @@ const CASES: [string, string, string][] = [
   ["zlib_zstd", "a.mjs", 'import { zstdCompressSync } from "node:zlib";\nzstdCompressSync("x");'],
   ["console_global", "a.cjs", 'const write = process.stdout.write;\nprocess.stdout.write = (s) => write.call(process.stdout, s.toUpperCase());\nconsole.log("x");'],
   ["console_class", "a.cjs", 'const c = new console.Console(process.stderr);\nc.log("x");'],
+  ["dns_resolver", "a.cjs", 'const dns = require("dns");\ndns.resolveMx("example.com", (err, mx) => console.log(err, mx));'],
+  ["dns_resolver", "b.mjs", 'import { promises } from "node:dns";\nconsole.log(await promises.resolve("example.com", "TXT"));'],
   ["crypto_x509", "a.cjs", 'const { X509Certificate } = require("crypto");\nconsole.log(new X509Certificate(process.argv[2]).subject);'],
   ["crypto_x509", "b.mjs", 'import tls from "node:tls";\ntls.connect(443, "example.com", function () { console.log(this.getPeerX509Certificate()); });'],
 ];
