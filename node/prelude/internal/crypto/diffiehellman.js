@@ -8,7 +8,7 @@
 import { cryptoCheckPrime, cryptoGeneratePrime, cryptoModExp, cryptoRandomFill } from "visaljs:host";
 import { codeError, invalidArgType, outOfRange, validateFunction } from "../errors.js";
 import { DH_GROUPS } from "./dh_groups.js";
-import { isAnyArrayBuffer, isArrayBufferView, kHandle, validateObject } from "./util.js";
+import { isAnyArrayBuffer, isArrayBufferView, kHandle, sslError, validateObject } from "./util.js";
 
 const later = (fn) => setTimeout(fn, 0);
 
@@ -76,15 +76,14 @@ function generateParameters(bits, generator) {
 
 const invalidParameters = () => codeError(TypeError, "ERR_INVALID_ARG_VALUE", "Invalid DH parameters");
 
-/* DH_check's flags (OpenSSL 3): what verifyError reports for given parameters */
-const DH_CHECK_P_NOT_PRIME = 0x01, DH_CHECK_P_NOT_SAFE_PRIME = 0x02, DH_NOT_SUITABLE_GENERATOR = 0x08, DH_MODULUS_TOO_SMALL = 0x80;
+/* DH_check's flags (BoringSSL's: no DH_MODULUS_TOO_SMALL): what verifyError reports for given parameters */
+const DH_CHECK_P_NOT_PRIME = 0x01, DH_CHECK_P_NOT_SAFE_PRIME = 0x02, DH_NOT_SUITABLE_GENERATOR = 0x08;
 function dhCheck(p, g) {
   let flags = 0;
   const big = toBig(p);
   const gen = toBig(g);
   if (!(big & 1n)) flags |= DH_CHECK_P_NOT_PRIME;
   if (gen <= 1n || gen >= big - 1n) flags |= DH_NOT_SUITABLE_GENERATOR;
-  if (bitsOf(p) < 512) flags |= DH_MODULUS_TOO_SMALL;
   if (!cryptoCheckPrime(p, 0)) flags |= DH_CHECK_P_NOT_PRIME;
   else if (!cryptoCheckPrime(fromBig(big >> 1n), 0)) flags |= DH_CHECK_P_NOT_SAFE_PRIME;
   return flags;
@@ -121,7 +120,8 @@ export function DiffieHellman(sizeOrKey, keyEncoding, generator, genEncoding) {
   }
   let p, g, verifyError;
   if (typeof sizeOrKey === "number") {
-    if (sizeOrKey < 512 || typeof generator !== "number" || generator < 2) throw invalidParameters();
+    if (sizeOrKey < 2) throw sslError(3, 103, "BITS_TOO_SMALL");
+    if (typeof generator !== "number" || generator < 2) throw invalidParameters();
     p = generateParameters(sizeOrKey, generator);
     g = fromBig(BigInt(generator));
     verifyError = 0;

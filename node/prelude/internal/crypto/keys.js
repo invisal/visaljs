@@ -11,7 +11,7 @@ import { codeError, invalidArgType, invalidArgValue, notSupported, outOfRange, v
 import { dhKeyParts, dhParameters } from "./diffiehellman.js";
 import { kKeyType } from "./key_type.js";
 import { checkPemPassphrase, decryptPemBody, decryptPkcs8, encryptPemBody, encryptPkcs8, isEncryptedPkcs8, missingPassphrase } from "./key_encryption.js";
-import { isAnyArrayBuffer, isArrayBufferView, kHandle, validateNumber, validateObject } from "./util.js";
+import { isAnyArrayBuffer, isArrayBufferView, kHandle, sslError, validateNumber, validateObject } from "./util.js";
 
 const kAsymmetricKeyType = Symbol("kAsymmetricKeyType");
 const kAsymmetricKeyDetails = Symbol("kAsymmetricKeyDetails");
@@ -35,8 +35,8 @@ const invalidJwk = (message = "Invalid JWK data") => codeError(TypeError, "ERR_C
 /* the runtime's error codes for a key it couldn't decode or encode */
 function keyError(code) {
   switch (code) {
-    case 1: return codeError(Error, "ERR_OSSL_UNSUPPORTED", "error:1E08010C:DECODER routines::unsupported");
-    case 2: return codeError(Error, "ERR_OSSL_ASN1_WRONG_TAG", "error:068000A8:asn1 encoding routines::wrong tag");
+    case 1:
+    case 2: return sslError(6, 102, "DECODE_ERROR");
     case 3: return notSupported("This key type");
     default: return new Error("Key operation failed");
   }
@@ -360,7 +360,7 @@ function parseKey(data, format, type, wantPrivate, passphrase) {
   }
   const text = typeof data === "string" ? data : viewBytes(data).toString("latin1");
   const m = /-----BEGIN ([A-Z0-9 ]+)-----\r?\n([\s\S]*?)-----END \1-----/.exec(text);
-  if (m === null) throw keyError(1);
+  if (m === null) throw sslError(9, 110, "NO_START_LINE");
   let label = m[1], body = m[2], der;
   if (label === "ENCRYPTED PRIVATE KEY") {
     if (passphrase === undefined) throw missingPassphrase();

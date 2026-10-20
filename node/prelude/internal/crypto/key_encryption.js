@@ -8,6 +8,7 @@ import {
   cryptoPbkdf2, cryptoRandomFill,
 } from "visaljs:host";
 import { codeError, notSupported } from "../errors.js";
+import { sslError } from "./util.js";
 
 /* OpenSSL 3's choices for PEM_write_bio_PKCS8PrivateKey with a cipher */
 const PBKDF2_ITERATIONS = 2048;
@@ -30,8 +31,9 @@ const CIPHERS = {
 const CIPHER_OIDS = Object.fromEntries(Object.entries(CIPHERS).map(([oid, name]) => [name, oid]));
 
 export const missingPassphrase = () => codeError(TypeError, "ERR_MISSING_PASSPHRASE", "Passphrase required for encrypted key");
-const badDecrypt = () => codeError(Error, "ERR_OSSL_BAD_DECRYPT", "error:1C800064:Provider routines::bad decrypt");
-const decodeError = () => codeError(Error, "ERR_OSSL_ASN1_WRONG_TAG", "error:0680007B:asn1 encoding routines::wrong tag");
+const badDecrypt = () => sslError(30, 101, "BAD_DECRYPT");
+const decodeError = () => sslError(6, 102, "DECODE_ERROR");
+const badPasswordRead = () => sslError(9, 104, "BAD_PASSWORD_READ");
 
 /* ---- DER: just the shapes above ---------------------------------------------------------------- */
 
@@ -198,9 +200,9 @@ export function encryptPemBody(der, cipherName, passphrase) {
 /** The DER of an encrypted PEM key: its DEK-Info header names the cipher and the IV. */
 export function decryptPemBody(headers, body, passphrase) {
   if (passphrase === undefined) throw missingPassphrase();
-  if (passphrase.length > PEM_PASSPHRASE_MAX) throw codeError(Error, "ERR_OSSL_PEM_BAD_PASSWORD_READ", "error:0480006D:PEM routines::bad password read");
+  if (passphrase.length > PEM_PASSPHRASE_MAX) throw badPasswordRead();
   const dek = /^DEK-Info:\s*([A-Za-z0-9-]+),([0-9A-Fa-f]+)\s*$/m.exec(headers);
-  if (dek === null) throw codeError(Error, "ERR_OSSL_PEM_BAD_DECRYPT", "error:04800065:PEM routines::bad decrypt");
+  if (dek === null) throw sslError(9, 101, "BAD_DECRYPT");
   const { name, keyLength } = cipherInfo(dek[1].toLowerCase());
   const iv = Buffer.from(dek[2], "hex");
   const key = bytesToKey(passphrase, iv.subarray(0, 8), keyLength);
@@ -209,6 +211,6 @@ export function decryptPemBody(headers, body, passphrase) {
 
 export function checkPemPassphrase(passphrase) {
   if (passphrase !== undefined && passphrase.length > PEM_PASSPHRASE_MAX) {
-    throw codeError(Error, "ERR_OSSL_PEM_BAD_PASSWORD_READ", "error:0480006D:PEM routines::bad password read");
+    throw badPasswordRead();
   }
 }

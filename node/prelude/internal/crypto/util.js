@@ -36,8 +36,28 @@ export function validateEncoding(data, enc) {
   }
 }
 
+/** Node's validateObject: an object, not null nor an array. */
 export function validateObject(value, name) {
-  if (value === null || typeof value !== "object") throw invalidArgType(name, "of type object", value);
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw invalidArgType(name, "of type object", value);
+}
+
+/* BoringSSL's libraries (ERR_LIB_*): the name it gives each, and Node's prefix for its codes (none
+ * for the libraries OpenSSL doesn't have) */
+const SSL_LIBS = {
+  3: ["bignum routines", "BN_"], 4: ["RSA routines", "RSA_"], 5: ["Diffie-Hellman routines", "DH_"], 6: ["public key routines", "EVP_"],
+  9: ["PEM routines", "PEM_"], 12: ["asn1 encoding routines", "ASN1_"], 15: ["elliptic curve routines", "EC_"], 30: ["Cipher functions", ""],
+};
+
+/** An error BoringSSL raised, as Node shows one: `error:1e000065:Cipher functions:OPENSSL_internal:BAD_DECRYPT`,
+ *  with its code, library, function and reason. `lib` and `reason` are BoringSSL's numbers. */
+export function sslError(lib, reason, name) {
+  const [library, prefix] = SSL_LIBS[lib];
+  const packed = ((lib << 24) | reason) >>> 0;
+  const e = codeError(Error, `ERR_OSSL_${prefix}${name}`, `error:${packed.toString(16).padStart(8, "0")}:${library}:OPENSSL_internal:${name}`);
+  e.library = library;
+  e.function = "OPENSSL_internal";
+  e.reason = name;
+  return e;
 }
 
 export function validateBoolean(value, name) {

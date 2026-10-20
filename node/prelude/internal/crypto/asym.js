@@ -11,20 +11,20 @@ import { Writable } from "../../stream.js";
 import { codeError, invalidArgType, invalidArgValue, validateFunction, validateString } from "../errors.js";
 import { dhStateless } from "./diffiehellman.js";
 import { asymmetricKeyTypeOf, KeyObject, preparePrivateKey, preparePublicOrPrivateKey, pssParamsOf } from "./keys.js";
-import { isAnyArrayBuffer, isArrayBufferView, kHandle, stringBytes, validateEncoding, validateObject } from "./util.js";
+import { isAnyArrayBuffer, isArrayBufferView, kHandle, sslError, stringBytes, validateEncoding, validateObject } from "./util.js";
 
 const later = (fn) => setTimeout(fn, 0);
 
 /* the runtime's error codes (JS_ASYM_ERR_*), as Node reports each */
 function asymError(code, digest) {
   switch (code) {
-    case 1: return codeError(Error, "ERR_OSSL_EVP_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE", "error:03000096:digital envelope routines::operation not supported for this keytype");
+    case 1: return sslError(6, 125, "OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE");
     case 2: return codeError(TypeError, "ERR_CRYPTO_INVALID_DIGEST", digest === undefined ? "Invalid digest" : "Invalid digest: " + digest);
-    case 4: return codeError(Error, "ERR_OSSL_INVALID_SALT_LENGTH", "error:1C800070:Provider routines::invalid salt length");
-    case 5: return codeError(Error, "ERR_OSSL_RSA_DATA_TOO_LARGE_FOR_KEY_SIZE", "error:0200006E:rsa routines::data too large for key size");
-    case 6: return codeError(Error, "ERR_OSSL_RSA_DATA_TOO_SMALL_FOR_KEY_SIZE", "error:0200007A:rsa routines::data too small for key size");
-    case 7: return codeError(Error, "ERR_OSSL_RSA_OAEP_DECODING_ERROR", "error:02000079:rsa routines::oaep decoding error");
-    case 8: return codeError(Error, "ERR_OSSL_RSA_PADDING_CHECK_FAILED", "error:02000072:rsa routines::padding check failed");
+    case 4: return sslError(6, 116, "INVALID_PSS_SALTLEN");
+    case 5: return sslError(4, 114, "DATA_TOO_LARGE_FOR_KEY_SIZE");
+    case 6: return sslError(4, 117, "DATA_TOO_SMALL_FOR_KEY_SIZE");
+    case 7: return sslError(4, 133, "OAEP_DECODING_ERROR");
+    case 8: return sslError(4, 137, "PKCS_DECODING_ERROR");
     case 9: return codeError(Error, "ERR_CRYPTO_ECDH_INVALID_PUBLIC_KEY", "Public key is not valid for specified curve");
     case 10: return codeError(TypeError, "ERR_CRYPTO_INVALID_CURVE", "Invalid EC curve name");
     case 11: return codeError(Error, "ERR_CRYPTO_UNSUPPORTED_OPERATION", "Unsupported crypto operation");
