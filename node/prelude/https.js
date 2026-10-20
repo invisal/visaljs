@@ -18,10 +18,11 @@ class ServerClass extends TlsServer {
       options = {};
     } else if (options === undefined || options === null) {
       options = {};
-    } else if (typeof options !== "object") {
+    } else if (typeof options !== "object" || Array.isArray(options)) {
       throw invalidArgType("options", "of type object", options);
     }
-    super({ noDelay: true, ALPNProtocols: ["http/1.1"], ...options });
+    /* only one of ALPNProtocols and ALPNCallback can be set: the default only when neither is */
+    super({ noDelay: true, ALPNProtocols: options.ALPNProtocols || options.ALPNCallback ? undefined : ["http/1.1"], ...options });
     this._initHttp(options, requestListener, "secureConnection");
     /* a handshake that fails is the client's error, as a request that does */
     this.on("tlsClientError", (err, conn) => {
@@ -84,17 +85,25 @@ const nameOptions = ["ca", "cert", "clientCertEngine", "ciphers", "key", "pfx", 
   "maxVersion", "secureProtocol", "crl", "honorCipherOrder", "ecdhCurve", "dhparam", "secureOptions", "sessionIdContext", "sigalgs",
   "privateKeyIdentifier", "privateKeyEngine"];
 
+/* the options a value of which, false or 0 too, names a different connection */
+const nameDefined = new Set(["rejectUnauthorized", "honorCipherOrder", "secureOptions"]);
+
+function pfxAgentKey(pfx, passphrase) {
+  if (!Array.isArray(pfx)) return pfx;
+  return pfx.map((value) => `:${value?.buf || value}:${value?.passphrase || passphrase}`).join("");
+}
+
 Agent.prototype.getName = function getName(options = {}) {
   let name = HttpAgent.prototype.getName.call(this, options);
   for (const key of nameOptions) {
     name += ":";
     const value = options[key];
-    if (key === "rejectUnauthorized") {
+    if (nameDefined.has(key)) {
       if (value !== undefined) name += value;
     } else if (key === "servername") {
       if (value && value !== options.host) name += value;
     } else if (value) {
-      name += value;
+      name += key === "sigalgs" ? JSON.stringify(value) : key === "pfx" ? pfxAgentKey(value, options.passphrase) : value;
     }
   }
   return name;

@@ -4,9 +4,10 @@
 // as Node shows them: BoringSSL's reasons are OpenSSL's, its numbers aren't).
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import {
-  fsReadFile, tlsCiphers, tlsContextAddCA, tlsContextAddRoots, tlsContextNew, tlsContextSetCert, tlsContextSetKey,
+  fsReadFile, tlsCiphers, tlsContextAddCA, tlsContextAddRoots, tlsContextNew, tlsContextSetCert, tlsContextSetKey, tlsContextSetSessions,
+  tlsContextAddCredential, tlsContextAllowPartialChain, tlsContextTicketKeys, tlsPkcs12, x509CheckKey,
 } from "visaljs:host";
-import { codeError, invalidArgType, invalidArgValue, notSupported, validateString } from "../errors.js";
+import { codeError, invalidArgType, invalidArgValue, notSupported, outOfRange, validateInteger, validateString } from "../errors.js";
 import { createPrivateKey } from "../crypto/keys.js";
 import { kHandle } from "../crypto/util.js";
 import { certificatesOf, parseCertificate } from "./x509.js";
@@ -58,14 +59,18 @@ const SSL_REASONS = {
   NO_SHARED_CIPHER: 0xC1, PEER_DID_NOT_RETURN_A_CERTIFICATE: 0xC7, NO_APPLICATION_PROTOCOL: 0xEB,
   UNSUPPORTED_PROTOCOL: 0x102, CERTIFICATE_VERIFY_FAILED: 0x86, NO_CIPHER_MATCH: 0xB9,
   DECRYPTION_FAILED_OR_BAD_RECORD_MAC: 0x119, UNEXPECTED_MESSAGE: 0xF4, UNEXPECTED_RECORD: 0xF5, WRONG_CIPHER_RETURNED: 0x105,
-  BAD_SIGNATURE: 0x7B, NO_RENEGOTIATION: 0x153, UNSAFE_LEGACY_RENEGOTIATION_DISABLED: 0x152, RECORD_TOO_LARGE: 0x109,
+  BAD_SIGNATURE: 0x7B, NO_SHARED_SIGNATURE_ALGORITHMS: 0x178, NO_RENEGOTIATION: 0x153, UNSAFE_LEGACY_RENEGOTIATION_DISABLED: 0x152, RECORD_TOO_LARGE: 0x109,
   TLSV1_ALERT_INAPPROPRIATE_FALLBACK: 0x480, INAPPROPRIATE_FALLBACK: 0x175, EXCESSIVE_MESSAGE_SIZE: 0x98,
 };
+
+/* BoringSSL's names for reasons OpenSSL names otherwise */
+const OPENSSL_NAMES = { NO_COMMON_SIGNATURE_ALGORITHMS: "NO_SHARED_SIGNATURE_ALGORITHMS" };
 
 /** The error a BoringSSL failure ([library, reason, name]) is reported as */
 export function tlsFailure(err) {
   if (!Array.isArray(err)) return sslError(0x0A0C0103, "internal error");
-  const [, code, name] = err;
+  const [, code, boringName] = err;
+  const name = OPENSSL_NAMES[boringName] ?? boringName;
   /* OpenSSL 3.5 calls the SSL 3 alerts "ssl/tls alert …", and TLS 1.3's "tlsv13 alert …" */
   const reasonName = name.replace(/^SSLV3_ALERT_/, "SSL/TLS_ALERT_").replace(/^TLSV1_ALERT_(CERTIFICATE_REQUIRED|MISSING_EXTENSION)$/, "TLSV13_ALERT_$1");
   const number = 0x0A000000 + (code >= 1000 ? code : SSL_REASONS[name] ?? code);
@@ -159,6 +164,8 @@ export function SecureContext(secureProtocol, secureOptions, minVersion, maxVers
     if (maxVersion != null) throw codeError(TypeError, "ERR_TLS_PROTOCOL_VERSION_CONFLICT", `TLS protocol version ${maxVersion} conflicts with secureProtocol ${secureProtocol}`);
     validateString(secureProtocol, "secureProtocol");
     const method = METHODS[secureProtocol];
+    const disabled = /^(SSLv[23])_(?:client_|server_)?method$/.exec(secureProtocol);
+    if (disabled) throw codeError(TypeError, "ERR_TLS_INVALID_PROTOCOL_METHOD", `${disabled[1]} methods disabled`);
     if (!method) throw codeError(TypeError, "ERR_TLS_INVALID_PROTOCOL_METHOD", `Unknown method: ${secureProtocol}`);
     [min, max] = method;
   } else {
@@ -184,16 +191,33 @@ function configure(c, options = {}, name = "options") {
   if (typeof options !== "object" || options === null) throw invalidArgType(name, "of type object", options);
   const { ca, cert, key, passphrase, pfx, ciphers = defaults.DEFAULT_CIPHERS, ecdhCurve = defaults.DEFAULT_ECDH_CURVE, sigalgs } = options;
   if (ciphers !== undefined && ciphers !== null) validateString(ciphers, `${name}.ciphers`);
-  const list = (ciphers || defaults.DEFAULT_CIPHERS).split(":");
+  /* BoringSSL has no security levels, and rejects a list that sets one */
+  const list = (ciphers || defaults.DEFAULT_CIPHERS).split(":").map((c) => c.replace(/@SECLEVEL=\d+$/, ""));
   const tls12 = list.filter((c) => c && !c.startsWith("TLS_") && !c.startsWith("!TLS_")).join(":");
   const tls13 = list.filter((c) => c.startsWith("TLS_") || c.startsWith("!TLS_")).join(":");
   if (tls12 === "" && tls13 === "") throw invalidArgValue(`${name}.ciphers`, "is invalid", list);
+  /* OpenSSL skips a TLS 1.3 suite it doesn't know, and fails a list of only those */
+  const suites = list.filter((c) => c.startsWith("TLS_"));
+  if (suites.length > 0 && !suites.some((c) => TLS13_SUITES.includes(c))) throw sslError(0x0A0000B9, "no cipher match");
   if (ecdhCurve !== undefined) validateString(ecdhCurve, `${name}.ecdhCurve`);
   if (sigalgs !== undefined && sigalgs !== null) {
     validateString(sigalgs, `${name}.sigalgs`);
     if (sigalgs === "") throw invalidArgValue(`${name}.sigalgs`, "is invalid", sigalgs);
   }
-  if (pfx !== undefined && pfx !== null) throw notSupported("PKCS#12 (the pfx option)");
+  validateEngineOptions(options, name);
+  validateCertificateCompression(options.certificateCompression, name);
+  const { dhparam, crl, sessionIdContext, ticketKeys, sessionTimeout } = options;
+  if (dhparam !== undefined && dhparam !== null) validateKeyOrCertOption(`${name}.dhparam`, dhparam);
+  for (const value of crl === undefined || crl === null ? [] : Array.isArray(crl) ? crl : [crl]) validateKeyOrCertOption(`${name}.crl`, value);
+  if (sessionIdContext !== undefined && sessionIdContext !== null) validateString(sessionIdContext, `${name}.sessionIdContext`);
+  if (ticketKeys !== undefined && ticketKeys !== null) {
+    if (!ArrayBuffer.isView(ticketKeys)) throw invalidArgType(`${name}.ticketKeys`, "an instance of Buffer, TypedArray, or DataView", ticketKeys);
+    if (ticketKeys.byteLength !== 48) throw invalidArgValue(`${name}.ticketKeys`, "must be exactly 48 bytes", ticketKeys.byteLength);
+  }
+  if (sessionTimeout !== undefined && sessionTimeout !== null) {
+    validateInteger(sessionTimeout, `${name}.sessionTimeout`);
+    if (sessionTimeout < 0 || sessionTimeout > 2 ** 31 - 1) throw outOfRange(`${name}.sessionTimeout`, `>= 0 && <= ${2 ** 31 - 1}`, sessionTimeout);
+  }
   /* only TLS 1.3 suites given: only TLS 1.3 (Node's rule) */
   if (tls12 === "" && c._minVersion < 0x0304 && c._maxVersion > 0x0303) c._minVersion = 0x0304;
   const groups = ecdhCurve && ecdhCurve !== "auto" ? ecdhCurve : null;
@@ -204,6 +228,8 @@ function configure(c, options = {}, name = "options") {
     throw tlsFailure(context);
   }
   c.context = context;
+  if (ticketKeys !== undefined && ticketKeys !== null) tlsContextTicketKeys(context, ticketKeys);
+  tlsContextSetSessions(context, sessionTimeout ?? null, sessionIdContext ?? null);
   if (ca) {
     for (const [i, value] of (Array.isArray(ca) ? ca : [ca]).entries()) {
       validateKeyOrCertOption(`${name}.ca${Array.isArray(ca) ? `[${i}]` : ""}`, value);
@@ -213,37 +239,123 @@ function configure(c, options = {}, name = "options") {
   } else {
     addDefaultCAs(c);
   }
-  if (cert) {
-    const ders = [];
-    for (const [i, value] of (Array.isArray(cert) ? cert : [cert]).entries()) {
-      validateKeyOrCertOption(`${name}.cert${Array.isArray(cert) ? `[${i}]` : ""}`, value);
-      const found = certificatesOf(value);
-      if (found.length === 0) throw caLoadError();
-      ders.push(...found);
-    }
-    autoChain(c, ders);
-    if (tlsContextSetCert(c.context, ders) !== 0) throw sslError(0x068000A8, "wrong tag", "asn1 encoding routines", "ERR_OSSL_ASN1_WRONG_TAG");
-    c._certs = ders;
+  if (options.allowPartialTrustChain) tlsContextAllowPartialChain(context);
+  const chains = [];
+  for (const [i, value] of (cert ? (Array.isArray(cert) ? cert : [cert]) : []).entries()) {
+    validateKeyOrCertOption(`${name}.cert${Array.isArray(cert) ? `[${i}]` : ""}`, value);
+    const found = certificatesOf(value);
+    if (found.length === 0) throw caLoadError();
+    chains.push(found);
   }
-  if (key) {
-    const keys = Array.isArray(key) ? key : [key];
-    for (const k of keys) {
-      const pem = k?.pem !== undefined ? k.pem : k;
-      const pass = k?.passphrase !== undefined ? k.passphrase : passphrase;
-      validateKeyOrCertOption(`${name}.key`, pem);
-      if (pass !== undefined && pass !== null) validateString(pass, `${name}.passphrase`);
-      let keyObject;
-      try {
-        keyObject = createPrivateKey(pass === undefined || pass === null ? pem : { key: pem, passphrase: pass });
-      } catch (e) {
-        if (e.code === "ERR_VISALJS_UNSUPPORTED") throw e;
-        throw sslError(0x1E08010C, "unsupported", "DECODER routines", "ERR_OSSL_UNSUPPORTED");
-      }
-      const r = tlsContextSetKey(c.context, keyObject[kHandle]);
-      if (r === 2) throw sslError(0x05800074, "key values mismatch", "x509 certificate routines", "ERR_OSSL_X509_KEY_VALUES_MISMATCH");
-      if (r === 1) throw notSupported(`A ${keyObject.asymmetricKeyType} key for TLS`);
+  const keys = [];
+  for (const k of key ? (Array.isArray(key) ? key : [key]) : []) {
+    const pem = k?.pem !== undefined ? k.pem : k;
+    const pass = k?.passphrase !== undefined ? k.passphrase : passphrase;
+    validateKeyOrCertOption(`${name}.key`, pem);
+    if (pass !== undefined && pass !== null) validateString(pass, `${name}.passphrase`);
+    keys.push(privateKeyOf(pass === undefined || pass === null ? pem : { key: pem, passphrase: pass }));
+  }
+  for (const value of pfx === undefined || pfx === null ? [] : Array.isArray(pfx) ? pfx : [pfx]) {
+    const [chain, keyObject] = loadPKCS12(c, value.buf || value, value.passphrase || passphrase);
+    chains.push(chain);
+    keys.push(keyObject);
+  }
+  setIdentities(c, chains, keys);
+}
+
+function privateKeyOf(key) {
+  try {
+    return createPrivateKey(key);
+  } catch (e) {
+    if (e.code === "ERR_VISALJS_UNSUPPORTED") throw e;
+    /* OpenSSL reads an encrypted PEM without a passphrase as with a wrong one */
+    if (e.code === "ERR_OSSL_BAD_DECRYPT" || e.code === "ERR_OSSL_PEM_BAD_DECRYPT") throw e;
+    if (e.code === "ERR_MISSING_PASSPHRASE" || e.code === "ERR_OSSL_CRYPTO_INTERRUPTED_OR_CANCELLED") {
+      throw sslError(0x1C800064, "bad decrypt", "Provider routines", "ERR_OSSL_BAD_DECRYPT");
+    }
+    throw sslError(0x1E08010C, "unsupported", "DECODER routines", "ERR_OSSL_UNSUPPORTED");
+  }
+}
+
+const keyMismatch = () => sslError(0x05800074, "key values mismatch", "x509 certificate routines", "ERR_OSSL_X509_KEY_VALUES_MISMATCH");
+
+function checkKeyResult(r, keyObject) {
+  if (r === 2) throw keyMismatch();
+  if (r === 1) throw notSupported(`A ${keyObject.asymmetricKeyType} key for TLS`);
+}
+
+/* One key: the certificates given are its chain. More: each is the certificate it belongs to
+ * (with that entry's chain), as OpenSSL keeps one identity per key type and chooses by what
+ * the client accepts. */
+function setIdentities(c, chains, keys) {
+  if (keys.length <= 1) {
+    if (chains.length > 0) {
+      const ders = chains.flat();
+      autoChain(c, ders);
+      if (tlsContextSetCert(c.context, ders) !== 0) throw sslError(0x068000A8, "wrong tag", "asn1 encoding routines", "ERR_OSSL_ASN1_WRONG_TAG");
+      c._certs = ders;
+    }
+    if (keys.length === 1) checkKeyResult(tlsContextSetKey(c.context, keys[0][kHandle]), keys[0]);
+    return;
+  }
+  for (const keyObject of keys) {
+    const chain = chains.find((ders) => x509CheckKey(ders[0], keyObject[kHandle]));
+    if (chain === undefined) throw keyMismatch();
+    autoChain(c, chain);
+    checkKeyResult(tlsContextAddCredential(c.context, chain, keyObject[kHandle]), keyObject);
+    if (c._certs.length === 0) c._certs = chain;
+  }
+}
+
+const STRING_OR_NONE = "of type string or one of null or undefined";
+/* BoringSSL has no engines: Node's message for an OpenSSL built without them */
+const noEngines = () => codeError(Error, "ERR_CRYPTO_CUSTOM_ENGINE_NOT_SUPPORTED", "Custom engines not supported by this OpenSSL");
+
+function validateEngineOptions({ key, clientCertEngine, privateKeyIdentifier, privateKeyEngine }, name) {
+  if (privateKeyIdentifier !== undefined && privateKeyIdentifier !== null) {
+    if (privateKeyEngine === undefined || privateKeyEngine === null) throw invalidArgValue(`${name}.privateKeyEngine`, "is invalid", privateKeyEngine);
+    if (key) throw invalidArgValue(`${name}.privateKeyIdentifier`, "is invalid", privateKeyIdentifier);
+    if (typeof privateKeyIdentifier !== "string") throw invalidArgType(`${name}.privateKeyIdentifier`, STRING_OR_NONE, privateKeyIdentifier);
+    if (typeof privateKeyEngine !== "string") throw invalidArgType(`${name}.privateKeyEngine`, STRING_OR_NONE, privateKeyEngine);
+    throw noEngines();
+  }
+  if (typeof clientCertEngine === "string") throw noEngines();
+  if (clientCertEngine !== undefined && clientCertEngine !== null) throw invalidArgType(`${name}.clientCertEngine`, STRING_OR_NONE, clientCertEngine);
+}
+
+const COMPRESSION_ALGORITHMS = ["zlib", "brotli", "zstd"];
+
+function validateCertificateCompression(algorithms, name) {
+  if (algorithms === undefined || algorithms === null) return;
+  if (!Array.isArray(algorithms)) throw invalidArgType(`${name}.certificateCompression`, "an instance of Array", algorithms);
+  if (algorithms.length > 3) throw invalidArgValue(`${name}.certificateCompression`, "can specify at most 3 algorithms", algorithms);
+  for (const [i, algorithm] of algorithms.entries()) {
+    if (!COMPRESSION_ALGORITHMS.includes(algorithm)) {
+      throw invalidArgValue(`${name}.certificateCompression[${i}]`, "must be 'zlib', 'brotli', or 'zstd'", algorithm);
     }
   }
+  /* tls.getCertificateCompressionAlgorithms() lists none */
+  if (algorithms.length > 0) throw notSupported("certificate compression (RFC 8879)");
+}
+
+/* pbeWithSHAAnd128BitRC4, …40BitRC4, …128BitRC2-CBC, …40BitRC2-CBC (PKCS#12's PBE OIDs 1.2.840.113549.1.12.1.n):
+ * OpenSSL 3 decrypts them only with its legacy provider, which Node doesn't load */
+const LEGACY_PBE = [1, 2, 5, 6].map((n) => Buffer.from([0x06, 0x0a, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x0c, 0x01, n]));
+
+/* BoringSSL's reasons → OpenSSL's words for them */
+const PKCS12_REASONS = { INCORRECT_PASSWORD: "mac verify failure", BAD_PKCS12_DATA: "header too long" };
+
+/** Node's SecureContext.loadPKCS12: the other certificates become CAs; the chain and its key, an identity */
+function loadPKCS12(c, pfx, passphrase) {
+  const der = typeof pfx === "string" ? Buffer.from(pfx) : Buffer.from(pfx.buffer, pfx.byteOffset, pfx.byteLength);
+  if (LEGACY_PBE.some((oid) => der.includes(oid))) throw codeError(Error, "ERR_CRYPTO_UNSUPPORTED_OPERATION", "Unsupported PKCS12 PFX data");
+  const parts = tlsPkcs12(der, passphrase === undefined || passphrase === null ? null : String(passphrase));
+  if (typeof parts === "string") throw new Error(PKCS12_REASONS[parts] ?? parts.toLowerCase().replace(/_/g, " "));
+  const [key, cert, others] = parts;
+  if (key === null) throw new Error("Unable to load private key from PFX data");
+  if (cert === null) throw new Error("Unable to load certificate from PFX data");
+  for (const ca of others) addCA(c, ca);
+  return [[cert, ...others], createPrivateKey({ key, format: "der", type: "pkcs8" })];
 }
 
 /* OpenSSL sends a certificate's issuers too when its trust store has them (the `ca` option):

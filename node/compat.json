@@ -3,16 +3,16 @@
   "node": "v24.21.0",
   "summary": {
     "modules": {
-      "complete": 31,
-      "partial": 25,
+      "complete": 32,
+      "partial": 24,
       "stub": 1,
       "missing": 1,
       "total": 58
     },
     "exports": {
-      "implemented": 1148,
-      "stubbed": 39,
-      "missing": 97,
+      "implemented": 1150,
+      "stubbed": 38,
+      "missing": 96,
       "total": 1284
     }
   },
@@ -445,6 +445,7 @@
         "KeyObject",
         "Sign",
         "Verify",
+        "X509Certificate",
         "checkPrime",
         "checkPrimeSync",
         "constants",
@@ -501,7 +502,6 @@
       ],
       "stubbed": [
         "Certificate",
-        "X509Certificate",
         "setEngine"
       ],
       "missing": [
@@ -1471,7 +1471,7 @@
       "missing": []
     },
     "tls": {
-      "status": "partial",
+      "status": "complete",
       "implemented": [
         "CLIENT_RENEG_LIMIT",
         "CLIENT_RENEG_WINDOW",
@@ -1488,14 +1488,13 @@
         "createSecureContext",
         "createServer",
         "getCACertificates",
+        "getCertificateCompressionAlgorithms",
         "getCiphers",
         "rootCertificates",
         "setDefaultCACertificates"
       ],
       "stubbed": [],
-      "missing": [
-        "getCertificateCompressionAlgorithms"
-      ],
+      "missing": [],
       "extra": [
         "createSecurePair"
       ],

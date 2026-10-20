@@ -2,8 +2,8 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  /* bench/kernels/awfy/src/ and bench/kernels/benchmarks-game/: other projects' benchmarks, unchanged; tests/nodejs/test/parallel/, fixtures/ and common/dns.js: Node's tests, unchanged (dns.js names Node's lint rules); tests/static/errors/: static code that must not compile */
-  { ignores: ["**/dist/", "**/.next/", "**/.astro/", "build/", "tests/test262/", "node_modules/", "compiler/test/golden/", "tests/programs/*.js", "tests/programs/win32/", "tests/programs/bundle/", "tests/differential/*.js", "tests/differential/app/", "tests/apps/typescript/sample/", "bench/kernels/awfy/src/", "bench/kernels/benchmarks-game/", "tests/nodejs/test/parallel/", "tests/nodejs/test/fixtures/", "tests/nodejs/test/common/dns.js", "tests/static/errors/"] },
+  /* bench/kernels/awfy/src/ and bench/kernels/benchmarks-game/: other projects' benchmarks, unchanged; tests/nodejs/test/parallel/, fixtures/ and common/'s dns.js, tls.js, boringssl.js and child_process.js: Node's tests, unchanged (they name Node's lint rules and globals); tests/static/errors/: static code that must not compile */
+  { ignores: ["**/dist/", "**/.next/", "**/.astro/", "build/", "tests/test262/", "node_modules/", "compiler/test/golden/", "tests/programs/*.js", "tests/programs/win32/", "tests/programs/bundle/", "tests/differential/*.js", "tests/differential/app/", "tests/apps/typescript/sample/", "bench/kernels/awfy/src/", "bench/kernels/benchmarks-game/", "tests/nodejs/test/parallel/", "tests/nodejs/test/fixtures/", "tests/nodejs/test/common/dns.js", "tests/nodejs/test/common/tls.js", "tests/nodejs/test/common/boringssl.js", "tests/nodejs/test/common/child_process.js", "tests/static/errors/"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

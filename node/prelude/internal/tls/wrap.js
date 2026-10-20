@@ -9,12 +9,13 @@
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import {
   errnoName, netReadStart, netReadStop, netShutdown, netWrite, tlsExportKeyingMaterial, tlsFinished, tlsInfo, tlsNew, tlsPeerCerts,
-  tlsRootCertificates, tlsRun, tlsSession, tlsSetNoRenegotiation, tlsShutdown, tlsVerifyError,
+  tlsContextTicketKeys, tlsEnableKeylog, tlsRootCertificates, tlsRun, tlsSession, tlsSetMaxSendFragment, tlsSetNoRenegotiation, tlsShutdown, tlsTicket, tlsVerifyError,
 } from "visaljs:host";
-import { codeError, invalidArgType, outOfRange, validateFunction, validateString } from "../errors.js";
-import { callableClass, features } from "../features.js";
+import { codeError, invalidArgType, invalidArgValue, outOfRange, validateFunction, validateInteger, validateString } from "../errors.js";
+import { callableClass, feature, features } from "../features.js";
 import { isIP } from "../net.js";
 import { Server as NetServer, Socket } from "../../net.js";
+import { domainToASCII } from "../../url.js";
 import { createSecureContext, SecureContext, sslError, tlsFailure, VERSION_NAMES, verifyError } from "./common.js";
 import { certificatesOf, legacyObject, parseCertificate } from "./x509.js";
 
@@ -30,6 +31,7 @@ const kSNICallback = Symbol("snicallback");
 const kALPNCallback = Symbol("alpncallback");
 const kIsVerified = Symbol("verified");
 const kPendingSession = Symbol("pendingSession");
+const kMaxSendFragment = Symbol("maxSendFragment");
 
 const connReset = (message) => codeError(Error, "ECONNRESET", message);
 
@@ -59,7 +61,10 @@ function alpnNames(buf) {
 function convertProtocols(protocols) {
   const parts = protocols.map((p, i) => {
     const b = Buffer.from(p);
-    if (b.length > 255) throw outOfRange(`The byte length of the protocol at index ${i} exceeds the maximum length.`, "<= 255", b.length);
+    if (b.length === 0) throw invalidArgValue(`protocols[${i}]`, "must be a non-empty string", p);
+    if (b.length > 255) {
+      throw codeError(RangeError, "ERR_OUT_OF_RANGE", `The byte length of the protocol at index ${i} exceeds the maximum length. It must be <= 255. Received ${b.length}`);
+    }
     return b;
   });
   const out = Buffer.allocUnsafe(parts.reduce((n, b) => n + 1 + b.length, 0));
@@ -72,10 +77,57 @@ function convertProtocols(protocols) {
   return out;
 }
 
+/* the wire format: <len><protocol>…, each 1–255 bytes, nothing after (empty: no ALPN) */
+function validateALPNBuffer(buffer) {
+  for (let at = 0; at < buffer.length; at += 1 + buffer[at]) {
+    if (buffer[at] === 0) throw invalidArgValue("ALPNProtocols", "must not contain zero-length protocol", buffer);
+    if (at + 1 + buffer[at] > buffer.length) throw invalidArgValue("ALPNProtocols", "contains truncated protocol", buffer);
+  }
+}
+
 export function convertALPNProtocols(protocols, out) {
-  if (Array.isArray(protocols)) out.ALPNProtocols = convertProtocols(protocols);
-  else if (protocols instanceof Uint8Array) out.ALPNProtocols = Buffer.from(protocols);
-  else if (ArrayBuffer.isView(protocols)) out.ALPNProtocols = Buffer.from(protocols.buffer.slice(protocols.byteOffset, protocols.byteOffset + protocols.byteLength));
+  let buf;
+  if (Array.isArray(protocols)) {
+    out.ALPNProtocols = convertProtocols(protocols);
+    return;
+  }
+  if (protocols instanceof Uint8Array) buf = Buffer.from(protocols);
+  else if (ArrayBuffer.isView(protocols)) buf = Buffer.from(protocols.buffer.slice(protocols.byteOffset, protocols.byteOffset + protocols.byteLength));
+  else return;
+  validateALPNBuffer(buf);
+  out.ALPNProtocols = buf;
+}
+
+/* ---- Sessions: a client's carry the server name they were verified for (Node 24.21) ------------ */
+
+const kSessionStatePrefix = Buffer.from("\0nodejs:tls:session:1\0");
+
+const sessionServerIdentity = (options) => options?.servername || options?.host || options?.socket?._host || "localhost";
+
+function wrapSessionState(session, options) {
+  if (!Buffer.isBuffer(session) || options?.isServer) return session;
+  const servername = Buffer.from(sessionServerIdentity(options), "utf8");
+  const length = Buffer.allocUnsafe(2);
+  length.writeUInt16BE(servername.length, 0);
+  return Buffer.concat([kSessionStatePrefix, length, servername, session]);
+}
+
+function unwrapSessionState(session) {
+  const start = kSessionStatePrefix.length;
+  if (!Buffer.isBuffer(session) || session.length < start + 2 || Buffer.compare(session.subarray(0, start), kSessionStatePrefix) !== 0) return;
+  const end = start + 2 + session.readUInt16BE(start);
+  if (session.length < end) return;
+  return { servername: session.toString("utf8", start + 2, end), session: session.subarray(end) };
+}
+
+/* a session another server name was verified for isn't resumed; nor a raw one, by a client that verifies */
+function sessionForReuse(session, options) {
+  if (typeof session === "string") session = Buffer.from(session, "latin1");
+  if (options?.isServer) return session;
+  const wrapped = unwrapSessionState(session);
+  if (wrapped !== undefined) return wrapped.servername === sessionServerIdentity(options) ? wrapped.session : undefined;
+  if (Buffer.isBuffer(session) && options?.rejectUnauthorized !== false) return;
+  return session;
 }
 
 /* ---- The ClientHello: what a server needs before it can choose a context --------------------- */
@@ -151,6 +203,7 @@ export class TLSSocket extends Socket {
       manualStart: true,
       highWaterMark: tlsOptions.highWaterMark,
       onread: !socket ? tlsOptions.onread : null,
+      signal: tlsOptions.signal,
     });
     this._tlsOptions = tlsOptions;
     this._secureEstablished = false;
@@ -170,6 +223,7 @@ export class TLSSocket extends Socket {
     this._conn = null;          /* the engine, once started */
     this._handshakes = 0;
     this._tlsClosed = false;    /* the engine closed (close_notify, or an error) */
+    this._inSecureHandlers = false;  /* in _onHandshakeDone, inside a _run */
     this._pendingWrites = [];   /* written before the handshake: [bytes, cb] */
     this._hello = null;         /* a server's first bytes, until the ClientHello is read */
     this._servernameOut = null; /* a client's SNI */
@@ -197,6 +251,8 @@ export class TLSSocket extends Socket {
 
   /* a Duplex (or a net.Socket not connected yet): records travel through its write() and 'data' */
   _wrapStream(socket) {
+    /* as Node's JSStreamSocket: paused until the engine reads (_startReading); not a stream, a TypeError */
+    if (!(socket instanceof Socket)) socket.pause();
     this._stream = socket;
     this._parent = socket instanceof Socket ? socket : null;
     socket.on("data", (chunk) => this._onCipher(chunk));
@@ -273,6 +329,12 @@ export class TLSSocket extends Socket {
       return;
     }
     if (this.destroyed || this._conn !== null) return;
+    /* a net.Socket wrapped before its connect(): the ClientHello goes once it is connected */
+    const stream = this._stream;
+    if (stream instanceof Socket && stream._handle === null && !stream.destroyed) {
+      stream.once("connect", () => this._start());
+      return;
+    }
     this._createEngine(this._secureContext, this._servernameOut, alpnNames(this._tlsOptions.ALPNProtocols), false);
     if (this._conn === null) return;
     this._run(null, null);
@@ -291,27 +353,43 @@ export class TLSSocket extends Socket {
     this._conn = conn;
     this.ssl = conn;
     this._activeContext = context;
+    if (this.listenerCount("keylog") > 0) tlsEnableKeylog(conn);
+    else this.on("newListener", keylogNewListener);
+    if (this[kMaxSendFragment] !== undefined) tlsSetMaxSendFragment(conn, this[kMaxSendFragment]);
     if (this[kDisableRenegotiation]) tlsSetNoRenegotiation(conn);
   }
 
   /** Runs the engine with records received and data to send: sends the records it makes (`cb`
    *  when the last of `plain`'s are written), pushes the data it decrypts, and reports handshakes,
    *  sessions, the peer's close_notify and failures. Returns how much of `plain` it took. */
+  /* each line (with its \n), as Node's onkeylog */
+  _emitKeylog(lines) {
+    for (let at = 0; at < lines.length;) {
+      const end = lines.indexOf(0x0a, at) + 1;
+      this.emit("keylog", lines.subarray(at, end));
+      at = end;
+    }
+  }
+
   _run(cipher, plain, cb) {
     if (this._conn === null || this._tlsClosed) {
       if (cb) cb();
       return plain ? plain.length : 0;
     }
-    const [out, app, taken, state, err, handshakes] = tlsRun(this._conn, cipher, plain);
+    const [out, app, taken, state, err, handshakes, keylog] = tlsRun(this._conn, cipher, plain);
+    if (keylog) this._emitKeylog(keylog);
     /* the callback goes with the last record of the data, once the engine took all of it */
     const all = !plain || taken === plain.length;
     if (handshakes > this._handshakes) {
       /* As Node's TLSWrap: the handshake's last flight goes out after 'secure' is handled, so a
        * side that rejects the peer's certificate there never sends it (the peer sees the end);
-       * whatever the handlers write goes after it. */
+       * whatever the handlers write goes after it. The handlers' runs leave the peer's end to
+       * this one, which has the data before it (`app`). */
       this._handshakes = handshakes;
       this._flight = out;
+      this._inSecureHandlers = true;
       this._onHandshakeDone();
+      this._inSecureHandlers = false;
       const flight = this._flight;
       this._flight = null;
       if (flight && !this.destroyed) this._sendCipher(flight);
@@ -326,7 +404,7 @@ export class TLSSocket extends Socket {
     if (state & TLS_FAILED && !this._tlsClosed) {
       this._tlsClosed = true;
       this._onTlsError(tlsFailure(err));
-    } else if (state & TLS_PEER_CLOSED) {
+    } else if (state & TLS_PEER_CLOSED && !this._inSecureHandlers) {
       this._peerEnded();
     }
     return taken;
@@ -335,7 +413,7 @@ export class TLSSocket extends Socket {
   /* a session the server gave (a TLS 1.3 ticket comes after the handshake): 'session', once the
    * server is verified (Node's onnewsessionclient) */
   _onNewSession() {
-    const session = tlsSession(this._conn);
+    const session = wrapSessionState(tlsSession(this._conn), this[kConnectOptions] || this._tlsOptions);
     if (!session) return;
     if (this[kIsVerified]) this.emit("session", session);
     else this[kPendingSession] = session;
@@ -384,8 +462,9 @@ export class TLSSocket extends Socket {
       this.destroy(errnoException(r, "write"));
       return;
     }
+    /* written at once, but a TLS write completes later, as Node's TLSWrap's (bufferSize counts it till then) */
     if (r === 0) {
-      if (cb) cb();
+      if (cb) process.nextTick(cb);
       return;
     }
     this._writeCallbacks.push((status) => {
@@ -477,12 +556,12 @@ export class TLSSocket extends Socket {
         alpn = [selected === undefined ? "\u0000" : selected];
         strict = true;
       }
-      this.servername = hello.servername ?? false;
       this._createEngine(context ?? this._secureContext, null, alpn, strict);
       const buffered = this._hello;
       this._hello = null;
       if (this._conn !== null) this._run(buffered, null);
     };
+    this.servername = hello.servername ?? false;
     if (!hello.servername || !this._SNICallback) {
       finish(null);
       return;
@@ -493,7 +572,10 @@ export class TLSSocket extends Socket {
         if (once) return this.destroy(codeError(Error, "ERR_MULTIPLE_CALLBACK", "Callback called multiple times"));
         once = true;
         if (err) return this.destroy(err);
-        finish(context ? (context instanceof SecureContext ? context : context.context instanceof SecureContext ? context.context : context) : null);
+        const secureContext = !context ? null : context instanceof SecureContext ? context : context.context instanceof SecureContext ? context.context : undefined;
+        /* Node's TLSWrap: the handshake fails, as a TLS error the server reports */
+        if (secureContext === undefined) return this._onTlsError(new TypeError("Invalid SNI context"));
+        finish(secureContext);
       });
     } catch (err) {
       this.destroy(err);
@@ -617,6 +699,21 @@ export class TLSSocket extends Socket {
 
   /* ---- Node's TLSSocket API ---- */
 
+  /* Node's TLSWrap is the socket's handle from the start, over a stream too; it goes with destroy() */
+  get bufferSize() {
+    return this.destroyed ? undefined : this.writableLength;
+  }
+
+  /* the engine goes; the transport stays (Node frees the SSL) */
+  _destroySSL() {
+    if (this._conn === null) return;
+    this._conn = null;
+    this.ssl = null;
+    this._tlsClosed = true;
+    this[kPendingSession] = null;
+    this[kIsVerified] = false;
+  }
+
   disableRenegotiation() {
     this[kDisableRenegotiation] = true;
     if (this._conn !== null) tlsSetNoRenegotiation(this._conn);
@@ -628,9 +725,9 @@ export class TLSSocket extends Socket {
     if (this.destroyed) return;
     if (options.requestCert !== undefined) this._requestCert = !!options.requestCert;
     if (options.rejectUnauthorized !== undefined) this._rejectUnauthorized = !!options.rejectUnauthorized;
-    /* BoringSSL never starts a renegotiation (a client follows a server's request); OpenSSL 3
-     * refuses one in TLS 1.3 too */
-    const err = sslError(0x0A000153, "no renegotiation");
+    /* BoringSSL never starts a renegotiation (a client follows a server's request); TLS 1.3 has
+     * none, which OpenSSL 3 reports as its wrong version */
+    const err = this.getProtocol() === "TLSv1.3" ? sslError(0x0A00010A, "wrong ssl version") : sslError(0x0A000153, "no renegotiation");
     if (callback) process.nextTick(callback, err);
     return false;
   }
@@ -647,8 +744,13 @@ export class TLSSocket extends Socket {
   }
 
   setMaxSendFragment(size) {
-    if (typeof size !== "number" || !Number.isInteger(size)) throw invalidArgType("size", "of type number", size);
-    return size >= 512 && size <= 16384;
+    validateInteger(size, "size");
+    if (size < -(2 ** 31) || size > 2 ** 31 - 1) throw outOfRange("size", `>= ${-(2 ** 31)} && <= ${2 ** 31 - 1}`, size);
+    /* OpenSSL's range: BoringSSL would clamp what's outside it, and report success */
+    if (size < 512 || size > 16384) return false;
+    if (this._conn) tlsSetMaxSendFragment(this._conn, size);
+    else this[kMaxSendFragment] = size;
+    return true;
   }
 
   _handleTimeout() {
@@ -692,12 +794,12 @@ export class TLSSocket extends Socket {
   /* a session is BoringSSL's (i2d_SSL_SESSION's), with the server's chain and verification as
    * OpenSSL's has them */
   setSession(session) {
-    if (typeof session === "string") session = Buffer.from(session, "latin1");
+    session = sessionForReuse(session, this[kConnectOptions] || this._tlsOptions);
     if (ArrayBuffer.isView(session)) this._sessionIn = session;
   }
 
   getSession() {
-    return this._conn === null ? null : tlsSession(this._conn);
+    return this._conn === null ? null : wrapSessionState(tlsSession(this._conn), this[kConnectOptions] || this._tlsOptions);
   }
 
   /** The peer's chain, parsed: the leaf, then each certificate's issuer among the rest */
@@ -769,12 +871,12 @@ export class TLSSocket extends Socket {
 
   getPeerX509Certificate() {
     const chain = this._peerChain();
-    return chain.length ? new X509Certificate(chain[0].der) : undefined;
+    return chain.length ? feature("x509CertificateChain")(chain.map((c) => c.der)) : undefined;
   }
 
   getX509Certificate() {
     const ctx = this._activeContext ?? this._secureContext;
-    return ctx._certs.length ? new X509Certificate(ctx._certs[0]) : undefined;
+    return ctx._certs.length ? feature("x509CertificateChain")([ctx._certs[0]]) : undefined;
   }
 
   setKeyCert(context) {
@@ -801,15 +903,15 @@ export class TLSSocket extends Socket {
   }
 
   getFinished() {
-    return this._conn === null ? null : tlsFinished(this._conn, false);
+    return this._conn === null ? undefined : tlsFinished(this._conn, false);
   }
 
   getPeerFinished() {
-    return this._conn === null ? null : tlsFinished(this._conn, true);
+    return this._conn === null ? undefined : tlsFinished(this._conn, true);
   }
 
   getTLSTicket() {
-    return this._conn === null ? null : undefined;
+    return this._conn === null ? undefined : tlsTicket(this._conn);
   }
 
   getSharedSigalgs() {
@@ -821,16 +923,6 @@ export class TLSSocket extends Socket {
   }
 
   enableTrace() {}
-}
-
-/* crypto.X509Certificate, which getPeerX509Certificate returns: set by node:crypto's module */
-let X509Certificate = class {
-  constructor() {
-    throw codeError(Error, "ERR_VISALJS_UNSUPPORTED", "X509Certificate is not supported by visaljs yet");
-  }
-};
-export function setX509Certificate(cls) {
-  X509Certificate = cls;
 }
 
 /* ---- Server ------------------------------------------------------------------------------------- */
@@ -866,6 +958,16 @@ function onSocketClose(err) {
   }
 }
 
+function keylogNewListener(event) {
+  if (event !== "keylog") return;
+  if (this._conn !== null) tlsEnableKeylog(this._conn);
+  this.removeListener("newListener", keylogNewListener);
+}
+
+function onSocketKeylog(line) {
+  this._tlsOptions.server.emit("keylog", line, this);
+}
+
 function tlsConnectionListener(rawSocket) {
   const socket = new TLSSocket(rawSocket, {
     secureContext: this._sharedCreds,
@@ -884,6 +986,7 @@ function tlsConnectionListener(rawSocket) {
   socket.on("close", onSocketClose);
   socket.on("_tlsError", onSocketTLSError);
   socket.on("error", onSocketTLSError);
+  if (this.listenerCount("keylog") > 0) socket.on("keylog", onSocketKeylog);
 }
 
 function SNICallback(servername, callback) {
@@ -937,27 +1040,39 @@ class ServerClass extends NetServer {
     this.honorCipherOrder = options.honorCipherOrder !== undefined ? !!options.honorCipherOrder : true;
     this.secureOptions = options.secureOptions || undefined;
     this.sessionIdContext = options.sessionIdContext || undefined;
+    if (options.sessionTimeout) this.sessionTimeout = options.sessionTimeout;
+    if (options.ticketKeys) this.ticketKeys = options.ticketKeys;
+    this.privateKeyIdentifier = options.privateKeyIdentifier;
+    this.privateKeyEngine = options.privateKeyEngine;
+    this.certificateCompression = options.certificateCompression;
     this._sharedCreds = createSecureContext({
-      pfx: this.pfx, key: this.key, passphrase: this.passphrase, cert: this.cert, ca: this.ca, ciphers: this.ciphers,
-      sigalgs: this.sigalgs, ecdhCurve: this.ecdhCurve, dhparam: this.dhparam, minVersion: this.minVersion,
+      pfx: this.pfx, key: this.key, passphrase: this.passphrase, cert: this.cert, clientCertEngine: this.clientCertEngine, ca: this.ca,
+      ciphers: this.ciphers, sigalgs: this.sigalgs, ecdhCurve: this.ecdhCurve, dhparam: this.dhparam, minVersion: this.minVersion,
       maxVersion: this.maxVersion, secureProtocol: this.secureProtocol, secureOptions: this.secureOptions,
-      honorCipherOrder: this.honorCipherOrder, crl: this.crl, sessionIdContext: this.sessionIdContext,
+      honorCipherOrder: this.honorCipherOrder, crl: this.crl, sessionIdContext: this.sessionIdContext, ticketKeys: this.ticketKeys,
+      sessionTimeout: this.sessionTimeout, privateKeyIdentifier: this.privateKeyIdentifier, privateKeyEngine: this.privateKeyEngine,
+      certificateCompression: this.certificateCompression,
     });
   }
 
   addContext(servername, context) {
     if (!servername) throw codeError(Error, "ERR_TLS_REQUIRED_SERVER_NAME", '"servername" is required parameter for Server.addContext');
-    const re = new RegExp(`^${servername.replace(/([.^$+?\-\\[\]{}])/g, "\\$1").replaceAll("*", "[^.]*")}$`);
+    const re = new RegExp(`^${servername.replace(/([.^$+?\-\\[\]{}])/g, "\\$1").replaceAll("*", "[^.]*")}$`, "i");
     const secureContext = context instanceof SecureContext ? context : createSecureContext(context);
     this._contexts.push([re, secureContext]);
   }
 
   getTicketKeys() {
-    return Buffer.alloc(48);
+    return tlsContextTicketKeys(this._sharedCreds.context, null);
   }
 
   setTicketKeys(keys) {
     if (!ArrayBuffer.isView(keys)) throw invalidArgType("buffer", "an instance of Buffer, TypedArray, or DataView", keys);
+    if (keys.byteLength !== 48) {
+      throw codeError(Error, "ERR_INTERNAL_ASSERTION", "Session ticket keys must be a 48-byte buffer\nThis is caused by either a bug in Node.js " +
+        "or incorrect usage of Node.js internals.\nPlease open an issue with this stack trace at https://github.com/nodejs/node/issues\n");
+    }
+    tlsContextTicketKeys(this._sharedCreds.context, keys);
   }
 }
 
@@ -990,10 +1105,9 @@ function onConnectSecure() {
   this.secureConnecting = false;
   this.emit("secureConnect");
   this[kIsVerified] = true;
-  if (this.listenerCount("session") > 0) {
-    const session = this.getSession();
-    if (session) this.emit("session", session);
-  }
+  const session = this[kPendingSession];
+  this[kPendingSession] = null;
+  if (session) this.emit("session", session);
   this.removeListener("end", onConnectEnd);
 }
 
@@ -1028,10 +1142,22 @@ function normalizeConnectArgs(listArgs) {
 
 let ipServernameWarned = false;
 
+let warnOnAllowUnauthorized = true;
+/* Node's getAllowUnauthorized: NODE_TLS_REJECT_UNAUTHORIZED=0, with a warning the first time */
+function allowUnauthorized() {
+  const allow = process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0";
+  if (allow && warnOnAllowUnauthorized) {
+    warnOnAllowUnauthorized = false;
+    process.emitWarning("Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests " +
+      "insecure by disabling certificate verification.");
+  }
+  return allow;
+}
+
 export function connect(...args) {
   let [options, cb] = normalizeConnectArgs(args);
   options = {
-    rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "0",
+    rejectUnauthorized: !allowUnauthorized(),
     ciphers: undefined,
     checkServerIdentity,
     minDHSize: 1024,
@@ -1054,6 +1180,7 @@ export function connect(...args) {
     ALPNProtocols: options.ALPNProtocols,
     highWaterMark: options.highWaterMark,
     onread: options.onread,
+    signal: options.signal,
   });
   options.rejectUnauthorized = options.rejectUnauthorized !== false;
   tlssock[kConnectOptions] = options;
@@ -1173,6 +1300,7 @@ export function checkServerIdentity(hostname, cert) {
   const dnsNames = [];
   const ips = [];
   hostname = "" + hostname;
+  const hostnameASCII = unfqdn(domainToASCII(hostname));
   if (altNames) {
     const splitAltNames = altNames.includes('"') ? splitEscapedAltNames(altNames) : altNames.split(", ");
     splitAltNames.forEach((name) => {
@@ -1187,7 +1315,7 @@ export function checkServerIdentity(hostname, cert) {
     valid = ips.includes(canonicalizeIP(hostname));
     if (!valid) reason = `IP: ${hostname} is not in the cert's list: ` + ips.join(", ");
   } else if (dnsNames.length > 0 || subject?.CN) {
-    const hostParts = splitHost(hostname);
+    const hostParts = splitHost(hostnameASCII);
     const wildcard = (pattern) => check(hostParts, pattern, true);
     if (dnsNames.length > 0) {
       valid = dnsNames.some(wildcard);
