@@ -438,6 +438,23 @@ static JSValue get_constructor_name(Insp *ip, JSValue obj, double recurse) {
 }
 
 /* getPrefix: "Foo ", "Foo [Tag] ", "[Object: null prototype] " */
+/* Node's getPrefix: the constructor's name already shows the tag when it contains it, at its end
+ * or before a character that isn't lowercase (SecretKeyObject shows KeyObject; Foox doesn't show Foo) */
+static bool names_tag(JSContext *ctx, JSValue constructor, JSValue tag) {
+    JSStrView c = js_string_view(ctx, constructor), t = js_string_view(ctx, tag);
+    if (t.length == 0 || t.length > c.length) return false;
+    for (uint32_t pos = 0; pos + t.length <= c.length; pos++) {  /* the first occurrence decides, as indexOf */
+        uint32_t i = 0;
+        while (i < t.length && js_view_at(c, pos + i) == js_view_at(t, i)) i++;
+        if (i < t.length) continue;
+        uint32_t end = pos + t.length;
+        if (end == c.length) return true;
+        uint32_t next = js_view_at(c, end);
+        return next >= 'A' && next <= 'Z';  /* Node: not equal to its own lowercase (ASCII here) */
+    }
+    return false;
+}
+
 static void put_prefix(Builder *b, JSContext *ctx, JSValue constructor, JSValue tag, const char *fallback, const char *size) {
     bool has_tag = js_string_length(tag) != 0;
     if (js_is_null(constructor)) {
@@ -455,7 +472,7 @@ static void put_prefix(Builder *b, JSContext *ctx, JSValue constructor, JSValue 
     }
     put_str(b, ctx, constructor);
     put_ascii(b, size);
-    if (has_tag && !js_string_equals(ctx, constructor, tag)) {
+    if (has_tag && !names_tag(ctx, constructor, tag)) {
         put_ascii(b, " [");
         put_str(b, ctx, tag);
         put_ascii(b, "]");
