@@ -223,6 +223,7 @@ export class TLSSocket extends Socket {
     this._conn = null;          /* the engine, once started */
     this._handshakes = 0;
     this._tlsClosed = false;    /* the engine closed (close_notify, or an error) */
+    this._inSecureHandlers = false;  /* in _onHandshakeDone, inside a _run */
     this._pendingWrites = [];   /* written before the handshake: [bytes, cb] */
     this._hello = null;         /* a server's first bytes, until the ClientHello is read */
     this._servernameOut = null; /* a client's SNI */
@@ -328,6 +329,12 @@ export class TLSSocket extends Socket {
       return;
     }
     if (this.destroyed || this._conn !== null) return;
+    /* a net.Socket wrapped before its connect(): the ClientHello goes once it is connected */
+    const stream = this._stream;
+    if (stream instanceof Socket && stream._handle === null && !stream.destroyed) {
+      stream.once("connect", () => this._start());
+      return;
+    }
     this._createEngine(this._secureContext, this._servernameOut, alpnNames(this._tlsOptions.ALPNProtocols), false);
     if (this._conn === null) return;
     this._run(null, null);
@@ -376,10 +383,13 @@ export class TLSSocket extends Socket {
     if (handshakes > this._handshakes) {
       /* As Node's TLSWrap: the handshake's last flight goes out after 'secure' is handled, so a
        * side that rejects the peer's certificate there never sends it (the peer sees the end);
-       * whatever the handlers write goes after it. */
+       * whatever the handlers write goes after it. The handlers' runs leave the peer's end to
+       * this one, which has the data before it (`app`). */
       this._handshakes = handshakes;
       this._flight = out;
+      this._inSecureHandlers = true;
       this._onHandshakeDone();
+      this._inSecureHandlers = false;
       const flight = this._flight;
       this._flight = null;
       if (flight && !this.destroyed) this._sendCipher(flight);
@@ -394,7 +404,7 @@ export class TLSSocket extends Socket {
     if (state & TLS_FAILED && !this._tlsClosed) {
       this._tlsClosed = true;
       this._onTlsError(tlsFailure(err));
-    } else if (state & TLS_PEER_CLOSED) {
+    } else if (state & TLS_PEER_CLOSED && !this._inSecureHandlers) {
       this._peerEnded();
     }
     return taken;
@@ -452,8 +462,9 @@ export class TLSSocket extends Socket {
       this.destroy(errnoException(r, "write"));
       return;
     }
+    /* written at once, but a TLS write completes later, as Node's TLSWrap's (bufferSize counts it till then) */
     if (r === 0) {
-      if (cb) cb();
+      if (cb) process.nextTick(cb);
       return;
     }
     this._writeCallbacks.push((status) => {
@@ -687,6 +698,21 @@ export class TLSSocket extends Socket {
   }
 
   /* ---- Node's TLSSocket API ---- */
+
+  /* Node's TLSWrap is the socket's handle from the start, over a stream too; it goes with destroy() */
+  get bufferSize() {
+    return this.destroyed ? undefined : this.writableLength;
+  }
+
+  /* the engine goes; the transport stays (Node frees the SSL) */
+  _destroySSL() {
+    if (this._conn === null) return;
+    this._conn = null;
+    this.ssl = null;
+    this._tlsClosed = true;
+    this[kPendingSession] = null;
+    this[kIsVerified] = false;
+  }
 
   disableRenegotiation() {
     this[kDisableRenegotiation] = true;
@@ -1116,10 +1142,22 @@ function normalizeConnectArgs(listArgs) {
 
 let ipServernameWarned = false;
 
+let warnOnAllowUnauthorized = true;
+/* Node's getAllowUnauthorized: NODE_TLS_REJECT_UNAUTHORIZED=0, with a warning the first time */
+function allowUnauthorized() {
+  const allow = process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0";
+  if (allow && warnOnAllowUnauthorized) {
+    warnOnAllowUnauthorized = false;
+    process.emitWarning("Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests " +
+      "insecure by disabling certificate verification.");
+  }
+  return allow;
+}
+
 export function connect(...args) {
   let [options, cb] = normalizeConnectArgs(args);
   options = {
-    rejectUnauthorized: process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "0",
+    rejectUnauthorized: !allowUnauthorized(),
     ciphers: undefined,
     checkServerIdentity,
     minDHSize: 1024,

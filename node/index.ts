@@ -379,6 +379,8 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   tlsContextAddCA: { c: "js_tls_context_add_ca", length: 2 },  // (context, der) → 0 | error
   tlsContextSetCert: { c: "js_tls_context_set_cert", length: 2 },  // (context, [der, …]) → 0 | error
   tlsContextSetKey: { c: "js_tls_context_set_key", length: 2 },    // (context, key handle) → 0 | 1 unusable | 2 not the cert's
+  tlsContextAddCredential: { c: "js_tls_context_add_credential", length: 3 },  // (context, [der, …], key handle) → 0 | 1 unusable | 2 not the cert's
+  tlsContextAllowPartialChain: { c: "js_tls_context_allow_partial_chain", length: 1 },
   tlsContextTicketKeys: { c: "js_tls_context_ticket_keys", length: 2 },  // (context, keys | null) → Buffer: its 48 bytes
   tlsContextSetSessions: { c: "js_tls_context_set_sessions", length: 3 },  // (context, timeout | null, sessionIdContext | null)
   tlsPkcs12: { c: "js_tls_pkcs12", length: 2 },               // (der, password | null) → [pkcs8 | null, cert | null, [der, …]] | reason

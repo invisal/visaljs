@@ -373,11 +373,14 @@ export const issuedBy = (cert, issuer) => Buffer.compare(cert.issuerRaw, issuer.
 
 /* ---- PEM ---------------------------------------------------------------------------------------- */
 
+/* what OpenSSL's PEM reader takes as a certificate */
+const CERTIFICATE_LABELS = new Set(["TRUSTED CERTIFICATE", "X509 CERTIFICATE"]);
+
 /** Every block of a label in PEM text, as DER Buffers */
 export function pemBlocks(text, label) {
   const out = [];
   const re = /-----BEGIN ([A-Z0-9 ]+)-----\r?\n([\s\S]*?)-----END \1-----/g;
-  for (let m; (m = re.exec(text)) !== null;) if (label === undefined || m[1] === label || (label === "CERTIFICATE" && m[1] === "TRUSTED CERTIFICATE")) out.push(Buffer.from(m[2], "base64"));
+  for (let m; (m = re.exec(text)) !== null;) if (label === undefined || m[1] === label || (label === "CERTIFICATE" && CERTIFICATE_LABELS.has(m[1]))) out.push(Buffer.from(m[2], "base64"));
   return out;
 }
 

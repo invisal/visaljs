@@ -298,6 +298,46 @@ PRIMITIVE(js_tls_context_set_key) {
     return js_int32(0);
 }
 
+/* tlsContextAddCredential(context, [der, …], key handle) → 0 | 1 a key TLS can't use | 2 not the
+ * certificate's key: one of a server's identities (a chain, leaf first, and its key), which
+ * BoringSSL chooses among by what the client accepts, as OpenSSL does by key type */
+PRIMITIVE(js_tls_context_add_credential) {
+    UNUSED_ARGS;
+    TlsContextObject *o = context_arg(ARG(0));
+    JSKeyData *k = js_key_data(ARG(2));
+    if (!o || !js_is_array(ARG(1)) || !k) return js_throw_type_error(ctx, "tlsContextAddCredential: a context, certificates and a key expected");
+    uint32_t n = js_array_length(js_as_object(ARG(1)));
+    if (n == 0 || n > 16) return js_throw_type_error(ctx, "tlsContextAddCredential: 1 to 16 certificates expected");
+    CRYPTO_BUFFER *certs[16] = { 0 };
+    int result = 0;
+    for (uint32_t i = 0; i < n && result == 0; i++) {
+        const uint8_t *p;
+        size_t len;
+        if (!bytes_arg(js_get_value(ctx, ARG(1), js_index_key(i)), &p, &len) || !(certs[i] = CRYPTO_BUFFER_new(p, len, NULL))) result = 1;
+    }
+    EVP_PKEY *pkey = result == 0 && k->type == JS_KEY_PRIVATE ? pkey_of(k) : NULL;
+    SSL_CREDENTIAL *cred = SSL_CREDENTIAL_new_x509();
+    if (result == 0 && (!pkey || !cred)) result = 1;
+    if (result == 0 && !SSL_CREDENTIAL_set1_cert_chain(cred, certs, n)) result = 1;
+    if (result == 0 && !SSL_CREDENTIAL_set1_private_key(cred, pkey)) result = 2;
+    if (result == 0 && !SSL_CTX_add1_credential(o->ctx, cred)) result = 1;
+    SSL_CREDENTIAL_free(cred);
+    EVP_PKEY_free(pkey);
+    for (uint32_t i = 0; i < n; i++) CRYPTO_BUFFER_free(certs[i]);
+    ERR_clear_error();
+    return js_int32(result);
+}
+
+/* tlsContextAllowPartialChain(context): a trusted intermediate ends a chain, as a root does
+ * (allowPartialTrustChain); on the context's parameters, as its store may be the shared roots' */
+PRIMITIVE(js_tls_context_allow_partial_chain) {
+    UNUSED_ARGS;
+    TlsContextObject *o = context_arg(ARG(0));
+    if (!o) return js_throw_type_error(ctx, "tlsContextAllowPartialChain: a context expected");
+    X509_VERIFY_PARAM_set_flags(SSL_CTX_get0_param(o->ctx), X509_V_FLAG_PARTIAL_CHAIN);
+    return JS_UNDEFINED;
+}
+
 /* tlsContextTicketKeys(context, keys | null) → the 48 bytes the context's session tickets are
  * encrypted with (after setting them to `keys`) */
 PRIMITIVE(js_tls_context_ticket_keys) {
@@ -457,6 +497,7 @@ typedef struct TlsConnData {
     uint32_t     handshakes;
     bool         in_handshake;
     SSL_SESSION *new_session;       /* the last session (or ticket) the peer gave: tlsRun reports it once */
+    SSL_SESSION *offered_session;   /* a client's, to resume */
     bool         session_reported;
     uint8_t     *alpn;              /* a server's protocols, in the wire format */
     size_t       alpn_len;
@@ -504,6 +545,7 @@ static void conn_finalize(JSRuntime *rt, JSCell *cell) {
     if (!d) return;
     SSL_free(d->ssl);  /* and its BIOs */
     SSL_SESSION_free(d->new_session);
+    SSL_SESSION_free(d->offered_session);
     free(d->alpn);
     free(d->keylog.p);
     free(d);
@@ -578,7 +620,7 @@ PRIMITIVE(js_tls_new) {
         if (bytes_arg(ARG(4), &sp, &spn)) {
             SSL_SESSION *s = SSL_SESSION_from_bytes(sp, spn, cx->ctx);
             if (s) SSL_set_session(d->ssl, s);
-            SSL_SESSION_free(s);
+            d->offered_session = s;  /* the reference from_bytes gave */
         }
     }
     ERR_clear_error();
@@ -786,7 +828,9 @@ PRIMITIVE(js_tls_ticket) {
     UNUSED_ARGS;
     TlsConnData *d = conn_arg(ARG(0));
     if (!d) return JS_UNDEFINED;
-    SSL_SESSION *s = d->new_session ? d->new_session : SSL_get_session(d->ssl);
+    /* resumed, a TLS 1.3 session is a copy without the ticket: the one offered had it */
+    SSL_SESSION *s = d->new_session ? d->new_session
+                   : SSL_session_reused(d->ssl) && d->offered_session ? d->offered_session : SSL_get_session(d->ssl);
     const uint8_t *p;
     size_t n;
     if (!s || !SSL_SESSION_has_ticket(s)) return JS_UNDEFINED;

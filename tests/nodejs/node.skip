@@ -196,6 +196,7 @@ test-tls-empty-sni-context.js            the alert for a context without a certi
 test-tls-disable-renegotiation.js        a client's renegotiation (BoringSSL only follows a server's)
 test-https-client-renegotiation-limit.js  a client's renegotiation (BoringSSL only follows a server's)
 test-tls-alpn-server-client.js           the openssl command (s_client)
+test-tls-client-reject.js                a TLS 1.3 ticket after the client's close_notify (BoringSSL ignores it)
 
 # tls: Node's command line and environment, read by a Node started as a child
 test-tls-cipher-list.js                  --tls-cipher-list

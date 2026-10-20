@@ -5,10 +5,10 @@
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import { fsReadFile, tlsRootCertificates } from "visaljs:host";
 import { EventEmitter } from "./events.js";
-import { invalidArgType, invalidArgValue, validateString } from "./internal/errors.js";
+import { codeError, invalidArgType, invalidArgValue, validateString } from "./internal/errors.js";
 import { cipherNames, createSecureContext, defaults, extraCAs, SecureContext } from "./internal/tls/common.js";
 import { checkServerIdentity, connect, convertALPNProtocols, createServer, Server, TLSSocket } from "./internal/tls/wrap.js";
-import { toPem } from "./internal/tls/x509.js";
+import { certificatesOf, parseCertificate, toPem } from "./internal/tls/x509.js";
 import { Duplex } from "./stream.js";
 
 export { checkServerIdentity, connect, convertALPNProtocols, createSecureContext, createServer, SecureContext, Server, TLSSocket };
@@ -70,7 +70,20 @@ export function setDefaultCACertificates(certs) {
       throw invalidArgType(`certs[${i}]`, "of type string or an instance of ArrayBufferView", certs[i]);
     }
   }
-  defaults.defaultCA = certs.map((c) => (typeof c === "string" ? c : Buffer.from(c.buffer, c.byteOffset, c.byteLength).toString("latin1")));
+  /* as Node's store: each certificate once, re-encoded; none, or one OpenSSL can't read, changes nothing */
+  const ders = new Map();
+  for (const cert of certs) {
+    for (const der of certificatesOf(cert)) {
+      try {
+        parseCertificate(der);
+      } catch {
+        throw codeError(Error, "ERR_OSSL_PEM_ASN1_LIB", "error:0480000D:PEM routines::ASN1 lib");
+      }
+      ders.set(der.toString("latin1"), der);
+    }
+  }
+  if (ders.size === 0) throw codeError(Error, "ERR_CRYPTO_OPERATION_FAILED", "No valid certificates found in the provided array");
+  defaults.defaultCA = [...ders.values()].map((der) => toPem(der));
   defaultPems = undefined;
 }
 
