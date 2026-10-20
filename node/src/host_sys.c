@@ -277,3 +277,21 @@ JSValue js_host_process_memory(JSContext *ctx, JSValue callee, JSValue this_val,
                          js_number((double)(h->live_after_gc + h->allocated_since_gc)) };
     return js_new_array_from(ctx, items, 3);
 }
+
+/* previewEntries(value, isIterator): Node's util binding: a Map's, Set's or iterator's entries,
+ * the iterator not advanced ([k1, v1, …] for a Map or an entries iterator, else the values);
+ * with isIterator, [entries, isKeyValue]. Undefined for any other value, or when the program
+ * has no collections. */
+JSValue js_host_preview_entries(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv,
+                                JSValue new_target) {
+    (void)callee, (void)this_val, (void)new_target;
+    if (argc < 1 || !ctx->rt->collection_preview) return JS_UNDEFINED;
+    JSCollectionPreview what = JS_PREVIEW_MAP;
+    JSValue entries = ctx->rt->collection_preview(ctx, argv[0], &what);
+    if (js_is_exception(entries)) return entries;
+    if (js_is_empty(entries)) return JS_UNDEFINED;
+    if (argc < 2 || !js_truthy(argv[1])) return entries;
+    bool pairs = what == JS_PREVIEW_MAP || what == JS_PREVIEW_MAP_ENTRIES || what == JS_PREVIEW_SET_ENTRIES;
+    JSValue items[2] = { entries, js_bool(pairs) };
+    return js_new_array_from(ctx, items, 2);
+}

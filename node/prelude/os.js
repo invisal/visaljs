@@ -208,6 +208,11 @@ export const constants = Object.freeze({
   }),
 });
 
+/* as Node's: `${os.hostname}` and the like give their value */
+for (const f of [availableParallelism, freemem, hostname, version, type, release, machine, homedir, totalmem, uptime, arch, platform, endianness]) {
+  f[Symbol.toPrimitive] = () => f();
+}
+
 /* as Node's module object: EOL and devNull read-only (but configurable), constants fixed */
 export default Object.defineProperties({
   arch, availableParallelism, cpus, endianness, freemem, getPriority, homedir, hostname, loadavg, networkInterfaces, platform, release,

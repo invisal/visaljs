@@ -44,8 +44,9 @@ function dnsException(code, syscall, hostname) {
 
 /* the DNS types (ares_dns_rec_type_t) */
 const T = { A: 1, NS: 2, CNAME: 5, SOA: 6, PTR: 12, MX: 15, TXT: 16, AAAA: 28, SRV: 33, NAPTR: 35, TLSA: 52, ANY: 255, CAA: 257 };
-/* dnsParse's kind for a CNAME or A records (Node's ns_t_cname_or_a) */
+/* dnsParse's kinds for a CNAME or A records (Node's ns_t_cname_or_a), and for ANY's SOA */
 const CNAME_OR_A = 0x10000;
+const SOA_IN_ANY = 0x10006;
 
 const TYPES = {
   queryA: T.A, queryAaaa: T.AAAA, queryCname: T.CNAME, queryMx: T.MX, queryNs: T.NS, queryTxt: T.TXT, querySrv: T.SRV, queryPtr: T.PTR,
@@ -102,7 +103,7 @@ function parseAny(answer) {
     [T.SRV, (records) => records.forEach((r) => out.push(srvRecord(r)))],
     [T.PTR, (records) => records.forEach((value) => out.push({ value, type: "PTR" }))],
     [T.NAPTR, (records) => records.forEach((r) => out.push(naptrRecord(r)))],
-    [T.SOA, (records) => records.forEach((r) => out.push({ ...soaRecord(r), type: "SOA" }))],
+    [SOA_IN_ANY, (records) => records.forEach((r) => out.push({ ...soaRecord(r), type: "SOA" }))],
     [T.TLSA, (records) => records.forEach((r) => out.push({ ...tlsaRecord(r), type: "TLSA" }))],
     [T.CAA, (records) => records.forEach((r) => out.push(caaRecord(r)))],
   ];

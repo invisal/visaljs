@@ -181,7 +181,11 @@
         "warn"
       ],
       "stubbed": [],
-      "missing": []
+      "missing": [],
+      "extra": [
+        "kBindProperties",
+        "kBindStreamsLazy"
+      ]
     },
     "constants": {
       "status": "partial",

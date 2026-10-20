@@ -17,8 +17,7 @@
 
 /* ---- The queue -------------------------------------------------------------------- */
 
-void js_enqueue_microtask(JSContext *ctx, const JSJob *job) {
-    JSJobQueue *q = &ctx->rt->jobs;
+static void enqueue(JSContext *ctx, JSJobQueue *q, const JSJob *job) {
     if (q->count == q->cap) {  /* grow, unwrapping the ring: no allocation of cells, so no GC */
         size_t cap = q->cap ? q->cap * 2 : 64;
         JSJob *items = malloc(cap * sizeof *items);
@@ -34,6 +33,14 @@ void js_enqueue_microtask(JSContext *ctx, const JSJob *job) {
     slot->realm = ctx;
     slot->context = ctx->rt->async_context;
     q->count++;
+}
+
+void js_enqueue_microtask(JSContext *ctx, const JSJob *job) {
+    enqueue(ctx, &ctx->rt->jobs, job);
+}
+
+void js_enqueue_tick(JSContext *ctx, const JSJob *job) {
+    enqueue(ctx, &ctx->rt->ticks, job);
 }
 
 /* ---- The async context --------------------------------------------------------------- */
@@ -144,25 +151,30 @@ static int process_rejections(JSContext *ctx) {
 
 /* ---- The checkpoint -------------------------------------------------------------- */
 
+/* Runs every job in `q`, the ones queued meanwhile too: 0, or -1 after an uncaught error (reported) */
+static int drain(JSJobQueue *q) {
+    while (q->count) {
+        JSJob job = q->items[q->head];  /* on the C stack: the conservative scan keeps it alive */
+        q->head = (q->head + 1) % q->cap;
+        q->count--;
+        if (run_job(&job) < 0 && js_report_uncaught(job.realm)) return -1;  /* handled: the next job runs */
+    }
+    return 0;
+}
+
+/* Node's processTicksAndRejections: the ticks, then the microtasks (a tick a microtask queues
+ * waits for them all), then the rejections, until none is left */
 int js_run_microtasks(JSContext *ctx) {
     JSRuntime *rt = ctx->rt;
     if (rt->in_checkpoint) return 0;
     rt->in_checkpoint = 1;
-    JSJobQueue *q = &rt->jobs;
     int status = 0;
-    do {  /* again while the host's handling of a rejection queued jobs */
-        while (q->count) {
-            JSJob job = q->items[q->head];  /* on the C stack: the conservative scan keeps it alive */
-            q->head = (q->head + 1) % q->cap;
-            q->count--;
-            if (run_job(&job) < 0 && js_report_uncaught(job.realm)) {  /* handled: the next job runs */
-                status = -1;
-                break;
-            }
-        }
+    do {
+        status = drain(&rt->ticks);
+        if (status == 0) status = drain(&rt->jobs);
         js_clear_kept_objects(rt);  /* the end of the job: WeakRef targets may go now */
         if (status == 0) status = process_rejections(ctx);
-    } while (status == 0 && (q->count || rt->handled_late.count));
+    } while (status == 0 && (rt->ticks.count || rt->jobs.count || rt->handled_late.count));
     rt->in_checkpoint = 0;
     return status;
 }
@@ -170,13 +182,14 @@ int js_run_microtasks(JSContext *ctx) {
 /* ---- GC and teardown (gc.c) ----------------------------------------------------- */
 
 void js_jobs_trace(JSRuntime *rt, JSTracer *trc) {
-    JSJobQueue *q = &rt->jobs;
-    for (size_t i = 0; i < q->count; i++) {
-        JSJob *j = &q->items[(q->head + i) % q->cap];
-        js_trace_value(trc, j->a);
-        js_trace_value(trc, j->b);
-        js_trace_value(trc, j->c);
-        js_trace_value(trc, j->context);
+    for (JSJobQueue *q = &rt->jobs; q; q = q == &rt->jobs ? &rt->ticks : NULL) {
+        for (size_t i = 0; i < q->count; i++) {
+            JSJob *j = &q->items[(q->head + i) % q->cap];
+            js_trace_value(trc, j->a);
+            js_trace_value(trc, j->b);
+            js_trace_value(trc, j->c);
+            js_trace_value(trc, j->context);
+        }
     }
     for (size_t i = 0; i < rt->rejections.count; i++) js_trace_value(trc, rt->rejections.items[i]);
     for (size_t i = 0; i < rt->handled_late.count; i++) js_trace_value(trc, rt->handled_late.items[i]);
@@ -189,6 +202,7 @@ void js_jobs_trace(JSRuntime *rt, JSTracer *trc) {
 
 void js_jobs_free(JSRuntime *rt) {
     free(rt->jobs.items);
+    free(rt->ticks.items);
     free(rt->rejections.items);
     free(rt->handled_late.items);
     free(rt->timers.heap);

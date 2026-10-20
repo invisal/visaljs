@@ -189,6 +189,7 @@ struct JSRuntime {
     JSValue   symbol_registry;  /* Symbol.for's GlobalSymbolRegistry: key -> symbol (a root) */
     uintptr_t stack_limit;  /* lowest usable stack address, margin included */
     JSJobQueue jobs;        /* microtasks */
+    JSJobQueue ticks;       /* process.nextTick's: each checkpoint runs them all before the microtasks (Node's) */
     JSTimers  timers;       /* setTimeout / setInterval */
     /* The async context: an opaque value the host keeps per chain of async work
      * (node:async_hooks' AsyncLocalStorage keeps its stores in it). Every job, timer and promise

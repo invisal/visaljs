@@ -617,18 +617,20 @@ typedef struct NameInfo {
 static void on_nameinfo(uv_getnameinfo_t *req, int status, const char *hostname, const char *service) {
     NameInfo *n = (NameInfo *)req;
     JSContext *ctx = js_uv_context();
-    JSValue args[3] = { js_int32(status), JS_NULL, JS_NULL };
+    JSValue args[4] = { js_int32(status), JS_NULL, JS_NULL, JS_NULL };
     if (status == 0) {
         args[1] = js_new_string_cstr(ctx, hostname);
         args[2] = js_new_string_cstr(ctx, service);
+    } else {
+        args[3] = js_new_string_cstr(ctx, uv_err_name(status));
     }
     JSValue cb = n->cb;
     js_remove_root(ctx->rt, &n->cb);
     free(n);
-    (void)js_uv_call(cb, 3, args, NULL);
+    (void)js_uv_call(cb, 4, args, NULL);
 }
 
-/* dnsLookupService(ip, port, cb) → 0 | -errno; cb(errno, hostname | null, service | null): getnameinfo, a
+/* dnsLookupService(ip, port, cb) → 0 | -errno; cb(errno, hostname | null, service | null, code | null): getnameinfo, a
  * name required (NI_NAMEREQD), as Node's */
 HOST_FN(js_host_dns_lookup_service) {
     UNUSED;

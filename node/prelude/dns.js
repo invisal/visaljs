@@ -200,7 +200,9 @@ Object.defineProperty(lookup, Symbol.for("nodejs.util.promisify.customArgs"), { 
 
 function lookupServiceArgs(args, names) {
   if (args.length !== names.length) {
-    throw codeError(TypeError, "ERR_MISSING_ARGS", `The ${names.map((n) => `"${n}"`).join(", ").replace(/, ([^,]*)$/, " and $1")} arguments must be specified`);
+    const quoted = names.map((n) => `"${n}"`);
+    const list = quoted.length > 2 ? `${quoted.slice(0, -1).join(", ")}, and ${quoted.at(-1)}` : quoted.join(" and ");
+    throw codeError(TypeError, "ERR_MISSING_ARGS", `The ${list} arguments must be specified`);
   }
   const [address, port] = args;
   validateString(address, "address");
@@ -211,8 +213,8 @@ function lookupServiceArgs(args, names) {
 
 /* getnameinfo: done(error | null, hostname, service) */
 function getnameinfo(address, port, done) {
-  return dnsLookupService(address, port, bindContext((errno, hostname, service) => {
-    if (errno) done(dnsException(errno, "getnameinfo", address));
+  return dnsLookupService(address, port, bindContext((errno, hostname, service, code) => {
+    if (errno) done(dnsException(errno, "getnameinfo", address, code));
     else done(null, hostname, service);
   }));
 }

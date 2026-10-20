@@ -100,7 +100,7 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
    * them and uses streams (pipes into them, listens on them, ends them) */
   { file: join(preludeDir, "internal", "process_stdio.js"), reached: (_code, program) => /\b(?:stdout|stderr)\b/.test(program) && STDIO_STREAM_USE.test(program) },
   /* the global console as Node's, through process.stdout and stderr: when a program replaces one's write (or the console's streams) */
-  { file: join(preludeDir, "internal", "console_global.js"), reached: (_code, program) => /\b(?:stdout|stderr)\b/.test(program) && STDIO_WRITE_REPLACED.test(program) },
+  { file: join(preludeDir, "internal", "console_global.js"), reached: (_code, program) => STDIO_WRITE_REPLACED.test(program) },
   /* console.Console, for a program that names it */
   { file: join(preludeDir, "internal", "console_class.js"), reached: (_code, program) => /\bConsole\b/.test(program) },
   /* process.stdin, made when first read: when the program's own code, or a package's, names it */
@@ -206,7 +206,8 @@ const READLINE_EDITOR = /\b(?:emitKeypressEvents|setRawMode|keypress|completer)\
 const DNS_MODULE_RESOLVE = /\b(?:dns|dns_default|require_dns\(\))\s*\.\s*(?:promises\s*\.\s*)?(?:resolve|reverse)\b/;
 /* resolve(name, "MX"): a record type names it, whatever the module's binding is called */
 const DNS_RESOLVE_RRTYPE = /\.\s*resolve\s*\([^,()]+,\s*["'`](?:A|AAAA|ANY|CAA|CNAME|MX|NAPTR|NS|PTR|SOA|SRV|TLSA|TXT)["'`]/;
-const STDIO_WRITE_REPLACED = /\b(?:stdout|stderr|stream)\s*\.\s*write\s*=(?![=>])|\b_std(?:out|err)\s*=(?!=)/;
+/* a stdio stream's write replaced, the console's streams set, or the console's diagnostics channels */
+const STDIO_WRITE_REPLACED = /\b(?:stdout|stderr|stream)\s*\.\s*write\s*=(?![=>])|\b_std(?:out|err)\s*=(?!=)|["'`]console\.(?:log|info|debug|warn|error)["'`]/;
 const STDIO_STREAM_USE = /\.\s*(?:pipe|on|once|end|cork|uncork|destroy|removeListener|addListener|prependListener)\s*\(|\b(?:pipeline|finished)\b|\bwritable(?:Length|HighWaterMark|NeedDrain|Ended|Finished)\b/;
 const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";
 const PROCESS_COMMON = "title|ppid|release|config|ref|unref|abort|report|domain|assert|binding|finalization";
@@ -336,6 +337,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   processSpawnSync: { c: "js_host_process_spawn_sync", length: 11 },  // (file, args, envPairs, cwd, stdio, flags, uid, gid, timeout, maxBuffer, killSignal) → [error, pid, exitStatus, termSignal, output]
   /* node:util: the runtime's own (console uses them too) */
   utilInspect: { c: "js_util_inspect", length: 2 },
+  previewEntries: { c: "js_host_preview_entries", length: 2 },  // (value, isIterator) → entries | [entries, isKeyValue] | undefined
   utilFormat: { c: "js_util_format", length: 0 },
   utilFormatWithOptions: { c: "js_util_format_with_options", length: 1 },
   utilTypeTag: { c: "js_util_type_tag", length: 1 },          // (value) → its internal kind: "Date", "Proxy", "Uint8Array", … | ""
@@ -484,7 +486,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   ttyOpen: { c: "js_host_tty_open", length: 2 },              // (fd, cb) → id | -errno: a terminal's, read as a net handle
   ttySetRawMode: { c: "js_host_tty_set_raw_mode", length: 2 }, // (id, raw) → 0 | -errno
   dnsLookup: { c: "js_host_dns_lookup", length: 3 },          // (host, family, cb) → 0 | -errno; cb(errno, code, [[address, family], …])
-  dnsLookupService: { c: "js_host_dns_lookup_service", length: 3 },  // (ip, port, cb) → 0 | -errno; cb(errno, hostname, service)
+  dnsLookupService: { c: "js_host_dns_lookup_service", length: 3 },  // (ip, port, cb) → 0 | -errno; cb(errno, hostname, service, code)
   /* dns.Resolver: c-ares channels on libuv (src/host_dns.c) */
   dnsChannel: { c: "js_host_dns_channel", length: 3 },        // (timeoutMs, tries, maxTimeoutMs) → channel
   dnsQuery: { c: "js_host_dns_query", length: 4 },            // (channel, name, type, cb) → 0; cb(status, answer | null)

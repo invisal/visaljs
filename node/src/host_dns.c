@@ -6,7 +6,8 @@
  *   dnsChannel(timeoutMs, tries, maxTimeoutMs) → channel (a c-ares channel, freed with it)
  *   dnsQuery(channel, name, type, cb) → 0 | ARES_*: cb(status, answer | null)
  *   dnsReverse(channel, ip, cb) → 0 | -EINVAL: cb(status, [name, …] | null)
- *   dnsParse(answer, kind) → [status, records, ttls | undefined, cname]   (kind: a DNS type, or 0x10000 + A: a CNAME or A)
+ *   dnsParse(answer, kind) → [status, records, ttls | undefined, cname]   (kind: a DNS type; 0x10000 + A: a CNAME
+ *        or A; 0x10000 + SOA: ANY's SOA, none no error)
  *   dnsGetServers(channel) → [[ip, port], …]
  *   dnsSetServers(channel, [[family, ip, port], …]) → 0 | ARES_* | DNS_ESETSRVPENDING (queries pending)
  *   dnsSetLocalAddress(channel, ip4 | null, ip6 | null)
@@ -39,6 +40,7 @@
 /* Node's: setServers while queries are pending */
 #define DNS_ESETSRVPENDING (-1000)
 #define KIND_CNAME_OR_A 0x10000
+#define KIND_SOA_IN_ANY 0x10006
 
 typedef struct Channel Channel;
 
@@ -50,7 +52,11 @@ typedef struct Task {
     struct Task *next;
 } Task;
 
+/* the loop and runtime are the channel's: c-ares opens sockets inside a primitive too, where
+ * js_uv_context() is null (it is set only while the loop runs callbacks) */
 struct Channel {
+    uv_loop_t      *loop;
+    JSRuntime      *rt;
     ares_channel_t *ares;
     uv_timer_t     *timer;     /* while c-ares has sockets: its timeouts */
     Task           *tasks;
@@ -101,7 +107,7 @@ static void start_timer(Channel *c) {
     if (!c->timer) {
         c->timer = malloc(sizeof *c->timer);
         if (!c->timer) js_fatal("out of memory in dns");
-        uv_timer_init(js_uv_loop(js_uv_context()), c->timer);
+        uv_timer_init(c->loop, c->timer);
         c->timer->data = c;
     } else if (uv_is_active((uv_handle_t *)c->timer)) {
         return;
@@ -131,7 +137,7 @@ static void on_sock_state(void *data, ares_socket_t sock, int read, int write) {
             task->channel = c;
             task->sock = sock;
             /* if this fails, the query times out */
-            if (uv_poll_init_socket(js_uv_loop(js_uv_context()), &task->poll, sock) < 0) {
+            if (uv_poll_init_socket(c->loop, &task->poll, sock) < 0) {
                 free(task);
                 return;
             }
@@ -149,7 +155,7 @@ static void on_sock_state(void *data, ares_socket_t sock, int read, int write) {
 /* ---- finished queries ----------------------------------------------------------------------- */
 
 static void query_done(Channel *c) {
-    if (--c->active == 0) js_remove_root(js_uv_context()->rt, &c->self);
+    if (--c->active == 0) js_remove_root(c->rt, &c->self);
 }
 
 static void on_deliver(uv_timer_t *t) {
@@ -189,7 +195,7 @@ static void finish(Query *q, int status) {
     *finished_tail = q;
     finished_tail = &q->next;
     if (!deliver_inited) {
-        uv_timer_init(js_uv_loop(js_uv_context()), &deliver_timer);
+        uv_timer_init(q->channel->loop, &deliver_timer);
         uv_unref((uv_handle_t *)&deliver_timer);
         deliver_inited = true;
     }
@@ -250,6 +256,8 @@ HOST_FN(js_host_dns_channel) {
     }
     Channel *c = calloc(1, sizeof *c);
     if (!c) js_fatal("out of memory in dns");
+    c->loop = js_uv_loop(ctx);
+    c->rt = ctx->rt;
     c->timeout = js_is_number(ARG(0)) ? (int)js_as_number(ARG(0)) : -1;
     struct ares_options options = { 0 };
     options.flags = ARES_FLAG_NOCHECKRESP;
@@ -530,6 +538,30 @@ static int soa(JSContext *ctx, const uint8_t *buf, int len, JSValue records) {
     return status;
 }
 
+/* ANY's SOA (Node's ParseSoaReply): the answer's last SOA, none being no error */
+static int soa_any(JSContext *ctx, const uint8_t *buf, int len, JSValue records) {
+    ares_dns_record_t *rec = NULL;
+    if (ares_dns_parse(buf, (size_t)len, 0, &rec) != ARES_SUCCESS) {
+        ares_dns_record_destroy(rec);
+        return ARES_EBADRESP;
+    }
+    const ares_dns_rr_t *found = NULL;
+    size_t n = ares_dns_record_rr_cnt(rec, ARES_SECTION_ANSWER);
+    for (size_t i = 0; i < n; i++) {
+        const ares_dns_rr_t *rr = ares_dns_record_rr_get(rec, ARES_SECTION_ANSWER, i);
+        if (ares_dns_rr_get_type(rr) == ARES_REC_TYPE_SOA) found = rr;
+    }
+    if (found) {
+        JSValue items[7] = { str(ctx, ares_dns_rr_get_str(found, ARES_RR_SOA_MNAME)), str(ctx, ares_dns_rr_get_str(found, ARES_RR_SOA_RNAME)),
+                             js_number(ares_dns_rr_get_u32(found, ARES_RR_SOA_SERIAL)), js_number(ares_dns_rr_get_u32(found, ARES_RR_SOA_REFRESH)),
+                             js_number(ares_dns_rr_get_u32(found, ARES_RR_SOA_RETRY)), js_number(ares_dns_rr_get_u32(found, ARES_RR_SOA_EXPIRE)),
+                             js_number(ares_dns_rr_get_u32(found, ARES_RR_SOA_MINIMUM)) };
+        append(ctx, records, array_of(ctx, items, 7));
+    }
+    ares_dns_record_destroy(rec);
+    return ARES_SUCCESS;
+}
+
 static int caa(JSContext *ctx, const uint8_t *buf, int len, JSValue records) {
     struct ares_caa_reply *start;
     int status = ares_parse_caa_reply(buf, len, &start);
@@ -581,6 +613,7 @@ HOST_FN(js_host_dns_parse) {
         case ARES_REC_TYPE_SRV: status = srv(ctx, buf, (int)len, records); break;
         case ARES_REC_TYPE_NAPTR: status = naptr(ctx, buf, (int)len, records); break;
         case ARES_REC_TYPE_SOA: status = soa(ctx, buf, (int)len, records); break;
+        case KIND_SOA_IN_ANY: status = soa_any(ctx, buf, (int)len, records); break;
         case ARES_REC_TYPE_CAA: status = caa(ctx, buf, (int)len, records); break;
         case ARES_REC_TYPE_TLSA: status = tlsa(ctx, buf, (int)len, records); break;
         default: status = general(ctx, buf, (int)len, kind, records, ttls, &cname); break;
