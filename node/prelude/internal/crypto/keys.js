@@ -10,7 +10,7 @@ import {
 import { codeError, invalidArgType, invalidArgValue, notSupported, outOfRange, validateFunction, validateString } from "../errors.js";
 import { dhKeyParts, dhParameters } from "./diffiehellman.js";
 import { kKeyType } from "./key_type.js";
-import { checkPemPassphrase, decryptPemBody, decryptPkcs8, encryptPemBody, encryptPkcs8, isEncryptedPkcs8, missingPassphrase } from "./key_encryption.js";
+import { checkPemPassphrase, decryptPemBody, decryptPkcs8, encryptPemBody, encryptPkcs8, isEncryptedPkcs8 } from "./key_encryption.js";
 import { isAnyArrayBuffer, isArrayBufferView, kHandle, validateNumber, validateObject } from "./util.js";
 
 const kAsymmetricKeyType = Symbol("kAsymmetricKeyType");
@@ -363,7 +363,6 @@ function parseKey(data, format, type, wantPrivate, passphrase) {
   if (m === null) throw keyError(1);
   let label = m[1], body = m[2], der;
   if (label === "ENCRYPTED PRIVATE KEY") {
-    if (passphrase === undefined) throw missingPassphrase();
     checkPemPassphrase(passphrase);
     der = decryptPkcs8(Buffer.from(body, "base64"), passphrase);
     label = "PRIVATE KEY";

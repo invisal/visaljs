@@ -36,8 +36,9 @@ export function validateEncoding(data, enc) {
   }
 }
 
+/** Node's validateObject: an object, not null nor an array. */
 export function validateObject(value, name) {
-  if (value === null || typeof value !== "object") throw invalidArgType(name, "of type object", value);
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw invalidArgType(name, "of type object", value);
 }
 
 export function validateBoolean(value, name) {

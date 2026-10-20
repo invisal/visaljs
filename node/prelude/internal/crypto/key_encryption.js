@@ -30,6 +30,8 @@ const CIPHERS = {
 const CIPHER_OIDS = Object.fromEntries(Object.entries(CIPHERS).map(([oid, name]) => [name, oid]));
 
 export const missingPassphrase = () => codeError(TypeError, "ERR_MISSING_PASSPHRASE", "Passphrase required for encrypted key");
+/* OpenSSL 3's PEM reader without a passphrase: its password callback gives up */
+const pemCancelled = () => codeError(Error, "ERR_OSSL_CRYPTO_INTERRUPTED_OR_CANCELLED", "error:07880109:common libcrypto routines::interrupted or cancelled");
 const badDecrypt = () => codeError(Error, "ERR_OSSL_BAD_DECRYPT", "error:1C800064:Provider routines::bad decrypt");
 const decodeError = () => codeError(Error, "ERR_OSSL_ASN1_WRONG_TAG", "error:0680007B:asn1 encoding routines::wrong tag");
 
@@ -197,7 +199,7 @@ export function encryptPemBody(der, cipherName, passphrase) {
 
 /** The DER of an encrypted PEM key: its DEK-Info header names the cipher and the IV. */
 export function decryptPemBody(headers, body, passphrase) {
-  if (passphrase === undefined) throw missingPassphrase();
+  if (passphrase === undefined) throw pemCancelled();
   if (passphrase.length > PEM_PASSPHRASE_MAX) throw codeError(Error, "ERR_OSSL_PEM_BAD_PASSWORD_READ", "error:0480006D:PEM routines::bad password read");
   const dek = /^DEK-Info:\s*([A-Za-z0-9-]+),([0-9A-Fa-f]+)\s*$/m.exec(headers);
   if (dek === null) throw codeError(Error, "ERR_OSSL_PEM_BAD_DECRYPT", "error:04800065:PEM routines::bad decrypt");
@@ -208,6 +210,7 @@ export function decryptPemBody(headers, body, passphrase) {
 }
 
 export function checkPemPassphrase(passphrase) {
+  if (passphrase === undefined) throw pemCancelled();
   if (passphrase !== undefined && passphrase.length > PEM_PASSPHRASE_MAX) {
     throw codeError(Error, "ERR_OSSL_PEM_BAD_PASSWORD_READ", "error:0480006D:PEM routines::bad password read");
   }
