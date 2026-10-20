@@ -43,6 +43,7 @@ export const modules: Readonly<Record<string, string>> = {
   inspector: join(preludeDir, "inspector.js"),
   "inspector/promises": join(preludeDir, "inspector_promises.js"),
   module: join(preludeDir, "module.js"),
+  dgram: join(preludeDir, "dgram.js"),
   net: join(preludeDir, "net.js"),
   os: join(preludeDir, "os.js"),
   path: join(preludeDir, "path.js"),
@@ -416,6 +417,29 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   httpFeed: { c: "js_host_http_feed", length: 2 },            // (conn, bytes | null) → taken by the parser
   httpFedClose: { c: "js_host_http_fed_close", length: 1 },   // (conn)
   httpDate: { c: "js_host_http_date", length: 0 },            // () → "Sun, 04 Oct 2026 20:51:49 GMT" (cached per second)
+  /* node:dgram: UDP handles on libuv (src/host_udp.c); each calls back cb(event, …) */
+  udpOpen: { c: "js_host_udp_open", length: 1 },              // (cb) → id
+  udpOpenFd: { c: "js_host_udp_open_fd", length: 2 },         // (id, fd) → 0 | -errno
+  udpFd: { c: "js_host_udp_fd", length: 1 },                  // (id) → fd | -errno
+  udpBind: { c: "js_host_udp_bind", length: 4 },              // (id, ip, port, flags) → 0 | -errno
+  udpConnect: { c: "js_host_udp_connect", length: 3 },        // (id, ip, port) → 0 | -errno
+  udpDisconnect: { c: "js_host_udp_disconnect", length: 1 },
+  udpSend: { c: "js_host_udp_send", length: 4 },              // (id, [bytes…], ip | null, port) → length + 1 | 0 queued | -errno
+  udpSendQueue: { c: "js_host_udp_send_queue", length: 2 },   // (id, count) → bytes | requests waiting
+  udpRecvStart: { c: "js_host_udp_recv_start", length: 1 },
+  udpRecvStop: { c: "js_host_udp_recv_stop", length: 1 },
+  udpAddress: { c: "js_host_udp_address", length: 2 },        // (id, peer) → [address, family, port] | -errno
+  udpSetBroadcast: { c: "js_host_udp_set_broadcast", length: 2 },
+  udpSetTTL: { c: "js_host_udp_set_ttl", length: 2 },
+  udpSetMulticastTTL: { c: "js_host_udp_set_multicast_ttl", length: 2 },
+  udpSetMulticastLoopback: { c: "js_host_udp_set_multicast_loopback", length: 2 },
+  udpSetMulticastInterface: { c: "js_host_udp_set_multicast_interface", length: 2 },
+  udpMembership: { c: "js_host_udp_membership", length: 4 },  // (id, group, iface | null, join) → 0 | -errno
+  udpSourceMembership: { c: "js_host_udp_source_membership", length: 5 },  // (id, source, group, iface | null, join)
+  udpBufferSize: { c: "js_host_udp_buffer_size", length: 3 }, // (id, size, recv) → size | -errno
+  udpClose: { c: "js_host_udp_close", length: 1 },
+  udpRef: { c: "js_host_udp_ref", length: 2 },
+  udpHasRef: { c: "js_host_udp_has_ref", length: 1 },
   /* node:net and dns.lookup: TCP and pipe handles on libuv (src/host_net.c); each calls back cb(event, value) */
   netOpen: { c: "js_host_net_open", length: 2 },              // (pipe, cb) → id
   netGuessHandle: { c: "js_host_net_guess_handle", length: 1 },  // (fd) → "TCP" | "PIPE" | "TTY" | "UDP" | "FILE" | "UNKNOWN"

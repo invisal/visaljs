@@ -69,9 +69,16 @@ test-http-set-max-idle-http-parser.js    _http_common's parsers (HTTPParser's fr
 test-http-dump-req-when-res-ends.js      the socket's 'data' listener (Node's parser reads through one)
 
 # another Node process: a compiled program has no Node to fork (child_process.fork, cluster)
-test-http-server-stale-close.js          child_process.fork
-test-http-server-drop-connections-in-cluster.js  cluster.fork
+test-dgram-bind-socket-close-before-cluster-reply.js  cluster.fork
+test-dgram-cluster-close-during-bind.js  cluster.fork
+test-dgram-cluster-close-in-listening.js cluster.fork
+test-dgram-deprecation-error.js          child_process.fork
+test-dgram-exclusive-implicit-bind.js    cluster.fork
+test-dgram-unref-in-cluster.js           cluster.fork
 test-http-max-header-size.js             node --max-http-header-size (Node's command line)
+test-http-server-drop-connections-in-cluster.js  cluster.fork
+test-http-server-stale-close.js          child_process.fork
+test-net-child-process-connect-reset.js  child_process.spawn of node with an 'ipc' channel
 test-net-listen-exclusive-random-ports.js  cluster.fork
 test-net-listen-handle-in-cluster-1.js   cluster.fork
 test-net-listen-twice.js                 cluster.fork
@@ -85,7 +92,6 @@ test-tls-env-extra-ca-with-options.js    child_process.fork (a Node with NODE_EX
 test-tls-env-extra-ca.js                 child_process.fork (a Node with NODE_EXTRA_CA_CERTS)
 test-tls-ticket-cluster.js               cluster.fork
 test-tls-wrap-econnreset-pipe.js         child_process.fork
-test-net-child-process-connect-reset.js  child_process.spawn of node with an 'ipc' channel
 
 # no threads: a socket or server moved to a worker (worker_threads, MessageChannel)
 test-crypto-key-objects-messageport.js   MessageChannel
