@@ -533,7 +533,7 @@ describe("prebuilt libraries", () => {
   it("has every target's libraries, and their licenses", () => {
     for (const target of TARGETS) {
       const libs = prebuiltLibraries(target);
-      expect(libs.map((l) => l.name).sort(), target.name).toEqual(["boringssl", "brotli", "uv", "zlib", "zstd"]);
+      expect(libs.map((l) => l.name).sort(), target.name).toEqual(["boringssl", "brotli", "cares", "uv", "zlib", "zstd"]);
       for (const l of libs) for (const f of [...l.sources, ...l.headers]) expect(existsSync(f), f).toBe(true);
     }
   });

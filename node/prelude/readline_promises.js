@@ -1,31 +1,31 @@
-// node:readline/promises: node:readline's Interface with question() as a promise, and Readline,
-// cursor moves queued and written by commit().
-import { codeError } from "./internal/errors.js";
+// node:readline/promises (Node's lib/readline/promises.js and internal/readline/promises.js):
+// Interface with question() as a promise, and Readline, cursor moves queued and written by commit().
+// Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
+import { invalidArgType, outOfRange } from "./internal/errors.js";
 import {
-  Interface as BaseInterface, abortError, clearLineEscape, cursorToEscape, kQuestion, kQuestionCancel, moveCursorEscape,
+  abortError, addAbortListener, CSI, Interface as BaseInterface, kQuestion, kQuestionCancel, kQuestionReject, validateAbortSignal,
 } from "./internal/readline.js";
 
+const kEmptyObject = Object.freeze({ __proto__: null });
+
 export class Interface extends BaseInterface {
-  /** The next line, or an AbortError when the signal aborts first. */
-  question(query, options = {}) {
+  question(query, options = kEmptyObject) {
     return new Promise((resolve, reject) => {
       let cb = resolve;
-      const signal = options?.signal;
-      if (signal) {
-        if (signal === null || typeof signal !== "object" || !("aborted" in signal)) {
-          throw codeError(TypeError, "ERR_INVALID_ARG_TYPE", 'The "options.signal" property must be an instance of AbortSignal.');
-        }
-        if (signal.aborted) return reject(abortError(signal));
+      if (options?.signal) {
+        validateAbortSignal(options.signal, "options.signal");
+        if (options.signal.aborted) return reject(abortError(undefined, { cause: options.signal.reason }));
         const onAbort = () => {
           this[kQuestionCancel]();
-          reject(abortError(signal));
+          reject(abortError(undefined, { cause: options.signal.reason }));
         };
-        signal.addEventListener("abort", onAbort, { once: true });
+        const disposable = addAbortListener(options.signal, onAbort);
         cb = (answer) => {
-          signal.removeEventListener("abort", onAbort);
+          disposable[Symbol.dispose]();
           resolve(answer);
         };
       }
+      this[kQuestionReject] = reject;
       this[kQuestion](query, cb);
     });
   }
@@ -35,48 +35,72 @@ export function createInterface(input, output, completer, terminal) {
   return new Interface(input, output, completer, terminal);
 }
 
-/** Cursor moves on a stream, queued until commit() (or written at once with autoCommit). */
+function validateInteger(value, name, min = Number.MIN_SAFE_INTEGER, max = Number.MAX_SAFE_INTEGER) {
+  if (typeof value !== "number") throw invalidArgType(name, "of type number", value);
+  if (!Number.isInteger(value)) throw outOfRange(name, "an integer", value);
+  if (value < min || value > max) throw outOfRange(name, `>= ${min} && <= ${max}`, value);
+}
+
+/* Node's isWritable: a stream that can still be written */
+const isWritable = (stream) => stream !== null && typeof stream === "object" && typeof stream.write === "function" &&
+  stream.writable !== false && !stream.writableEnded && !stream.destroyed;
+
 export class Readline {
+  #autoCommit = false;
   #stream;
   #todo = [];
-  #autoCommit;
 
   constructor(stream, options = undefined) {
-    if (stream === null || typeof stream !== "object" || typeof stream.write !== "function") {
-      throw codeError(TypeError, "ERR_INVALID_ARG_TYPE", 'The "stream" argument must be an instance of Writable.');
-    }
+    if (!isWritable(stream)) throw invalidArgType("stream", "an instance of Writable", stream);
     this.#stream = stream;
-    this.#autoCommit = Boolean(options?.autoCommit);
+    if (options?.autoCommit != null) {
+      if (typeof options.autoCommit !== "boolean") throw invalidArgType("options.autoCommit", "of type boolean", options.autoCommit);
+      this.#autoCommit = options.autoCommit;
+    }
   }
 
-  #add(data) {
+  #queue(data) {
     if (this.#autoCommit) process.nextTick(() => this.#stream.write(data));
     else this.#todo.push(data);
-    return this;
   }
 
   cursorTo(x, y = undefined) {
-    return this.#add(cursorToEscape(x, y));
+    validateInteger(x, "x");
+    if (y != null) validateInteger(y, "y");
+    this.#queue(y == null ? CSI`${x + 1}G` : CSI`${y + 1};${x + 1}H`);
+    return this;
   }
 
   moveCursor(dx, dy) {
-    if (!dx && !dy) return this;
-    return this.#add(moveCursorEscape(dx, dy));
+    if (dx || dy) {
+      validateInteger(dx, "dx");
+      validateInteger(dy, "dy");
+      let data = "";
+      if (dx < 0) data += CSI`${-dx}D`;
+      else if (dx > 0) data += CSI`${dx}C`;
+      if (dy < 0) data += CSI`${-dy}A`;
+      else if (dy > 0) data += CSI`${dy}B`;
+      this.#queue(data);
+    }
+    return this;
   }
 
   clearLine(dir) {
-    return this.#add(clearLineEscape(dir));
+    validateInteger(dir, "dir", -1, 1);
+    this.#queue(dir < 0 ? CSI.kClearToLineBeginning : dir > 0 ? CSI.kClearToLineEnd : CSI.kClearLine);
+    return this;
   }
 
   clearScreenDown() {
-    return this.#add("\x1b[0J");
+    this.#queue(CSI.kClearScreenDown);
+    return this;
   }
 
-  /** Writes what's queued: resolved once written. */
   commit() {
-    const data = this.#todo.join("");
-    this.#todo = [];
-    return new Promise((resolve) => this.#stream.write(data, resolve));
+    return new Promise((resolve) => {
+      this.#stream.write(this.#todo.join(""), resolve);
+      this.#todo = [];
+    });
   }
 
   rollback() {

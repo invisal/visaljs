@@ -164,9 +164,12 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
    * fs.open(…)`: the bundle renames fs) */
   { file: join(preludeDir, "internal", "fs_filehandle.js"), reached: (_code, program) =>
       FS_OPEN.test(program) || /\bFileHandle\b/.test(program) || (/\bpromises\b/.test(program) && /\.\s*open\s*\(/.test(program)) },
+  /* readline's terminal line editor: a readline program that reads stdin or names a terminal's parts */
+  { file: join(preludeDir, "internal", "readline_editor.js"), reached: (_code, program) =>
+      READLINE_EDITOR.test(program) || (/readline/i.test(program) && /\b(?:stdin|terminal)\b/.test(program)) },
   /* dns.Resolver and the resolve* functions (c-ares): named, or a dns program's resolve(…) or reverse(…) */
   { file: join(preludeDir, "internal", "dns_resolver.js"), reached: (_code, program) =>
-      DNS_RESOLVER.test(program) || (/\bdns\b/.test(program) && /\.\s*(?:resolve|reverse)\s*\(/.test(program)) },
+      DNS_RESOLVER.test(program) || DNS_RESOLVE_RRTYPE.test(program) || (/\bdns\b/.test(program) && /\.\s*(?:resolve|reverse)\s*\(/.test(program)) },
   /* crypto.X509Certificate, and the TLS sockets' getters that give one */
   { file: join(preludeDir, "internal", "crypto_x509.js"), reached: (_code, program) => /\b(?:X509Certificate|get(?:Peer)?X509Certificate)\b/.test(program) },
   /* process's other members (some link libuv): named as process's, or by a distinctive name */
@@ -197,6 +200,9 @@ const FETCH = /(?<![.\w$#])fetch\s*\(|[=(,]\s*fetch\s*[;,)\n]|\btypeof\s+fetch\b
 /* a Readable's operators: the distinctive ones by name, the others with node:stream named */
 const STREAM_OPERATORS = /\.\s*(?:flatMap|toArray|drop|take|asIndexedPairs)\s*\(|\bReadable\b[\s\S]*\.\s*(?:map|filter|forEach|reduce|some|every|find)\s*\(/;
 const DNS_RESOLVER = /\b(?:Resolver|resolve(?:4|6|Any|Caa|Cname|Mx|Naptr|Ns|Ptr|Soa|Srv|Tlsa|Txt)|getServers|setServers|setLocalAddress)\b/;
+const READLINE_EDITOR = /\b(?:emitKeypressEvents|setRawMode|keypress|completer)\b/;
+/* resolve(name, "MX"): a record type names it, whatever the module's binding is called */
+const DNS_RESOLVE_RRTYPE = /\.\s*resolve\s*\([^,()]+,\s*["'`](?:A|AAAA|ANY|CAA|CNAME|MX|NAPTR|NS|PTR|SOA|SRV|TLSA|TXT)["'`]/;
 const STDIO_WRITE_REPLACED = /\.\s*write\s*=(?![=>])|\b_std(?:out|err)\s*=(?!=)/;
 const STDIO_STREAM_USE = /\.\s*(?:pipe|on|once|end|cork|uncork|destroy|removeListener|addListener|prependListener)\s*\(|\b(?:pipeline|finished)\b|\bwritable(?:Length|HighWaterMark|NeedDrain|Ended|Finished)\b/;
 const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";

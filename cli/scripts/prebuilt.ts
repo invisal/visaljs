@@ -1,5 +1,5 @@
 // Builds the prebuilt libraries (cc.ts, prebuiltArchive) in build/prebuilt/<target>: each
-// platform's third-party C libraries (BoringSSL, libuv, zlib, Brotli, zstd), cross-compiled with
+// platform's third-party C libraries (BoringSSL, libuv, zlib, Brotli, zstd, c-ares), cross-compiled with
 // Zig from one machine. dist.ts puts them in the published package, under prebuilt/<target>. The
 // runtime and the host code (libjsrt, libjsnode) aren't prebuilt: they change with nearly every
 // release, and build in seconds.
@@ -44,7 +44,7 @@ export function prebuiltLibraries(target: Target) {
 
 /** Each library's notice (licenses.ts): the published package carries their licenses (dist.ts,
  *  THIRD_PARTY_LICENSES). */
-const LICENSES: Record<string, string> = { boringssl: "BoringSSL", uv: "libuv", zlib: "zlib", brotli: "Brotli", zstd: "Zstandard" };
+const LICENSES: Record<string, string> = { boringssl: "BoringSSL", uv: "libuv", zlib: "zlib", brotli: "Brotli", zstd: "Zstandard", cares: "c-ares" };
 const NOTICED = new Set(notices(DEFAULT_HOSTS).map((n) => n.name));
 /** Where they're built: build/prebuilt/<target>/<name>-<prebuiltKey>.a. */
 export const PREBUILT_DIR = join(import.meta.dirname, "..", "..", "build", "prebuilt");
@@ -54,7 +54,9 @@ function build(target: Target) {
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   /* Linux executables are position-independent by default: their libraries' code must be too */
-  const common = [...PREBUILT_COMMON, ...(target.platform === "linux" ? ["-fPIC"] : [])];
+  /* macOS's: Apple's headers c-ares needs that Zig's don't have (darwin-shims/) */
+  const common = [...PREBUILT_COMMON, ...(target.platform === "linux" ? ["-fPIC"] : []),
+    ...(target.platform === "darwin" ? [`-I${join(import.meta.dirname, "darwin-shims")}`] : [])];
   /* ld64 wants the BSD archive format */
   const arFlags = target.platform === "darwin" ? ["--format=darwin"] : [];
   for (const lib of prebuiltLibraries(target)) {

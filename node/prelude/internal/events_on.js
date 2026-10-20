@@ -1,14 +1,27 @@
-// events.on: an emitter's or EventTarget's events as an async iterator. Linked into programs that
-// name it (internal/features.js).
-import { invalidArgType } from "./errors.js";
+// events.on (Node's lib/events.js): an emitter's or EventTarget's events as an async iterator,
+// buffered until read, the emitter paused above highWaterMark and resumed below lowWaterMark.
+// Linked into programs that name it (internal/features.js), and with node:readline's iterator.
+// Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
+import { invalidArgType, outOfRange } from "./errors.js";
 import { features } from "./features.js";
 
-const isEventTarget = (target) => typeof target?.addEventListener === "function" && typeof target?.on !== "function";
+/* the iterator's watermarks and state (events.on's [kWatermarkData]) */
+const kWatermarkData = Symbol.for("nodejs.watermarkData");
+/** Node's internal option: each event's first argument, not an array of them (readline's lines) */
+export const kFirstEventParam = Symbol("kFirstEventParam");
+
+const AsyncIteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf(async function* () {}).prototype);
 
 function validateSignal(signal, name) {
   if (signal !== undefined && (signal === null || typeof signal !== "object" || !("aborted" in signal))) {
     throw invalidArgType(name, "an instance of AbortSignal", signal);
   }
+}
+
+function validateWatermark(value, name) {
+  if (typeof value !== "number") throw invalidArgType(name, "of type number", value);
+  if (!Number.isInteger(value)) throw outOfRange(name, "an integer", value);
+  if (value < 1 || value > Number.MAX_SAFE_INTEGER) throw outOfRange(name, `>= 1 && <= ${Number.MAX_SAFE_INTEGER}`, value);
 }
 
 /* Node's AbortError: name and code, the signal's reason as its cause */
@@ -19,29 +32,48 @@ function abortError(signal) {
   return error;
 }
 
-/** events.on(emitter, name[, { signal, close }]): the events as an async iterator of their
- *  arguments, buffered until read; an 'error' ends it by throwing, a `close` event by finishing. */
-function on(emitter, event, options = {}) {
-  const signal = options?.signal;
+function addListener(emitter, name, listener) {
+  if (typeof emitter.on === "function") emitter.on(name, listener);
+  else if (typeof emitter.addEventListener === "function") emitter.addEventListener(name, listener);
+  else throw invalidArgType("emitter", "an instance of EventEmitter", emitter);
+}
+
+function removeListener(emitter, name, listener) {
+  if (typeof emitter.removeListener === "function") emitter.removeListener(name, listener);
+  else if (typeof emitter.removeEventListener === "function") emitter.removeEventListener(name, listener);
+  else throw invalidArgType("emitter", "an instance of EventEmitter", emitter);
+}
+
+const iterResult = (value, done) => ({ value, done });
+
+/** events.on(emitter, name[, { signal, close, highWaterMark, lowWaterMark }]) */
+export function on(emitter, event, options = {}) {
+  if (typeof options !== "object" || options === null || Array.isArray(options)) throw invalidArgType("options", "of type object", options);
+  const signal = options.signal;
   validateSignal(signal, "options.signal");
   if (signal?.aborted) throw abortError(signal);
-  const close = options?.close ?? [];
+  const highWatermark = options.highWaterMark ?? options.highWatermark ?? Number.MAX_SAFE_INTEGER;
+  validateWatermark(highWatermark, "options.highWaterMark");
+  const lowWatermark = options.lowWaterMark ?? options.lowWatermark ?? 1;
+  validateWatermark(lowWatermark, "options.lowWaterMark");
+
   const unconsumedEvents = [];
   const unconsumedPromises = [];
+  let paused = false;
   let error = null;
   let finished = false;
   const listening = [];
-  const listen = (name, handler) => {
-    if (isEventTarget(emitter)) emitter.addEventListener(name, handler);
-    else emitter.on(name, handler);
-    listening.push([name, handler]);
-  };
-  const result = (value, done) => ({ value, done });
 
-  const iterator = {
+  const iterator = Object.setPrototypeOf({
     next() {
-      const value = unconsumedEvents.shift();
-      if (value) return Promise.resolve(result(value, false));
+      if (unconsumedEvents.length) {
+        const value = unconsumedEvents.shift();
+        if (paused && unconsumedEvents.length < lowWatermark) {
+          emitter.resume();
+          paused = false;
+        }
+        return Promise.resolve(iterResult(value, false));
+      }
       if (error) {
         const p = Promise.reject(error);
         error = null;
@@ -54,45 +86,57 @@ function on(emitter, event, options = {}) {
       return closeHandler();
     },
     throw(err) {
-      if (!(err instanceof Error)) throw invalidArgType("EventEmitter.AsyncIterator", "an instance of Error", err);
+      if (!err || !(err instanceof Error)) throw invalidArgType("EventEmitter.AsyncIterator", "an instance of Error", err);
       errorHandler(err);
     },
     [Symbol.asyncIterator]() {
       return this;
     },
+    [kWatermarkData]: {
+      get size() { return unconsumedEvents.length; },
+      get low() { return lowWatermark; },
+      get high() { return highWatermark; },
+      get isPaused() { return paused; },
+    },
+  }, AsyncIteratorPrototype);
+
+  const listen = (name, handler) => {
+    addListener(emitter, name, handler);
+    listening.push([name, handler]);
   };
 
-  function eventHandler(...args) {
-    const pending = unconsumedPromises.shift();
-    if (pending) pending.resolve(result(args, false));
-    else unconsumedEvents.push(args);
+  function eventHandler(value) {
+    if (unconsumedPromises.length === 0) {
+      if (!paused && unconsumedEvents.length + 1 > highWatermark) {
+        paused = true;
+        emitter.pause();
+      }
+      unconsumedEvents.push(value);
+    } else {
+      unconsumedPromises.shift().resolve(iterResult(value, false));
+    }
   }
   function errorHandler(err) {
-    finished = true;
-    const pending = unconsumedPromises.shift();
-    if (pending) pending.reject(err);
-    else error = err;
-    iterator.return();
+    if (unconsumedPromises.length === 0) error = err;
+    else unconsumedPromises.shift().reject(err);
+    closeHandler();
   }
   function abortListener() {
     errorHandler(abortError(signal));
   }
   function closeHandler() {
-    for (const [name, handler] of listening) {
-      if (isEventTarget(emitter)) emitter.removeEventListener(name, handler);
-      else emitter.removeListener(name, handler);
-    }
-    listening.length = 0;
     signal?.removeEventListener("abort", abortListener);
+    while (listening.length) removeListener(emitter, ...listening.pop());
     finished = true;
-    const done = result(undefined, true);
+    paused = false;
+    const done = iterResult(undefined, true);
     while (unconsumedPromises.length) unconsumedPromises.shift().resolve(done);
     return Promise.resolve(done);
   }
 
-  listen(event, eventHandler);
-  if (event !== "error" && !isEventTarget(emitter)) listen("error", errorHandler);
-  for (const name of close) listen(name, closeHandler);
+  listen(event, options[kFirstEventParam] ? eventHandler : (...args) => eventHandler(args));
+  if (event !== "error" && typeof emitter.on === "function") listen("error", errorHandler);
+  for (const name of options?.close ?? []) listen(name, closeHandler);
   signal?.addEventListener("abort", abortListener, { once: true });
   return iterator;
 }

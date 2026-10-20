@@ -3,15 +3,15 @@
   "node": "v24.21.0",
   "summary": {
     "modules": {
-      "complete": 34,
-      "partial": 22,
+      "complete": 35,
+      "partial": 21,
       "stub": 1,
       "missing": 1,
       "total": 58
     },
     "exports": {
-      "implemented": 1192,
-      "stubbed": 38,
+      "implemented": 1193,
+      "stubbed": 37,
       "missing": 54,
       "total": 1284
     }
@@ -1216,19 +1216,18 @@
       "missing": []
     },
     "readline": {
-      "status": "partial",
+      "status": "complete",
       "implemented": [
         "Interface",
         "clearLine",
         "clearScreenDown",
         "createInterface",
         "cursorTo",
+        "emitKeypressEvents",
         "moveCursor",
         "promises"
       ],
-      "stubbed": [
-        "emitKeypressEvents"
-      ],
+      "stubbed": [],
       "missing": [],
       "notes": "Interface reads its input a line at a time as Node's does when the input isn't a terminal: lines, question (also promisified), prompt, pause and resume, the async iterator, and the cursor functions. A terminal is read in its normal mode, the terminal editing and echoing the line: Node's own editor in raw mode (keys, history, tab completion) isn't provided, nor is emitKeypressEvents."
     },

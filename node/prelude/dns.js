@@ -39,12 +39,13 @@ export const LOADIPHLPAPI = "ELOADIPHLPAPI";
 export const ADDRGETNETWORKPARAMS = "EADDRGETNETWORKPARAMS";
 export const CANCELLED = "ECANCELLED";
 
-/** Node's DNSException: a libuv errno (getaddrinfo's EAI_NODATA and EAI_NONAME are ENOTFOUND), or a c-ares code */
-function dnsException(code, syscall, hostname) {
+/** Node's DNSException: a libuv errno (its name when the host gives it: libuv's for getaddrinfo's EAI_*;
+ *  EAI_NODATA and EAI_NONAME are ENOTFOUND), or a c-ares code */
+function dnsException(code, syscall, hostname, name = undefined) {
   let errno;
   if (typeof code === "number") {
     errno = code;
-    code = errnoName(code);
+    code = name ?? errnoName(code);
     if (code === "EAI_NODATA" || code === "EAI_NONAME") code = "ENOTFOUND";
   }
   const error = new Error(`${syscall} ${code}${hostname ? ` ${hostname}` : ""}`);
@@ -154,7 +155,7 @@ function ordered(list, order) {
 /* getaddrinfo: done(error | null, [[address, family], …]); the hostname is neither empty nor an IP */
 function getaddrinfo(hostname, family, order, done) {
   const r = dnsLookup(hostname, family, bindContext((errno, code, list) => {
-    if (errno) done(dnsException(errno, "getaddrinfo", hostname));
+    if (errno) done(dnsException(errno, "getaddrinfo", hostname, code));
     else done(null, ordered(list, order));
   }));
   if (r < 0) process.nextTick(done, dnsException(r, "getaddrinfo", hostname));
