@@ -98,7 +98,7 @@ static JSValue path_result(JSContext *ctx, PathFn fn) {
     return e ? js_int32(e) : js_new_string_utf8(ctx, buf, n);
 }
 
-/* osHostname(), osHomedir(), osTmpdir(): a string, or -errno. */
+/* osHostname(), osHomedir(): a string, or -errno. */
 PRIMITIVE(js_host_os_hostname) {
     UNUSED_PRIMITIVE_ARGS;
     return path_result(ctx, uv_os_gethostname);
@@ -107,11 +107,6 @@ PRIMITIVE(js_host_os_hostname) {
 PRIMITIVE(js_host_os_homedir) {
     UNUSED_PRIMITIVE_ARGS;
     return path_result(ctx, uv_os_homedir);
-}
-
-PRIMITIVE(js_host_os_tmpdir) {
-    UNUSED_PRIMITIVE_ARGS;
-    return path_result(ctx, uv_os_tmpdir);
 }
 
 /* osMemory(): [total, free] in bytes. */

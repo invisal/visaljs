@@ -80,6 +80,8 @@ const CASES: [string, string, string][] = [
   ["fetch", "a.mjs", 'const res = await fetch("https://example.com");\nconsole.log(await res.text());'],
   ["zlib_brotli", "a.cjs", 'const zlib = require("zlib");\nzlib.brotliCompressSync("x");'],
   ["zlib_zstd", "a.mjs", 'import { zstdCompressSync } from "node:zlib";\nzstdCompressSync("x");'],
+  ["console_global", "a.cjs", 'const write = process.stdout.write;\nprocess.stdout.write = (s) => write.call(process.stdout, s.toUpperCase());\nconsole.log("x");'],
+  ["console_class", "a.cjs", 'const c = new console.Console(process.stderr);\nc.log("x");'],
   ["crypto_x509", "a.cjs", 'const { X509Certificate } = require("crypto");\nconsole.log(new X509Certificate(process.argv[2]).subject);'],
   ["crypto_x509", "b.mjs", 'import tls from "node:tls";\ntls.connect(443, "example.com", function () { console.log(this.getPeerX509Certificate()); });'],
 ];

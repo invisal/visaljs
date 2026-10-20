@@ -98,6 +98,10 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   /* process.stdout and stderr as Writables: when the program's own code, or a package's, names
    * them and uses streams (pipes into them, listens on them, ends them) */
   { file: join(preludeDir, "internal", "process_stdio.js"), reached: (_code, program) => /\b(?:stdout|stderr)\b/.test(program) && STDIO_STREAM_USE.test(program) },
+  /* the global console as Node's, through process.stdout and stderr: when a program replaces one's write (or the console's streams) */
+  { file: join(preludeDir, "internal", "console_global.js"), reached: (_code, program) => /\b(?:stdout|stderr)\b/.test(program) && STDIO_WRITE_REPLACED.test(program) },
+  /* console.Console, for a program that names it */
+  { file: join(preludeDir, "internal", "console_class.js"), reached: (_code, program) => /\bConsole\b/.test(program) },
   /* process.stdin, made when first read: when the program's own code, or a package's, names it */
   { file: join(preludeDir, "internal", "process_stdin.js"), reached: (_code, program) => /\bstdin\b/.test(program) },
   /* node:tty's ReadStream: it links node:net and libuv */
@@ -188,6 +192,7 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
 const FETCH = /(?<![.\w$#])fetch\s*\(|[=(,]\s*fetch\s*[;,)\n]|\btypeof\s+fetch\b|\b(?:globalThis|global|self)\s*(?:\.\s*fetch\b|\[\s*["'`]fetch["'`])/;
 /* a Readable's operators: the distinctive ones by name, the others with node:stream named */
 const STREAM_OPERATORS = /\.\s*(?:flatMap|toArray|drop|take|asIndexedPairs)\s*\(|\bReadable\b[\s\S]*\.\s*(?:map|filter|forEach|reduce|some|every|find)\s*\(/;
+const STDIO_WRITE_REPLACED = /\.\s*write\s*=(?![=>])|\b_std(?:out|err)\s*=(?!=)/;
 const STDIO_STREAM_USE = /\.\s*(?:pipe|on|once|end|cork|uncork|destroy|removeListener|addListener|prependListener)\s*\(|\b(?:pipeline|finished)\b|\bwritable(?:Length|HighWaterMark|NeedDrain|Ended|Finished)\b/;
 const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";
 const PROCESS_COMMON = "title|ppid|release|config|ref|unref|abort|report|domain|assert|binding|finalization";
@@ -297,7 +302,6 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   osUname: { c: "js_host_os_uname", length: 0 },              // () → [sysname, release, version, machine]
   osHostname: { c: "js_host_os_hostname", length: 0 },
   osHomedir: { c: "js_host_os_homedir", length: 0 },
-  osTmpdir: { c: "js_host_os_tmpdir", length: 0 },
   osMemory: { c: "js_host_os_memory", length: 0 },            // () → [total, free]
   osUptime: { c: "js_host_os_uptime", length: 0 },
   osLoadavg: { c: "js_host_os_loadavg", length: 0 },

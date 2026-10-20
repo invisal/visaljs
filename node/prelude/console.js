@@ -166,8 +166,20 @@ proto._write = function (useStderr, string) {
 };
 Object.defineProperty(proto, "_write", { enumerable: false });
 
-proto._format = function (args) {
-  return this._inspectOptions ? formatWithOptions(this._inspectOptions, ...args) : format(...args);
+/* Node's FORCE_COLOR levels (tty's getColorDepth): '', 1, true, 2 and 3 give colors */
+const FORCE_COLORS = new Set(["", "1", "true", "2", "3"]);
+
+/* Node's shouldColorize */
+function shouldColorize(stream) {
+  if (process.env.FORCE_COLOR !== undefined) return FORCE_COLORS.has(process.env.FORCE_COLOR);
+  return Boolean(stream?.isTTY) && (typeof stream.getColorDepth === "function" ? stream.getColorDepth() > 2 : true);
+}
+
+/* util.format's arguments as Node's console formats them for a stream: colored as colorMode says */
+proto._format = function (args, useStderr = false) {
+  const colors = this._colorMode === "auto" ? shouldColorize(useStderr ? this._stderr : this._stdout) : this._colorMode;
+  if (this._inspectOptions) return formatWithOptions({ ...this._inspectOptions, colors: this._inspectOptions.colors ?? colors }, ...args);
+  return colors ? formatWithOptions({ colors: true }, ...args) : format(...args);
 };
 Object.defineProperty(proto, "_format", { enumerable: false });
 
@@ -176,7 +188,7 @@ Object.assign(proto, {
     this._write(false, this._format(args));
   },
   warn(...args) {
-    this._write(true, this._format(args));
+    this._write(true, this._format(args, true));
   },
   dir(object, options) {
     this._write(false, inspect(object, { customInspect: false, ...this._inspectOptions, ...options }));
@@ -197,7 +209,7 @@ Object.assign(proto, {
     this._timeLog(`${label}`, "console.timeLog()", data);
   },
   trace(...args) {
-    this._write(true, `Trace${args.length ? ": " + this._format(args) : ""}`);
+    this._write(true, `Trace${args.length ? ": " + this._format(args, true) : ""}`);
   },
   assert(expression, ...args) {
     if (!expression) {
