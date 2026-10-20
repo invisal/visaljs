@@ -10,7 +10,7 @@ import {
 import { codeError, invalidArgType, invalidArgValue, outOfRange, validateString } from "../errors.js";
 import { StringDecoder } from "../../string_decoder.js";
 import { prepareSecretKey } from "./keys.js";
-import { isAnyArrayBuffer, isArrayBufferView, kHandle, LazyTransform, sslError, stringBytes, validateEncoding, validateNumber, validateObject } from "./util.js";
+import { isAnyArrayBuffer, isArrayBufferView, kHandle, LazyTransform, stringBytes, validateEncoding, validateNumber, validateObject } from "./util.js";
 
 /* the C side's error codes (JS_CIPHER_ERR_*), as Node reports each */
 function cipherError(code, name, detail) {
@@ -22,8 +22,8 @@ function cipherError(code, name, detail) {
     case 4: return codeError(TypeError, "ERR_CRYPTO_INVALID_AUTH_TAG", "Invalid authentication tag length: " + detail);
     case 5: return new Error("Trying to add data in unsupported state");
     case 6: return codeError(Error, "ERR_CRYPTO_INVALID_STATE", "Invalid state");
-    case 7: return sslError(30, 123, "WRONG_FINAL_BLOCK_LENGTH");
-    case 8: return sslError(30, 101, "BAD_DECRYPT");
+    case 7: return codeError(Error, "ERR_OSSL_WRONG_FINAL_BLOCK_LENGTH", "error:1C80006B:Provider routines::wrong final block length");
+    case 8: return codeError(Error, "ERR_OSSL_BAD_DECRYPT", "error:1C800064:Provider routines::bad decrypt");
     case 9: return new Error("Unsupported state or unable to authenticate data");
     case 10: return codeError(Error, "ERR_OSSL_TAG_NOT_SET", "error:1C800077:Provider routines::tag not set");
     case 11: return codeError(RangeError, "ERR_CRYPTO_INVALID_MESSAGELEN", "Invalid message length");
