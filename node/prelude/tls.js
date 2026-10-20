@@ -70,7 +70,7 @@ export function setDefaultCACertificates(certs) {
       throw invalidArgType(`certs[${i}]`, "of type string or an instance of ArrayBufferView", certs[i]);
     }
   }
-  /* as Node's store: each certificate once, re-encoded; none, or one OpenSSL can't read, changes nothing */
+  /* as Node's store: each certificate once, re-encoded; one OpenSSL can't read, or none of those given, changes nothing */
   const ders = new Map();
   for (const cert of certs) {
     for (const der of certificatesOf(cert)) {
@@ -82,7 +82,7 @@ export function setDefaultCACertificates(certs) {
       ders.set(der.toString("latin1"), der);
     }
   }
-  if (ders.size === 0) throw codeError(Error, "ERR_CRYPTO_OPERATION_FAILED", "No valid certificates found in the provided array");
+  if (certs.length > 0 && ders.size === 0) throw codeError(Error, "ERR_CRYPTO_OPERATION_FAILED", "No valid certificates found in the provided array");
   defaults.defaultCA = [...ders.values()].map((der) => toPem(der));
   defaultPems = undefined;
 }

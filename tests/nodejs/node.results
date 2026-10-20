@@ -896,6 +896,7 @@ test-https-client-resume.js
 test-https-close.js
 test-https-connect-address-family.js
 test-https-connecting-to-http.js
+test-https-drain.js
 test-https-expect-continue-reuse-race.js
 test-https-foafssl.js
 test-https-host-headers.js
@@ -919,6 +920,7 @@ test-https-set-timeout-server.js
 test-https-simple.js
 test-https-snicallback-override.js
 test-https-socket-options.js
+test-https-strict.js
 test-https-timeout-server-2.js
 test-https-timeout-server.js
 test-https-timeout.js
@@ -1355,6 +1357,7 @@ test-tls-alert-handling.js
 test-tls-alert.js
 test-tls-alpn-protocols-validation.js
 test-tls-basic-validations.js
+test-tls-buffersize.js
 test-tls-ca-concat.js
 test-tls-cert-chains-concat.js
 test-tls-cert-chains-in-ca.js
@@ -1364,6 +1367,8 @@ test-tls-certificate-compression.js
 test-tls-check-server-identity.js
 test-tls-client-abort.js
 test-tls-client-abort2.js
+test-tls-client-allow-partial-trust-chain.js
+test-tls-client-auth.js
 test-tls-client-cert-resumption.js
 test-tls-client-destroy-soon.js
 test-tls-client-reject-12.js
@@ -1399,6 +1404,7 @@ test-tls-econnreset.js
 test-tls-error-servername.js
 test-tls-error-stack.js
 test-tls-exportkeyingmaterial.js
+test-tls-fast-writing.js
 test-tls-friendly-error-message.js
 test-tls-get-ca-certificates-bundled.js
 test-tls-get-ca-certificates-default.js
@@ -1417,12 +1423,19 @@ test-tls-junk-server.js
 test-tls-key-mismatch.js
 test-tls-keyengine-invalid-arg-type.js
 test-tls-keylog-tlsv13.js
+test-tls-multi-key.js
+test-tls-multi-pfx.js
 test-tls-multiple-cas-as-string.js
 test-tls-net-connect-prefer-path.js
+test-tls-net-socket-keepalive-12.js
+test-tls-net-socket-keepalive.js
 test-tls-no-rsa-key.js
 test-tls-no-sslv23.js
 test-tls-no-sslv3.js
+test-tls-on-empty-socket.js
 test-tls-over-http-tunnel.js
+test-tls-passphrase.js
+test-tls-pause.js
 test-tls-peer-certificate-encoding.js
 test-tls-peer-certificate-multi-keys.js
 test-tls-peer-certificate.js
@@ -1447,6 +1460,7 @@ test-tls-set-default-ca-certificates-error.js
 test-tls-set-default-ca-certificates-mixed-types.js
 test-tls-set-default-ca-certificates-precedence-bundled.js
 test-tls-set-default-ca-certificates-precedence-empty.js
+test-tls-set-default-ca-certificates-recovery.js
 test-tls-set-default-ca-certificates-reset-https-request.js
 test-tls-set-encoding.js
 test-tls-sni-case-insensitive.js
@@ -1456,10 +1470,12 @@ test-tls-sni-servername.js
 test-tls-snicallback-error.js
 test-tls-socket-allow-half-open-option.js
 test-tls-socket-constructor-alpn-options-parsing.js
+test-tls-socket-destroy.js
 test-tls-socket-failed-handshake-emits-error.js
 test-tls-socket-snicallback-without-server.js
 test-tls-startcom-wosign-whitelist.js
 test-tls-starttls-server.js
+test-tls-streamwrap-buffersize.js
 test-tls-ticket-12.js
 test-tls-ticket-invalid-arg.js
 test-tls-timeout-server-2.js
@@ -1467,6 +1483,7 @@ test-tls-timeout-server.js
 test-tls-tlswrap-segfault-2.js
 test-tls-use-after-free-regression.js
 test-tls-wrap-econnreset-localaddress.js
+test-tls-wrap-econnreset-socket.js
 test-tls-wrap-econnreset.js
 test-tls-wrap-event-emmiter.js
 test-tls-write-error.js
