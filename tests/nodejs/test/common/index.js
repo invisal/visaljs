@@ -166,8 +166,19 @@ function getBufferSources(buf) {
   return [...getArrayBufferViews(buf), new Uint8Array(buf).buffer];
 }
 
-function skip(msg) {
+// Node's: an exit code or signal of a process that aborted (SIGILL, SIGTRAP or SIGABRT)
+function nodeProcessAborted(exitCode, signal) {
+  const expectedExitCodes = isWindows ? [0x80000003, 134] : [132, 133, 134];
+  const expectedSignals = ['SIGILL', 'SIGTRAP', 'SIGABRT'];
+  return expectedExitCodes.includes(exitCode) || expectedSignals.includes(signal);
+}
+
+function printSkipMessage(msg) {
   console.log(`1..0 # Skipped: ${msg}`);
+}
+
+function skip(msg) {
+  printSkipMessage(msg);
   process.exit(0);
 }
 
@@ -318,6 +329,8 @@ module.exports = {
   mustNotCall,
   mustSucceed,
   platformTimeout,
+  nodeProcessAborted,
+  printSkipMessage,
   skip,
   get localhostIPv4() { return '127.0.0.1'; },
   get PORT() { return 12346; },

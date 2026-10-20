@@ -40,14 +40,18 @@ function checkout(version: string): string {
 /** The fixtures a test names: fixtures.path('a', 'b.js'), fixtures.readSync('x'),
  *  fixtures.fileURL(...), require('../fixtures/x'). Only literal names: a test that builds one
  *  at run time needs it copied by hand. */
+const ENCODINGS = new Set(["utf8", "utf-8", "ascii", "latin1", "binary", "base64", "base64url", "hex", "ucs2", "utf16le"]);
+
 function fixturesOf(source: string): string[] {
   const out = new Set<string>();
   for (const m of source.matchAll(/fixtures\.(?:path|readSync|fileURL|readKey)\(\s*((?:['"][^'"]+['"]\s*,?\s*)+)/g)) {
-    const parts = [...m[1]!.matchAll(/['"]([^'"]+)['"]/g)].map((p) => p[1]!);
-    if (/fixtures\.readKey/.test(m[0])) parts.unshift("keys");
+    let parts = [...m[1]!.matchAll(/['"]([^'"]+)['"]/g)].map((p) => p[1]!);
+    if (/fixtures\.readKey/.test(m[0])) parts = ["keys", parts[0]!];  /* readKey(name, encoding) */
+    else if (/fixtures\.readSync/.test(m[0]) && parts.length > 1 && ENCODINGS.has(parts.at(-1)!)) parts.pop();  /* readSync(name, encoding) */
     out.add(join(...parts));
   }
   for (const m of source.matchAll(/require\(\s*['"]\.\.\/fixtures\/([^'"]+)['"]\s*\)/g)) out.add(m[1]!);
+  for (const m of source.matchAll(/(?:from|import\()\s*['"]\.\.\/fixtures\/([^'"]+)['"]/g)) out.add(m[1]!);
   return [...out];
 }
 
@@ -68,12 +72,13 @@ const missing: string[] = [];
 for (const file of files) {
   cpSync(join(parallel, file), join(TESTS, "parallel", file));
   for (const fixture of fixturesOf(readFileSync(join(parallel, file), "utf8"))) {
-    const from = join(src, "test", "fixtures", fixture);
+    let from = join(src, "test", "fixtures", fixture);
+    if (!existsSync(from) && existsSync(from + ".js")) from += ".js";  /* require('../fixtures/crypto/kmac') */
     if (!existsSync(from)) {
       missing.push(`${file}: ${fixture}`);
       continue;
     }
-    cpSync(from, join(TESTS, "fixtures", fixture), { recursive: statSync(from).isDirectory() });
+    cpSync(from, join(TESTS, "fixtures", from.endsWith(".js") && !fixture.endsWith(".js") ? fixture + ".js" : fixture), { recursive: statSync(from).isDirectory() });
     fixtures++;
   }
 }

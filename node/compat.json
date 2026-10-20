@@ -10,9 +10,9 @@
       "total": 58
     },
     "exports": {
-      "implemented": 1145,
+      "implemented": 1146,
       "stubbed": 39,
-      "missing": 100,
+      "missing": 99,
       "total": 1284
     }
   },
@@ -488,6 +488,7 @@
         "randomFillSync",
         "randomInt",
         "randomUUID",
+        "randomUUIDv7",
         "scrypt",
         "scryptSync",
         "secureHeapUsed",
@@ -507,8 +508,7 @@
         "argon2",
         "argon2Sync",
         "decapsulate",
-        "encapsulate",
-        "randomUUIDv7"
+        "encapsulate"
       ],
       "extra": [
         "Cipher",

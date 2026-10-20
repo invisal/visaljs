@@ -130,6 +130,8 @@ export class KeyObject {
   }
 }
 
+Object.defineProperty(KeyObject.prototype, Symbol.toStringTag, { configurable: true, value: "KeyObject" });
+
 class SecretKeyObject extends KeyObject {
   constructor(handle) {
     super("secret", handle);

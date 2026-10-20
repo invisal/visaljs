@@ -17,10 +17,10 @@ import {
   createPrivateKey, createPublicKey, createSecretKey, generateKey, generateKeyPair, generateKeyPairSync, generateKeySync, KeyObject,
 } from "./internal/crypto/keys.js";
 import { hkdf, hkdfSync, pbkdf2, pbkdf2Sync, scrypt, scryptSync } from "./internal/crypto/kdf.js";
-import { randomBytes, randomFill, randomFillSync, randomInt, randomUUID } from "./internal/crypto/random.js";
+import { randomBytes, randomFill, randomFillSync, randomInt, randomUUID, randomUUIDv7 } from "./internal/crypto/random.js";
 import { isAnyArrayBuffer, isArrayBufferView } from "./internal/crypto/util.js";
 
-export { createHash, createHmac, getHashes, Hash, hash, Hmac, randomBytes, randomFill, randomFillSync, randomInt, randomUUID };
+export { createHash, createHmac, getHashes, Hash, hash, Hmac, randomBytes, randomFill, randomFillSync, randomInt, randomUUID, randomUUIDv7 };
 export { hkdf, hkdfSync, pbkdf2, pbkdf2Sync, scrypt, scryptSync };
 export { createPrivateKey, createPublicKey, createSecretKey, generateKey, generateKeyPair, generateKeyPairSync, generateKeySync, KeyObject };
 export { createECDH, createSign, createVerify, diffieHellman, ECDH, getCurves, privateDecrypt, privateEncrypt, publicDecrypt, publicEncrypt };
@@ -106,6 +106,6 @@ export default {
   createVerify, diffieHellman, generateKey, generateKeyPair, generateKeyPairSync, generateKeySync, generatePrime,
   generatePrimeSync, getCipherInfo, getCiphers, getCurves, getDiffieHellman, getFips, getHashes, getRandomValues, hash, hkdf,
   hkdfSync, pbkdf2, pbkdf2Sync, privateDecrypt, privateEncrypt, publicDecrypt, publicEncrypt, randomBytes, randomFill,
-  randomFillSync, randomInt, randomUUID, scrypt, scryptSync, secureHeapUsed, setEngine, setFips, sign, subtle, timingSafeEqual,
+  randomFillSync, randomInt, randomUUID, randomUUIDv7, scrypt, scryptSync, secureHeapUsed, setEngine, setFips, sign, subtle, timingSafeEqual,
   verify, webcrypto,
 };
