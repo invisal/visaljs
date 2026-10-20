@@ -203,6 +203,7 @@ export class TLSSocket extends Socket {
       manualStart: true,
       highWaterMark: tlsOptions.highWaterMark,
       onread: !socket ? tlsOptions.onread : null,
+      signal: tlsOptions.signal,
     });
     this._tlsOptions = tlsOptions;
     this._secureEstablished = false;
@@ -1141,6 +1142,7 @@ export function connect(...args) {
     ALPNProtocols: options.ALPNProtocols,
     highWaterMark: options.highWaterMark,
     onread: options.onread,
+    signal: options.signal,
   });
   options.rejectUnauthorized = options.rejectUnauthorized !== false;
   tlssock[kConnectOptions] = options;
