@@ -2,7 +2,7 @@
 // underscored names of its methods, createInterface, the cursor functions, emitKeypressEvents
 // (with the terminal editor, internal/readline_editor.js), and readline/promises as promises.
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
-import { lazyFunction } from "./internal/features.js";
+import { features, lazyFunction } from "./internal/features.js";
 import {
   abortError, addAbortListener, clearLine, clearScreenDown, cursorTo, Interface as BaseInterface, InterfaceConstructor, kAddHistory,
   kDecoder, kDeleteLeft, kDeleteLineLeft, kDeleteLineRight, kDeleteRight, kDeleteWordLeft, kDeleteWordRight, kGetDisplayPos, kHistoryNext,
@@ -29,7 +29,8 @@ export function Interface(input, output, completer, terminal) {
     completer = (v, cb) => cb(null, realCompleter(v));
   }
   InterfaceConstructor.call(this, input, output, completer, terminal);
-  if (this.terminal && process.env.TERM === "dumb") this._ttyWrite = _ttyWriteDumb.bind(this);
+  /* a terminal is the editor's (internal/readline_editor.js): a dumb one gets its plain writer */
+  if (this.terminal && process.env.TERM === "dumb") this._ttyWrite = features.ttyWriteDumb.bind(this);
 }
 
 Object.setPrototypeOf(Interface.prototype, BaseInterface.prototype);
@@ -110,39 +111,6 @@ Interface.prototype._normalWrite = BaseInterface.prototype[kNormalWrite];
 Interface.prototype._getDisplayPos = BaseInterface.prototype[kGetDisplayPos];
 Interface.prototype._getCursorPos = BaseInterface.prototype.getCursorPos;
 Interface.prototype._moveCursor = BaseInterface.prototype[kMoveCursor];
-
-/* a TERM=dumb terminal: no escapes, the line as typed */
-function _ttyWriteDumb(s, key) {
-  key ||= kEmptyObject;
-  if (key.name === "escape") return;
-  if (this[kSawReturnAt] && key.name !== "enter") this[kSawReturnAt] = 0;
-  if (key.ctrl) {
-    if (key.name === "c") {
-      if (this.listenerCount("SIGINT") > 0) this.emit("SIGINT");
-      else this.close();
-      return;
-    } else if (key.name === "d") {
-      this.close();
-      return;
-    }
-  }
-  switch (key.name) {
-    case "return":
-      this[kSawReturnAt] = Date.now();
-      this._line();
-      break;
-    case "enter":
-      if (this[kSawReturnAt] === 0 || Date.now() - this[kSawReturnAt] > this.crlfDelay) this._line();
-      this[kSawReturnAt] = 0;
-      break;
-    default:
-      if (typeof s === "string" && s) {
-        this.line += s;
-        this.cursor += s.length;
-        this._writeToOutput(s);
-      }
-  }
-}
 
 export { clearLine, clearScreenDown, cursorTo, moveCursor, promises };
 

@@ -38,6 +38,7 @@ const CASES: [string, string, string][] = [
   ["util_debuglog", "a.cjs", 'const debug = require("util").debuglog("app");\ndebug("x");'],
   ["util_more", "a.cjs", 'const { callbackify } = require("util");\ncallbackify(async () => 1)(() => {});'],
   ["buffer_transcode", "a.cjs", 'const { transcode } = require("buffer");\ntranscode(Buffer.from("a"), "utf8", "latin1");'],
+  ["events_on", "b.mjs", 'import { createInterface } from "node:readline";\nfor await (const line of createInterface({ input: process.stdin })) console.log(line);'],
   ["events_on", "a.mjs", 'import { on, EventEmitter } from "node:events";\nconst e = new EventEmitter();\nfor await (const x of on(e, "x")) console.log(x);'],
   ["stream_compose", "a.cjs", 'const { compose, PassThrough } = require("stream");\ncompose(new PassThrough(), new PassThrough());'],
   ["stream_compose", "b.cjs", 'const { Duplex } = require("stream");\nDuplex.from(async function* (s) { yield* s; });'],

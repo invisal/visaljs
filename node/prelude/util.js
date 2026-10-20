@@ -6,8 +6,9 @@
 // TextDecoder, the globals (the runtime's encoding component).
 import { utilFormat, utilFormatWithOptions, utilInspect } from "visaljs:host";
 import { isDeepStrictEqual } from "./internal/comparisons.js";
-import { validateFunction, validateString } from "./internal/errors.js";
+import { validateFunction } from "./internal/errors.js";
 import { lazyClass, lazyFunction } from "./internal/features.js";
+import { stripVTControlCharacters } from "./internal/string_width.js";
 import types, { isPromise } from "./util_types.js";
 
 export { types };
@@ -32,15 +33,7 @@ export const format = utilFormat;
 export const formatWithOptions = utilFormatWithOptions;
 export const TextEncoder = globalThis.TextEncoder;
 export const TextDecoder = globalThis.TextDecoder;
-
-/* ANSI escape codes, as Node's internal/util/inspect.js matches them: an OSC sequence (a terminal
-   hyperlink: ESC ] … BEL) whole, or a CSI sequence */
-const ansi = new RegExp(
-  "(?:\\u001B\\][\\s\\S]*?(?:\\u0007|\\u001B\\u005C|\\u009C))" +
-  "|[\\u001B\\u009B][[\\]()#;?]*" +
-  "(?:\\d{1,4}(?:[;:]\\d{0,4})*)?" +
-  "[\\dA-PR-TZcf-nq-uy=><~]", "g",
-);
+export { stripVTControlCharacters };
 
 const kCustomPromisifiedSymbol = Symbol.for("nodejs.util.promisify.custom");
 /* names to make an object of when the callback gets several values, e.g. ['bytesRead', 'buffer'] */
@@ -93,12 +86,6 @@ export function promisify(original) {
 
 promisify.custom = kCustomPromisifiedSymbol;
 
-/** The string without its ANSI escape codes (colors, cursor movements, …). */
-export function stripVTControlCharacters(str) {
-  validateString(str, "str");
-  if (!str.includes("\u001B") && !str.includes("\u009B")) return str;  /* no escape introducer */
-  return str.replace(ansi, "");
-}
 
 const codesWarned = new Set();
 

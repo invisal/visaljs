@@ -1,6 +1,24 @@
-// Node's getStringWidth (internal/util/inspect): columns on a terminal, wide characters two,
-// combining ones none; console.table and readline's line editor measure with it.
-import { stripVTControlCharacters } from "../util.js";
+// Node's getStringWidth and stripVTControlCharacters (internal/util/inspect): columns on a
+// terminal, wide characters two, combining ones none, escape codes none; console.table, readline
+// and util measure with them.
+import { validateString } from "./errors.js";
+
+/* ANSI escape codes, as Node's internal/util/inspect.js matches them: an OSC sequence (a terminal
+   hyperlink: ESC ] … BEL) whole, or a CSI sequence */
+const ansi = new RegExp(
+  "(?:\\u001B\\][\\s\\S]*?(?:\\u0007|\\u001B\\u005C|\\u009C))" +
+  "|[\\u001B\\u009B][[\\]()#;?]*" +
+  "(?:\\d{1,4}(?:[;:]\\d{0,4})*)?" +
+  "[\\dA-PR-TZcf-nq-uy=><~]", "g",
+);
+
+/** The string without its ANSI escape codes (colors, cursor movements, …). */
+export function stripVTControlCharacters(str) {
+  validateString(str, "str");
+  if (!str.includes("\u001B") && !str.includes("\u009B")) return str;  /* no escape introducer */
+  return str.replace(ansi, "");
+}
+
 
 const isFullWidthCodePoint = (code) => code >= 0x1100 && (code <= 0x115f || code === 0x2329 || code === 0x232a ||
   (code >= 0x2e80 && code <= 0x3247 && code !== 0x303f) || (code >= 0x3250 && code <= 0x4dbf) || (code >= 0x4e00 && code <= 0xa4c6) ||

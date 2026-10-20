@@ -237,23 +237,23 @@ const resolverFunction = (prefix, key) => {
   return f;
 };
 
-export const getServers = resolverFunction("dns.", "getServers");
-export const setServers = resolverFunction("dns.", "setServers");
-export const resolve = resolverFunction("dns.", "resolve");
-export const resolve4 = resolverFunction("dns.", "resolve4");
-export const resolve6 = resolverFunction("dns.", "resolve6");
-export const resolveAny = resolverFunction("dns.", "resolveAny");
-export const resolveCaa = resolverFunction("dns.", "resolveCaa");
-export const resolveCname = resolverFunction("dns.", "resolveCname");
-export const resolveMx = resolverFunction("dns.", "resolveMx");
-export const resolveNaptr = resolverFunction("dns.", "resolveNaptr");
-export const resolveNs = resolverFunction("dns.", "resolveNs");
-export const resolvePtr = resolverFunction("dns.", "resolvePtr");
-export const resolveSoa = resolverFunction("dns.", "resolveSoa");
-export const resolveSrv = resolverFunction("dns.", "resolveSrv");
-export const resolveTlsa = resolverFunction("dns.", "resolveTlsa");
-export const resolveTxt = resolverFunction("dns.", "resolveTxt");
-export const reverse = resolverFunction("dns.", "reverse");
+export const getServers = /* @__PURE__ */ resolverFunction("dns.", "getServers");
+export const setServers = /* @__PURE__ */ resolverFunction("dns.", "setServers");
+export const resolve = /* @__PURE__ */ resolverFunction("dns.", "resolve");
+export const resolve4 = /* @__PURE__ */ resolverFunction("dns.", "resolve4");
+export const resolve6 = /* @__PURE__ */ resolverFunction("dns.", "resolve6");
+export const resolveAny = /* @__PURE__ */ resolverFunction("dns.", "resolveAny");
+export const resolveCaa = /* @__PURE__ */ resolverFunction("dns.", "resolveCaa");
+export const resolveCname = /* @__PURE__ */ resolverFunction("dns.", "resolveCname");
+export const resolveMx = /* @__PURE__ */ resolverFunction("dns.", "resolveMx");
+export const resolveNaptr = /* @__PURE__ */ resolverFunction("dns.", "resolveNaptr");
+export const resolveNs = /* @__PURE__ */ resolverFunction("dns.", "resolveNs");
+export const resolvePtr = /* @__PURE__ */ resolverFunction("dns.", "resolvePtr");
+export const resolveSoa = /* @__PURE__ */ resolverFunction("dns.", "resolveSoa");
+export const resolveSrv = /* @__PURE__ */ resolverFunction("dns.", "resolveSrv");
+export const resolveTlsa = /* @__PURE__ */ resolverFunction("dns.", "resolveTlsa");
+export const resolveTxt = /* @__PURE__ */ resolverFunction("dns.", "resolveTxt");
+export const reverse = /* @__PURE__ */ resolverFunction("dns.", "reverse");
 
 /* ---- dns.promises ------------------------------------------------------------------------------ */
 
@@ -265,45 +265,49 @@ const errorCodes = {
 const resolverKeys = ["getServers", "setServers", "resolve", "resolve4", "resolve6", "resolveAny", "resolveCaa", "resolveCname", "resolveMx",
   "resolveNaptr", "resolveNs", "resolvePtr", "resolveSoa", "resolveSrv", "resolveTlsa", "resolveTxt", "reverse"];
 
-export const promises = {
-  lookup(hostname, options) {
-    if (hostname) validateStringWithoutNullBytes(hostname, "hostname");
-    if (options !== undefined && typeof options !== "number" && typeof options !== "object") {
-      throw invalidArgType("options", "of type integer or an instance of Object", options);
-    }
-    const [family, all, , order] = lookupOptions(options);
-    return new Promise((resolvePromise, reject) => {
-      if (!hostname) {
-        emitInvalidHostnameWarning(hostname);
-        resolvePromise(all ? [] : { address: null, family: family === 6 ? 6 : 4 });
-        return;
+/* in a pure call, so a program that only looks names up drops the promise API */
+export const promises = /* @__PURE__ */ (() => {
+  const promises = {
+    lookup(hostname, options) {
+      if (hostname) validateStringWithoutNullBytes(hostname, "hostname");
+      if (options !== undefined && typeof options !== "number" && typeof options !== "object") {
+        throw invalidArgType("options", "of type integer or an instance of Object", options);
       }
-      const matched = isIP(hostname);
-      if (matched !== 0) {
-        const result = { address: hostname, family: matched };
-        resolvePromise(all ? [result] : result);
-        return;
-      }
-      getaddrinfo(hostname, family, order, (err, list) => {
-        if (err) reject(err);
-        else if (all) resolvePromise(list.map(([address, f]) => ({ address, family: f })));
-        else resolvePromise({ address: list[0][0], family: list[0][1] });
+      const [family, all, , order] = lookupOptions(options);
+      return new Promise((resolvePromise, reject) => {
+        if (!hostname) {
+          emitInvalidHostnameWarning(hostname);
+          resolvePromise(all ? [] : { address: null, family: family === 6 ? 6 : 4 });
+          return;
+        }
+        const matched = isIP(hostname);
+        if (matched !== 0) {
+          const result = { address: hostname, family: matched };
+          resolvePromise(all ? [result] : result);
+          return;
+        }
+        getaddrinfo(hostname, family, order, (err, list) => {
+          if (err) reject(err);
+          else if (all) resolvePromise(list.map(([address, f]) => ({ address, family: f })));
+          else resolvePromise({ address: list[0][0], family: list[0][1] });
+        });
       });
-    });
-  },
-  lookupService(address, port) {
-    [address, port] = lookupServiceArgs(arguments, ["address", "port"]);
-    return new Promise((resolvePromise, reject) => {
-      const err = getnameinfo(address, port, (e, hostname, service) => (e ? reject(e) : resolvePromise({ hostname, service })));
-      if (err) reject(dnsException(err, "getnameinfo", address));
-    });
-  },
-  Resolver: PromisesResolver,
-  getDefaultResultOrder,
-  setDefaultResultOrder,
-  ...errorCodes,
-};
-for (const key of resolverKeys) promises[key] = resolverFunction("dns.promises.", key);
+    },
+    lookupService(address, port) {
+      [address, port] = lookupServiceArgs(arguments, ["address", "port"]);
+      return new Promise((resolvePromise, reject) => {
+        const err = getnameinfo(address, port, (e, hostname, service) => (e ? reject(e) : resolvePromise({ hostname, service })));
+        if (err) reject(dnsException(err, "getnameinfo", address));
+      });
+    },
+    Resolver: PromisesResolver,
+    getDefaultResultOrder,
+    setDefaultResultOrder,
+    ...errorCodes,
+  };
+  for (const key of resolverKeys) promises[key] = resolverFunction("dns.promises.", key);
+  return promises;
+})();
 
 export default {
   lookup, lookupService, Resolver, getDefaultResultOrder, setDefaultResultOrder, getServers, setServers, resolve, resolve4, resolve6,

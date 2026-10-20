@@ -7,8 +7,9 @@ import { features } from "./features.js";
 
 /* the iterator's watermarks and state (events.on's [kWatermarkData]) */
 const kWatermarkData = Symbol.for("nodejs.watermarkData");
-/** Node's internal option: each event's first argument, not an array of them (readline's lines) */
-export const kFirstEventParam = Symbol("kFirstEventParam");
+/** Node's internal option: each event's first argument, not an array of them (readline's lines).
+ *  In the registry: readline's iterator names it without linking this module. */
+export const kFirstEventParam = Symbol.for("visaljs.events.kFirstEventParam");
 
 const AsyncIteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf(async function* () {}).prototype);
 

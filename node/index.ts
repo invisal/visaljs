@@ -123,7 +123,8 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "util_more.js"), reached: (_code, program) => UTIL_MORE.test(program) || UTIL_MORE_MEMBERS.test(program) },
   { file: join(preludeDir, "internal", "buffer_transcode.js"), reached: (_code, program) => /\btranscode\b/.test(program) },
   /* events.on as a call (bare, or of events or EventEmitter): `.on(` is an emitter's method */
-  { file: join(preludeDir, "internal", "events_on.js"), reached: (_code, program) => EVENTS_ON.test(program) },
+  { file: join(preludeDir, "internal", "events_on.js"), reached: (_code, program) =>
+      EVENTS_ON.test(program) || (/readline|readLines/i.test(program) && /\bfor\s+await\b|\basyncIterator\b/.test(program)) },
   /* node:stream's rarer parts: compose, Duplex.from and duplexPair; the operators (map, filter, …
    * on a Readable: drop, take, flatMap and toArray by name, the others named with streams); the
    * conversions to and from web streams */
@@ -167,9 +168,9 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   /* readline's terminal line editor: a readline program that reads stdin or names a terminal's parts */
   { file: join(preludeDir, "internal", "readline_editor.js"), reached: (_code, program) =>
       READLINE_EDITOR.test(program) || (/readline/i.test(program) && /\b(?:stdin|terminal)\b/.test(program)) },
-  /* dns.Resolver and the resolve* functions (c-ares): named, or a dns program's resolve(…) or reverse(…) */
+  /* dns.Resolver and the resolve* functions (c-ares): named, or node:dns's resolve(…) or reverse(…) */
   { file: join(preludeDir, "internal", "dns_resolver.js"), reached: (_code, program) =>
-      DNS_RESOLVER.test(program) || DNS_RESOLVE_RRTYPE.test(program) || (/\bdns\b/.test(program) && /\.\s*(?:resolve|reverse)\s*\(/.test(program)) },
+      DNS_RESOLVER.test(program) || DNS_RESOLVE_RRTYPE.test(program) || DNS_MODULE_RESOLVE.test(program) },
   /* crypto.X509Certificate, and the TLS sockets' getters that give one */
   { file: join(preludeDir, "internal", "crypto_x509.js"), reached: (_code, program) => /\b(?:X509Certificate|get(?:Peer)?X509Certificate)\b/.test(program) },
   /* process's other members (some link libuv): named as process's, or by a distinctive name */
@@ -201,9 +202,11 @@ const FETCH = /(?<![.\w$#])fetch\s*\(|[=(,]\s*fetch\s*[;,)\n]|\btypeof\s+fetch\b
 const STREAM_OPERATORS = /\.\s*(?:flatMap|toArray|drop|take|asIndexedPairs)\s*\(|\bReadable\b[\s\S]*\.\s*(?:map|filter|forEach|reduce|some|every|find)\s*\(/;
 const DNS_RESOLVER = /\b(?:Resolver|resolve(?:4|6|Any|Caa|Cname|Mx|Naptr|Ns|Ptr|Soa|Srv|Tlsa|Txt)|getServers|setServers|setLocalAddress)\b/;
 const READLINE_EDITOR = /\b(?:emitKeypressEvents|setRawMode|keypress|completer)\b/;
+/* dns.resolve(…), dns.promises.reverse(…), as the bundle names node:dns */
+const DNS_MODULE_RESOLVE = /\b(?:dns|dns_default|require_dns\(\))\s*\.\s*(?:promises\s*\.\s*)?(?:resolve|reverse)\b/;
 /* resolve(name, "MX"): a record type names it, whatever the module's binding is called */
 const DNS_RESOLVE_RRTYPE = /\.\s*resolve\s*\([^,()]+,\s*["'`](?:A|AAAA|ANY|CAA|CNAME|MX|NAPTR|NS|PTR|SOA|SRV|TLSA|TXT)["'`]/;
-const STDIO_WRITE_REPLACED = /\.\s*write\s*=(?![=>])|\b_std(?:out|err)\s*=(?!=)/;
+const STDIO_WRITE_REPLACED = /\b(?:stdout|stderr|stream)\s*\.\s*write\s*=(?![=>])|\b_std(?:out|err)\s*=(?!=)/;
 const STDIO_STREAM_USE = /\.\s*(?:pipe|on|once|end|cork|uncork|destroy|removeListener|addListener|prependListener)\s*\(|\b(?:pipeline|finished)\b|\bwritable(?:Length|HighWaterMark|NeedDrain|Ended|Finished)\b/;
 const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";
 const PROCESS_COMMON = "title|ppid|release|config|ref|unref|abort|report|domain|assert|binding|finalization";

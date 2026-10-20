@@ -6,11 +6,9 @@
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import { EventEmitter } from "../events.js";
 import { StringDecoder } from "../string_decoder.js";
-import { stripVTControlCharacters } from "../util.js";
+import { getStringWidth, stripVTControlCharacters } from "./string_width.js";
 import { codeError, invalidArgType, invalidArgValue, outOfRange, validateFunction, validateString } from "./errors.js";
-import { kFirstEventParam, on } from "./events_on.js";
-import { features } from "./features.js";
-import { getStringWidth } from "./string_width.js";
+import { feature, features } from "./features.js";
 
 /* ---- utils (Node's internal/readline/utils.js) ---------------------------------------------- */
 
@@ -222,6 +220,8 @@ const kMincrlfDelay = 100;
 /* \r\n, \n, \r (not one that a \n may follow in the next chunk), and the Unicode line separators */
 const lineEnding = /\r?\n|\r(?!\n)|\u2028|\u2029/g;
 const ESCAPE_CODE_TIMEOUT = 500;
+/* events.on's option (internal/events_on.js) */
+const kFirstEventParam = Symbol.for("visaljs.events.kFirstEventParam");
 
 export const kLineObjectStream = Symbol("line object stream");
 export const kQuestionCancel = Symbol("kQuestionCancel");
@@ -697,9 +697,10 @@ export class Interface extends InterfaceConstructor {
     else this[kRefreshLine]();
   }
 
+  /* events.on (internal/events_on.js, linked into readline programs that iterate) */
   [Symbol.asyncIterator]() {
     if (this[kLineObjectStream] === undefined) {
-      this[kLineObjectStream] = on(this, "line", { close: ["close"], highWaterMark: 1024, [kFirstEventParam]: true });
+      this[kLineObjectStream] = feature("on")(this, "line", { close: ["close"], highWaterMark: 1024, [kFirstEventParam]: true });
     }
     return this[kLineObjectStream];
   }

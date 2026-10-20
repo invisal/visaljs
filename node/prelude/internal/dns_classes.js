@@ -2,5 +2,5 @@
 // gives its classes (internal/features.js), so programs that don't name them don't link c-ares.
 import { lazyClass } from "./features.js";
 
-export const Resolver = lazyClass("Resolver", "dnsResolver");
-export const PromisesResolver = lazyClass("Resolver", "dnsPromisesResolver");
+export const Resolver = /* @__PURE__ */ lazyClass("Resolver", "dnsResolver");
+export const PromisesResolver = /* @__PURE__ */ lazyClass("Resolver", "dnsPromisesResolver");

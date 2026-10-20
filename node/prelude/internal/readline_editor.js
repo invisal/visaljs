@@ -1202,5 +1202,39 @@ legacy._historyNext = Interface.prototype[kHistoryNext];
 legacy._historyPrev = Interface.prototype[kHistoryPrev];
 legacy._ttyWrite = Interface.prototype[kTtyWrite];
 
+/* a TERM=dumb terminal: no escapes, the line as typed */
+function _ttyWriteDumb(s, key) {
+  key ||= kEmptyObject;
+  if (key.name === "escape") return;
+  if (this[kSawReturnAt] && key.name !== "enter") this[kSawReturnAt] = 0;
+  if (key.ctrl) {
+    if (key.name === "c") {
+      if (this.listenerCount("SIGINT") > 0) this.emit("SIGINT");
+      else this.close();
+      return;
+    } else if (key.name === "d") {
+      this.close();
+      return;
+    }
+  }
+  switch (key.name) {
+    case "return":
+      this[kSawReturnAt] = Date.now();
+      this._line();
+      break;
+    case "enter":
+      if (this[kSawReturnAt] === 0 || Date.now() - this[kSawReturnAt] > this.crlfDelay) this._line();
+      this[kSawReturnAt] = 0;
+      break;
+    default:
+      if (typeof s === "string" && s) {
+        this.line += s;
+        this.cursor += s.length;
+        this._writeToOutput(s);
+      }
+  }
+}
+
 features.readlineEditor = true;
+features.ttyWriteDumb = _ttyWriteDumb;
 features.emitKeypressEvents = emitKeypressEvents;
