@@ -3,16 +3,16 @@
   "node": "v24.21.0",
   "summary": {
     "modules": {
-      "complete": 30,
+      "complete": 31,
       "partial": 25,
       "stub": 1,
-      "missing": 2,
+      "missing": 1,
       "total": 58
     },
     "exports": {
-      "implemented": 1146,
+      "implemented": 1148,
       "stubbed": 39,
-      "missing": 99,
+      "missing": 97,
       "total": 1284
     }
   },
@@ -516,13 +516,13 @@
       ]
     },
     "dgram": {
-      "status": "missing",
-      "implemented": [],
-      "stubbed": [],
-      "missing": [
+      "status": "complete",
+      "implemented": [
         "Socket",
         "createSocket"
-      ]
+      ],
+      "stubbed": [],
+      "missing": []
     },
     "diagnostics_channel": {
       "status": "complete",

@@ -75,6 +75,58 @@ static const struct { int code, uv; const char *name, *message; } ERRORS[] = {
     E(ENXIO, "no such device or address"),
     E(EMLINK, "too many links"),
     E(ENOTTY, "inappropriate ioctl for device"),
+    /* the rest of libuv's: some C libraries (Windows') lack a few */
+#ifdef EALREADY
+    E(EALREADY, "connection already in progress"),
+#endif
+#ifdef EDESTADDRREQ
+    E(EDESTADDRREQ, "destination address required"),
+#endif
+#ifdef EISCONN
+    E(EISCONN, "socket is already connected"),
+#endif
+#ifdef ENETDOWN
+    E(ENETDOWN, "network is down"),
+#endif
+#ifdef ENODEV
+    E(ENODEV, "no such device"),
+#endif
+#ifdef ENONET
+    E(ENONET, "machine is not on the network"),
+#endif
+#ifdef ENOPROTOOPT
+    E(ENOPROTOOPT, "protocol not available"),
+#endif
+#ifdef EPROTONOSUPPORT
+    E(EPROTONOSUPPORT, "protocol not supported"),
+#endif
+#ifdef EPROTOTYPE
+    E(EPROTOTYPE, "protocol wrong type for socket"),
+#endif
+#ifdef ESHUTDOWN
+    E(ESHUTDOWN, "cannot send after transport endpoint shutdown"),
+#endif
+#ifdef EHOSTDOWN
+    E(EHOSTDOWN, "host is down"),
+#endif
+#ifdef EREMOTEIO
+    E(EREMOTEIO, "remote I/O error"),
+#endif
+#ifdef EILSEQ
+    E(EILSEQ, "illegal byte sequence"),
+#endif
+#ifdef ESOCKTNOSUPPORT
+    E(ESOCKTNOSUPPORT, "socket type not supported"),
+#endif
+#ifdef ENODATA
+    E(ENODATA, "no data available"),
+#endif
+#ifdef EUNATCH
+    E(EUNATCH, "protocol driver not attached"),
+#endif
+#ifdef ENOEXEC
+    E(ENOEXEC, "exec format error"),
+#endif
 };
 #undef E
 
