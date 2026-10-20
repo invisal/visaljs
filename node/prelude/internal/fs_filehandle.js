@@ -62,13 +62,18 @@ export class FileHandle extends EventEmitter {
   }
 
   /* the call on the fd as a promise; EBADF once the handle is closed */
+  /* done at once, settled on a later turn of the loop: Node's run on the thread pool, so what
+   * the caller's ticks and promise jobs do (an abort) comes first. An async operation's promise
+   * is followed at once (its steps are these calls), so its rejection has a handler. */
   #call(syscall, fn) {
     return new Promise((resolve, reject) => {
       if (this.#fd < 0) return reject(closedError(syscall));
       try {
-        resolve(fn(this.#fd));
+        const result = fn(this.#fd);
+        if (typeof result?.then === "function") resolve(result);
+        else setImmediate(resolve, result);
       } catch (e) {
-        reject(e);
+        setImmediate(reject, e);
       }
     });
   }
@@ -274,12 +279,13 @@ export class FileHandle extends EventEmitter {
 }
 
 /** fs/promises' open(path[, flags[, mode]]): a FileHandle. */
+/* settled on a later turn of the loop, as Node's open on its thread pool (FileHandle's #call) */
 function promisesOpen(path, flags = "r", mode = 0o666) {
   return new Promise((resolve, reject) => {
     try {
-      resolve(new FileHandle(openSync(path, flags, mode)));
+      setImmediate(resolve, new FileHandle(openSync(path, flags, mode)));
     } catch (e) {
-      reject(e);
+      setImmediate(reject, e);
     }
   });
 }

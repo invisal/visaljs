@@ -163,7 +163,8 @@ static int drain(JSJobQueue *q) {
 }
 
 /* Node's processTicksAndRejections: the ticks, then the microtasks (a tick a microtask queues
- * waits for them all), then the rejections, until none is left */
+ * waits for them all), again while there are ticks; the rejections only then, so a handler a
+ * tick adds is in time */
 int js_run_microtasks(JSContext *ctx) {
     JSRuntime *rt = ctx->rt;
     if (rt->in_checkpoint) return 0;
@@ -173,7 +174,7 @@ int js_run_microtasks(JSContext *ctx) {
         status = drain(&rt->ticks);
         if (status == 0) status = drain(&rt->jobs);
         js_clear_kept_objects(rt);  /* the end of the job: WeakRef targets may go now */
-        if (status == 0) status = process_rejections(ctx);
+        if (status == 0 && rt->ticks.count == 0) status = process_rejections(ctx);
     } while (status == 0 && (rt->ticks.count || rt->jobs.count || rt->handled_late.count));
     rt->in_checkpoint = 0;
     return status;

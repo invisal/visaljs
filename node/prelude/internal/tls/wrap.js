@@ -405,7 +405,10 @@ export class TLSSocket extends Socket {
       this._tlsClosed = true;
       this._onTlsError(tlsFailure(err));
     } else if (state & TLS_PEER_CLOSED && !this._inSecureHandlers) {
-      this._peerEnded();
+      /* libuv reads data and the end apart, Node's ticks and promise jobs between them: the end
+       * of what came with data, a turn of the loop later */
+      if (app) setImmediate(() => this._peerEnded());
+      else this._peerEnded();
     }
     return taken;
   }
