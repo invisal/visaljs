@@ -601,16 +601,16 @@ static JSValue new_process(JSContext *ctx) {
     if (js_is_exception(versions)) return versions;
     js_define_data(ctx, js_as_object(versions), js_atom_from_cstr(ctx, "node"), js_new_string_cstr(ctx, JS_NODE_VERSION), JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
     js_define_data(ctx, js_as_object(versions), js_atom_from_cstr(ctx, "visaljs"), js_new_string_cstr(ctx, JS_VISALJS_VERSION), JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
-    /* what a Node built with BoringSSL reports: the version in its OPENSSL_VERSION_TEXT, "OpenSSL 1.1.1
-       (compatible; BoringSSL)". Node's own check for crypto is Boolean(process.versions.openssl). */
-    js_define_data(ctx, js_as_object(versions), js_atom_from_cstr(ctx, "openssl"), js_new_string_cstr(ctx, "1.1.1"), JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
+    /* Node 24.21's OpenSSL: crypto is BoringSSL, but behaves as Node's (its errors and limits), so programs
+       and Node's tests see the Node they expect. Node's own check for crypto is Boolean(process.versions.openssl). */
+    js_define_data(ctx, js_as_object(versions), js_atom_from_cstr(ctx, "openssl"), js_new_string_cstr(ctx, "3.5.5"), JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
     js_define_data(ctx, p, js_atom_from_cstr(ctx, "versions"), versions, JS_PROP_ENUMERABLE | JS_PROP_CONFIGURABLE);
-    /* features: what this build has, in Node 24's names. No inspector, TLS from
-       BoringSSL without OCSP stapling, require() of ES modules, no QUIC, no type stripping */
+    /* features: what this build has, in Node 24's names. No inspector, TLS without OCSP stapling, require()
+       of ES modules, no QUIC, no type stripping; openssl_is_boringssl false, as crypto behaves as OpenSSL's */
     static const struct { const char *name; bool on; } features[] = {
         { "inspector", false }, { "debug", false }, { "uv", true }, { "ipv6", true },
         { "tls_alpn", true }, { "tls_sni", true }, { "tls_ocsp", false }, { "tls", true },
-        { "openssl_is_boringssl", true }, { "cached_builtins", true }, { "require_module", true }, { "quic", false },
+        { "openssl_is_boringssl", false }, { "cached_builtins", true }, { "require_module", true }, { "quic", false },
         { "typescript", false },
     };
     JSValue feats = js_new_object(ctx);
