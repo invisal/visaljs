@@ -3,6 +3,7 @@
 // provided yet throws ERR_VISALJS_UNSUPPORTED when called.
 import { cryptoTimingSafeEqual } from "visaljs:host";
 import { codeError, notSupported } from "./internal/errors.js";
+import { lazyClass } from "./internal/features.js";
 import {
   createECDH, createSign, createVerify, diffieHellman, ECDH, getCurves, privateDecrypt, privateEncrypt, publicDecrypt, publicEncrypt, Sign,
   sign, Verify, verify,
@@ -97,7 +98,8 @@ const unsupported = (name) =>
 export const Certificate = unsupported("Certificate");
 export const Cipher = unsupported("Cipher");
 export const Decipher = unsupported("Decipher");
-export const X509Certificate = unsupported("X509Certificate");
+
+export const X509Certificate = lazyClass("X509Certificate");
 
 export default {
   Certificate, Cipher, Cipheriv, Decipher, Decipheriv, DiffieHellman, DiffieHellmanGroup, ECDH, Hash, Hmac, KeyObject, Sign,

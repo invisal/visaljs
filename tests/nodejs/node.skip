@@ -77,6 +77,14 @@ test-net-listen-handle-in-cluster-1.js   cluster.fork
 test-net-listen-twice.js                 cluster.fork
 test-net-server-close-before-ipc-response.js  cluster.fork
 test-net-socket-constructor.js           cluster.fork (a worker given descriptors 4–6)
+test-https-agent-unref-socket.js         child_process.fork
+test-tls-enable-keylog-cli.js            child_process.fork (a Node with --tls-keylog)
+test-tls-env-bad-extra-ca.js             child_process.fork (a Node with NODE_EXTRA_CA_CERTS)
+test-tls-env-extra-ca-no-crypto.js       child_process.fork (a Node with NODE_EXTRA_CA_CERTS)
+test-tls-env-extra-ca-with-options.js    child_process.fork (a Node with NODE_EXTRA_CA_CERTS)
+test-tls-env-extra-ca.js                 child_process.fork (a Node with NODE_EXTRA_CA_CERTS)
+test-tls-ticket-cluster.js               cluster.fork
+test-tls-wrap-econnreset-pipe.js         child_process.fork
 test-net-child-process-connect-reset.js  child_process.spawn of node with an 'ipc' channel
 
 # no threads: a socket or server moved to a worker (worker_threads, MessageChannel)
@@ -171,5 +179,36 @@ test-process-redirect-warnings-env.js    process.execPath as Node
 test-process-binding-util.js             process.binding
 test-process-env-allowed-flags.js        process.allowedNodeEnvironmentFlags (Node's options)
 
-# require() of a path built at run time: a compiled program has only the modules its bundle has
-test-crypto-authenticated.js             require(fixtures.path('aead-vectors.js'))
+# tls: what BoringSSL doesn't do, where Node's test takes OpenSSL's branch (visaljs reports OpenSSL 3)
+test-tls-client-getephemeralkeyinfo.js   finite-field DHE cipher suites
+test-tls-getcipher.js                    AES256-SHA256 (static RSA, CBC with SHA-256)
+test-tls-honorcipherorder.js             AES256-SHA256 and AES128-SHA256 (static RSA, CBC with SHA-256)
+test-tls-no-cert-required.js             AECDH-NULL-SHA (anonymous, no encryption)
+test-tls-reduced-SECLEVEL-in-cipher.js   security levels (a key too small at the default one)
+test-tls-finished.js                     TLS 1.3's Finished messages (BoringSSL keeps none)
+test-tls-empty-sni-context.js            the alert for a context without a certificate (BoringSSL: internal_error)
+test-tls-disable-renegotiation.js        a client's renegotiation (BoringSSL only follows a server's)
+test-https-client-renegotiation-limit.js  a client's renegotiation (BoringSSL only follows a server's)
+test-tls-alpn-server-client.js           the openssl command (s_client)
+
+# tls: Node's command line and environment, read by a Node started as a child
+test-tls-cipher-list.js                  --tls-cipher-list
+test-tls-cli-min-max-conflict.js         --tls-min-v1.3 --tls-max-v1.2
+test-tls-get-ca-certificates-extra-empty.js  NODE_EXTRA_CA_CERTS in a child Node
+test-tls-get-ca-certificates-extra-subset.js  NODE_EXTRA_CA_CERTS in a child Node
+test-tls-get-ca-certificates-extra.js    NODE_EXTRA_CA_CERTS in a child Node
+test-tls-get-ca-certificates-node-use-system-ca.js  --use-system-ca and NODE_USE_SYSTEM_CA
+test-tls-get-ca-certificates-system-without-flag.js  --use-system-ca
+test-tls-off-thread-cert-loading-disabled.js  NODE_DEBUG_NATIVE=crypto (Node's native debug output)
+test-tls-off-thread-cert-loading-system.js  NODE_DEBUG_NATIVE=crypto (Node's native debug output)
+test-tls-off-thread-cert-loading.js      NODE_DEBUG_NATIVE=crypto (Node's native debug output)
+test-tls-set-default-ca-certificates-extra-override.js  NODE_EXTRA_CA_CERTS in a child Node
+
+# a stack trace's frames: compiled code's errors have none
+test-tls-min-max-version.js              inspect(new Error()) names the caller's line
+test-tls-set-ciphers.js                  inspect(new Error()) names the caller's line
+
+# tls: Node's internals
+test-tls-external-accessor.js            SecureContext's native context (_external)
+test-tls-translate-peer-certificate.js   require('_tls_common')
+test-https-resume-after-renew.js         SecureContext's native context (enableTicketKeyCallback)

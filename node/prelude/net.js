@@ -724,7 +724,7 @@ class SocketClass extends Duplex {
       });
       return;
     }
-    let family = options.family ?? 0;
+    let family = options.family;
     if (family === "IPv4") family = 4;
     else if (family === "IPv6") family = 6;
     const lookupFn = options.lookup ?? lookup;

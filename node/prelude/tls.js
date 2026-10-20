@@ -18,6 +18,10 @@ export const CLIENT_RENEG_WINDOW = 600;
 
 export const getCiphers = () => cipherNames();
 
+/* RFC 8879's: none (BoringSSL takes the algorithms from its user, and visaljs gives it none) */
+const compressionAlgorithms = [];
+export const getCertificateCompressionAlgorithms = () => compressionAlgorithms;
+
 let bundled;
 const bundledRoots = () => (bundled ??= Object.freeze(tlsRootCertificates()));
 
@@ -127,7 +131,7 @@ const tls = {
   set DEFAULT_MIN_VERSION(v) { defaults.DEFAULT_MIN_VERSION = v; },
   get DEFAULT_MAX_VERSION() { return defaults.DEFAULT_MAX_VERSION; },
   set DEFAULT_MAX_VERSION(v) { defaults.DEFAULT_MAX_VERSION = v; },
-  getCiphers,
+  getCiphers, getCertificateCompressionAlgorithms,
   get rootCertificates() { return bundledRoots(); },
   getCACertificates, setDefaultCACertificates, convertALPNProtocols, checkServerIdentity, createSecureContext, SecureContext,
   TLSSocket, Server, createServer, connect, createSecurePair,
