@@ -15,7 +15,7 @@ import { type FunctionIR, T, type Type, type TypedCall } from "@visaljs/ir";
 import { optimize, type PassReport } from "@visaljs/optimizer";
 import ts from "typescript";
 
-import { linkUnit } from "./link.ts";
+import { compileError, linkUnit } from "./link.ts";
 import { checkSubset } from "./subset.ts";
 import { declaredSignatures, type Signature, TYPES_FILE } from "./types.ts";
 
@@ -68,6 +68,8 @@ export function buildTypedUnit(files: readonly string[], primitives: HostPrimiti
   const exports: Record<string, { c: string; length: number }> = {};
   const exportedFns = new Map<string, string>();
   for (const [name, loc] of exported) {
+    const array = signatures.get(loc)?.arrays[0];
+    if (array) throw compileError(array, `export '${name}' takes an array: static code doesn't take arrays from JavaScript yet`);
     const fn = ir.functions.find((f) => at(f) === loc)!;
     exportedFns.set(name, fn.name);
     exports[name] = { c: `${TYPED_PREFIX}jsf_${ident(fn.name)}__generic`, length: fn.meta!.length };

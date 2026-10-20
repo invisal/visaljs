@@ -11,7 +11,7 @@
 import type { Loc } from "../frontend/ast.ts";
 import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr, Type, TypedCall } from "@visaljs/ir";
 import type { HostPrimitives } from "../frontend/host.ts";
-import { declaredCallFits, expectedText, isSubtype, Number_, OPS, readsDouble, successors, T, typedCallFits, VIEWS } from "@visaljs/ir";
+import { ARRAY_ELEMS, declaredCallFits, expectedText, isSubtype, Number_, OPS, readsDouble, successors, T, typedCallFits, VIEWS } from "@visaljs/ir";
 import { liveAfterPauses } from "@visaljs/ir";
 import type { CoreEntry } from "./core.ts";
 import { ATOMS } from "./atoms.ts";
@@ -791,6 +791,14 @@ class FunctionEmitter {
       : `js_tav_set_${i.taView}${suffix}(ctx, ${view}, ${args[0]}, ${k}, ${args[2]}, ${strict})`;
   }
 
+  /** A static array's index, an int64_t: -1 for a Number that isn't an index. */
+  private arrayIndex(key: Instr): string {
+    if (key.op === "const" && Number.isSafeInteger(key.lit!.value) && (key.lit!.value as number) >= 0) return this.as(key, "i64");
+    if (key.repr === "i32" || key.repr === "i64") return `(int64_t)${this.as(key, key.repr)}`;
+    if (key.repr === "f64") return `js_sarray_index_f64(${this.as(key, "f64")})`;
+    return `js_sarray_index(${this.v(key)})`;
+  }
+
   /** A double read of a Float64Array's view: false from the access is an exception. */
   private readDouble(i: Instr, args: string[]) {
     this.lines.push(`    { double d; if (JS_UNLIKELY(!${this.viewAccess(i, args)})) { ${this.onException(i.block)} }`,
@@ -1225,6 +1233,24 @@ class FunctionEmitter {
         this.constructDirect(i, args);
         return;
       }
+      case "from_char_code": {  /* typed code: the built-in's, of one unit */
+        const c = i.operands[0]!;
+        const unit = c.repr === "i32" || c.repr === "i64" ? this.as(c, c.repr) : `js_f64_to_int32(${this.as(c, "f64")})`;
+        expr = `js_from_char_code_unit(ctx, (uint16_t)${unit})`;
+        break;
+      }
+      case "array_get":
+        expr = `js_sarray_get(ctx, ${args[0]}, ${this.arrayIndex(i.operands[1]!)}, ${ARRAY_ELEMS[i.elem!].c})`;
+        break;
+      case "array_set":
+        status = `js_sarray_set(ctx, ${args[0]}, ${this.arrayIndex(i.operands[1]!)}, ${args[2]}, ${ARRAY_ELEMS[i.elem!].c})`;
+        break;
+      case "array_length":
+        expr = `js_sarray_length(ctx, ${args[0]})`;
+        break;
+      case "array_push":
+        expr = `js_sarray_push(ctx, ${args[0]}, ${args[1]}, ${ARRAY_ELEMS[i.elem!].c})`;
+        break;
       case "math": {  /* typed code: Math's, as C's */
         const f = { sqrt: "sqrt", abs: "fabs", floor: "floor", ceil: "ceil", trunc: "trunc" }[i.target!];
         expr = convert(`${f}(${this.as(i.operands[0]!, "f64")})`, "f64", i.repr);

@@ -7,7 +7,7 @@
 // splitting blocks, so the variable values reaching a handler are exactly
 // those before the throwing instruction (and never its result).
 import type { Loc } from "./loc.ts";
-import { type Dialect, isStatic } from "./static.ts";
+import { type ArrayElem, type Dialect, isStatic } from "./static.ts";
 import { isSubtype, Number_, T, type Repr, type Type } from "./types.ts";
 import type { ViewKind } from "./views.ts";
 
@@ -41,8 +41,13 @@ export type Op =
   | "num_bitand" | "num_bitor" | "num_bitxor" | "num_bitnot" | "num_shl" | "num_sar" | "num_shr"
   | "in" | "instanceof" | "to_property_key"
   // typed code ("use static"), which trusts the built-ins: s.charCodeAt(i) of a string s, a Number;
-  // Math.<Instr.target>(x) of a Number (sqrt, abs, floor, ceil, trunc), C's
-  | "char_code_at" | "math"
+  // Math.<Instr.target>(x) of a Number (sqrt, abs, floor, ceil, trunc), C's; String.fromCharCode(c)
+  // of a Number
+  | "char_code_at" | "math" | "from_char_code"
+  // typed code's arrays (Instr.elem): an element (past the end a RangeError, of another kind a
+  // TypeError), a store (at the length a push, past it a RangeError), the length, a push (the new
+  // length); lengths are int32s
+  | "array_get" | "array_set" | "array_length" | "array_push"
   // typed code's i32 arithmetic: C's, wrapping
   | "int_add" | "int_sub" | "int_mul"
   // typed code's `int`: a Number as a C int64_t (truncated toward zero, wrapping; NaN 0); its
@@ -150,6 +155,10 @@ export const OPS: Record<Op, OpInfo> = {
   typeof: { ...pure(1), allocates: false },
   char_code_at: { ...pure(2), allocates: true },  // a rope is flattened
   math: pure(1),
+  from_char_code: { ...pure(1), allocates: true },
+  array_get: generic(2),  /* a hole's or a sparse store's element is read as JavaScript reads it */
+  array_set: { ...generic(3), result: false },
+  array_length: { ...generic(1), callsUser: false }, array_push: { ...generic(2), callsUser: false },
   int_add: pure(2), int_sub: pure(2), int_mul: pure(2), to_i64: pure(1), to_i32: pure(1),
   int_div: { ...pure(2), mayThrow: true }, int_mod: { ...pure(2), mayThrow: true }, i64: pure(2),
   identical: pure(2), strict_eq_atom: pure(2), is_type: pure(1), strict_eq_num: pure(2),
@@ -339,6 +348,8 @@ export interface Instr {
   /** new of a typed array only indexed (the typed-arrays pass), and its accesses: the element type
    *  of its view, taken once after `new` */
   taView?: ViewKind;
+  /** array_*: the array's element kind */
+  elem?: ArrayElem;
   /** call of a typed unit's export (a "visaljs:host" import the typed unit defines) */
   typedCall?: TypedCall;
   /** call, construct_direct: the fallback of an inlined site (its guard failed): not inlined again */

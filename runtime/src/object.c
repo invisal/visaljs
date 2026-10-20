@@ -745,6 +745,51 @@ int js_array_push(JSContext *ctx, JSObject *a, JSValue v) {
     return js_define_own_property(ctx, a, js_index_key(len), &d, true);
 }
 
+static const char *const SARRAY_KINDS[] = { "number", "string", "boolean" };
+
+static JSValue sarray_not_array(JSContext *ctx, int kind) {
+    return js_throw_type_error(ctx, "A %s[] of static code isn't an array", SARRAY_KINDS[kind]);
+}
+
+static JSValue sarray_out_of_range(JSContext *ctx, int64_t i, uint32_t len) {
+    if (i < 0) return js_throw_range_error(ctx, "Invalid array index for length %u", len);
+    return js_throw_range_error(ctx, "Index %lld is out of range for length %u", (long long)i, len);
+}
+
+JSValue js_sarray_get_slow(JSContext *ctx, JSValue arr, int64_t i, int kind) {
+    if (!js_is_array(arr)) return sarray_not_array(ctx, kind);
+    uint32_t len = js_array_length(js_as_object(arr));
+    if (i < 0 || i >= len) return sarray_out_of_range(ctx, i, len);
+    /* a hole, a sparse store: the element as JavaScript reads it, which may be of another kind */
+    JSValue v = js_get_elem(ctx, arr, js_number((double)i));
+    if (js_is_exception(v) || js_sarray_is(v, kind)) return v;
+    return js_throw_type_error(ctx, "Element %lld of a %s[] isn't a %s", (long long)i, SARRAY_KINDS[kind], SARRAY_KINDS[kind]);
+}
+
+int js_sarray_set_slow(JSContext *ctx, JSValue arr, int64_t i, JSValue v, int kind) {
+    JSValue error = !js_is_array(arr) ? sarray_not_array(ctx, kind)
+        : !js_sarray_is(v, kind) ? js_throw_type_error(ctx, "A %s[]'s element can't be another type", SARRAY_KINDS[kind])
+        : JS_UNDEFINED;
+    if (js_is_exception(error)) return -1;
+    uint32_t len = js_array_length(js_as_object(arr));
+    if (i == len) return js_array_push(ctx, js_as_object(arr), v);
+    if (i < 0 || i > len) {
+        js_discard(sarray_out_of_range(ctx, i, len));
+        return -1;
+    }
+    return js_set_elem(ctx, arr, js_number((double)i), v, true);
+}
+
+JSValue js_sarray_length_slow(JSContext *ctx, JSValue arr) {
+    if (!js_is_array(arr)) return sarray_not_array(ctx, JS_SARRAY_NUMBER);
+    return js_throw_range_error(ctx, "A static array's length is below 2^31");
+}
+
+JSValue js_sarray_push_slow(JSContext *ctx, JSValue arr, JSValue v, int kind) {
+    if (js_sarray_set_slow(ctx, arr, js_is_array(arr) ? js_array_length(js_as_object(arr)) : 0, v, kind) < 0) return JS_EXCEPTION;
+    return js_sarray_length(ctx, arr);
+}
+
 int js_array_append(JSContext *ctx, JSValue arr, JSValue v) {
     JSObject *a = js_as_object(arr);
     if (!js_is_empty(v)) return js_array_push(ctx, a, v);

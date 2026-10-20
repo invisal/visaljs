@@ -11,7 +11,7 @@ import type * as A from "../frontend/ast.ts";
 import { boundNames } from "../frontend/ast.ts";
 import { CompileError } from "../frontend/errors.ts";
 import { FunctionBuilder, type VarKey } from "@visaljs/ir";
-import { propKey, type Block, type FunctionIR, type GlobalSlot, type Instr, type IntKind, type ModuleIR, type Op, type PropKey } from "@visaljs/ir";
+import { propKey, type ArrayElem, type Block, type FunctionIR, type GlobalSlot, type Instr, type IntKind, type ModuleIR, type Op, type PropKey } from "@visaljs/ir";
 import { thisOwner, type Binding, type FunctionInfo, type Scope, type SemanticInfo } from "../sema/analyze.ts";
 
 /** Host functions a script can call by name (the test host's). */
@@ -54,7 +54,17 @@ interface MemberRef {
   private?: boolean;
   /** `super.x`: the function whose home object's prototype holds the property; `obj` is `this`. */
   superCallee?: Instr;
+  /** Static code, a member of an array: its element kind (an element's `key` is an Instr). */
+  elem?: A.ElementKind;
 }
+
+/** `a.push(v)` of a static array: one argument, no spread. */
+function isArrayPush(callee: A.MemberExpression, e: A.CallExpression): boolean {
+  return callee.elem !== undefined && !callee.computed && (callee.property as A.Identifier).name === "push" && e.arguments.length === 1 && e.arguments[0]!.type !== "SpreadElement";
+}
+
+/** A static array's element kind in the IR: an i32[]'s elements are Numbers its code converts. */
+const irElem = (elem: A.ElementKind): ArrayElem => (elem === "i32" ? "number" : elem);
 
 function isConst(key: PropKey | Instr): key is PropKey {
   return !("op" in key);
@@ -836,6 +846,7 @@ class FunctionLowering {
       case "UpdateExpression": return this.isInt(e.argument as A.Expression);
       case "BinaryExpression": return INT_OPERATORS.has(e.operator) && this.isInt(e.left) && this.isInt(e.right);
       case "AssignmentExpression": return e.target.type === "Identifier" && this.isInt(e.target);
+      case "MemberExpression": return e.computed && e.elem === "i32";
       case "ConditionalExpression": return this.isInt(e.consequent) && this.isInt(e.alternate);
       case "CallExpression": return e.callee.type === "Identifier" && declared(e.callee)?.returnsInt !== undefined;
       default: return false;
@@ -1691,11 +1702,12 @@ class FunctionLowering {
       if (e.private) return { obj, key: this.expression(e.property), private: true };
     }
     const p = e.property;
+    const elem = e.type === "MemberExpression" && e.elem && !(e.computed && p.type === "Literal" && typeof p.value === "string") ? { elem: e.elem } : {};
     let key: PropKey | Instr;
     if (!e.computed) key = propKey((p as A.Identifier).name);
-    else if (p.type === "Literal" && (typeof p.value === "string" || typeof p.value === "number")) key = propKey(p.value);
+    else if (p.type === "Literal" && (typeof p.value === "string" || typeof p.value === "number") && !elem.elem) key = propKey(p.value);
     else key = this.expression(p);
-    return superCallee ? { obj, key, superCallee } : { obj, key };
+    return superCallee ? { obj, key, superCallee } : { obj, key, ...elem };
   }
 
   private getMember(ref: MemberRef): Instr {
@@ -1704,6 +1716,11 @@ class FunctionLowering {
       if (isConst(ref.key)) return this.b.emit("super_get", [ref.superCallee, ref.obj], { key: ref.key });
       return this.b.emit("super_get", [ref.superCallee, ref.obj, ref.key]);
     }
+    if (ref.elem && !isConst(ref.key)) {
+      const v = this.b.emit("array_get", [ref.obj, ref.key], { elem: irElem(ref.elem) });
+      return ref.elem === "i32" ? this.toInt(v, "i32") : v;
+    }
+    if (ref.elem && "name" in ref.key && ref.key.name === "length") return this.b.emit("array_length", [ref.obj], { elem: irElem(ref.elem) });
     if (isConst(ref.key)) return this.b.emit("get_prop", [ref.obj], { key: ref.key });
     return this.b.emit("get_elem", [ref.obj, ref.key]);
   }
@@ -1718,7 +1735,9 @@ class FunctionLowering {
       else this.b.emit("super_set", [ref.superCallee, ref.obj, ref.key, value]);
       return;
     }
-    if (isConst(ref.key)) this.b.emit("set_prop", [ref.obj, value], { key: ref.key });
+    if (ref.elem && !isConst(ref.key))
+      this.b.emit("array_set", [ref.obj, ref.key, ref.elem === "i32" ? this.toInt(value, "i32") : value], { elem: irElem(ref.elem) });
+    else if (isConst(ref.key)) this.b.emit("set_prop", [ref.obj, value], { key: ref.key });
     else this.b.emit("set_elem", [ref.obj, ref.key, value]);
   }
 
@@ -1939,6 +1958,13 @@ class FunctionLowering {
   private call(e: A.CallExpression): Instr {
     const b = this.b;
     const callee = e.callee;
+    if (callee.type === "MemberExpression" && isArrayPush(callee, e)) {
+      /* static code trusts the built-ins: the array's push */
+      const obj = this.expression(callee.object);
+      const v = this.expression(e.arguments[0] as A.Expression);
+      b.loc = e.loc;
+      return b.emit("array_push", [obj, callee.elem === "i32" ? this.toInt(v, "i32") : v], { elem: irElem(callee.elem!) });
+    }
     /* a method call: `this` is the object the method was read from */
     if (callee.type === "MemberExpression" || callee.type === "SuperMember") {
       const ref = this.memberRef(callee);

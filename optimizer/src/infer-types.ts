@@ -3,7 +3,7 @@
 // to a fixpoint (the lattice is a bitset of 10 kinds, so that's quick). A phi is the union of its
 // inputs; an operation's type comes from its operands' (`transfer`). Operations it knows nothing
 // about are Unknown: any JS value, or EMPTY.
-import { dominators, isStatic, isSubtype, Number_, OPS, Primitive, readsDouble, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { ARRAY_ELEMS, dominators, isStatic, isSubtype, Number_, OPS, Primitive, readsDouble, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { callers, closedFunctions, functionsOf, pauses, reversePostorder } from "./cfg.ts";
 import { trustedBuiltin } from "./specialize.ts";
@@ -262,6 +262,12 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
       if (readsDouble(i)) return T.Int32 | T.Double;
       if (i.taView && isStatic(i.block.fn)) return T.Int32 | T.Undefined;
       return Unknown;
+    case "array_get":  /* checked: of its kind, or the read throws */
+      return ARRAY_ELEMS[i.elem!].type;
+    case "array_length": case "array_push":
+      return T.Int32;
+    case "from_char_code":
+      return T.String;
     case "char_code_at":  /* a unit, or NaN past the end */
     case "math":
       return Number_;

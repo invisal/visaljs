@@ -77,6 +77,9 @@ export interface StaticUnitSource {
   fileName(sf: ts.SourceFile): string;
   /** The integer a type names ("visaljs"'s int or i32, through aliases), if it names one. */
   intKind(type: ts.TypeNode | undefined): IntKind | undefined;
+  /** The element kind of the array an expression is, if it is one (an array of any other
+   *  element is a compile error). */
+  arrayElement(node: ts.Expression): A.ElementKind | undefined;
 }
 
 /** A static unit as one module: its types ignored, its files' top levels one after another.
@@ -1034,12 +1037,14 @@ class Converter {
       return { type: "SuperMember", loc, property: this.expression(node.argumentExpression), computed: true };
     }
     const object = this.expression(node.expression);
+    const element = this.unit?.arrayElement(node.expression);
+    const elem = element ? { elem: element } : {};
     if (ts.isPropertyAccessExpression(node)) {
       if (ts.isPrivateIdentifier(node.name))
         return { type: "MemberExpression", loc, object, property: { type: "Identifier", loc: this.loc(node.name), name: node.name.text }, computed: false, private: true };
-      return { type: "MemberExpression", loc, object, property: this.identifier(node.name), computed: false };
+      return { type: "MemberExpression", loc, object, property: this.identifier(node.name), computed: false, ...elem };
     }
-    return { type: "MemberExpression", loc, object, property: this.expression(node.argumentExpression), computed: true };
+    return { type: "MemberExpression", loc, object, property: this.expression(node.argumentExpression), computed: true, ...elem };
   }
 
   /** A property name: an identifier or literal naming the key, or a computed expression. */

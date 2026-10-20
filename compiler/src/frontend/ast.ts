@@ -4,7 +4,7 @@
 // It covers the language the compiler handles: scripts and modules, functions, classes,
 // generators and async functions, and the expression and statement forms.
 
-import type { IntKind, Loc } from "@visaljs/ir";
+import type { ArrayElem, IntKind, Loc } from "@visaljs/ir";
 
 /** 1-based line and column (UTF-16 units) in the original file (the IR's Loc). */
 export type { Loc };
@@ -553,7 +553,12 @@ export interface MemberExpression extends Base {
   computed: boolean;
   private?: boolean;
   optional?: boolean;  // `a?.b`, inside a ChainExpression
+  /** Static code, a member of an array: its element kind (i32: a number[] whose code converts
+   *  what it reads and stores). */
+  elem?: ElementKind;
 }
+
+export type ElementKind = ArrayElem | "i32";
 
 /** What assignment and update expressions write to. */
 export type Target = Identifier | MemberExpression | SuperMember;

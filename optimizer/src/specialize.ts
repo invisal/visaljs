@@ -59,13 +59,13 @@ function inlineBuiltin(i: Instr): string | null {
 }
 
 /** What typed code ("use static", which trusts the built-ins to be the standard ones) makes of a
- *  built-in call: s.charCodeAt(i) of a string, or Math's sqrt/abs/floor/ceil/trunc of a Number,
- *  the C helper's suffix; null for anything else. `type`: the values' types. */
+ *  built-in call: s.charCodeAt(i) of a string, or Math's sqrt/abs/floor/ceil/trunc or
+ *  String.fromCharCode of a Number, the C helper's suffix; null for anything else. `type`: the values' types. */
 export function trustedBuiltin(i: Instr, type: (v: Instr) => Type): string | null {
   if (!isStatic(i.block.fn)) return null;
   const name = inlineBuiltin(i);
   if (name === "char_code_at") return isSubtype(type(i.operands[1]!), T.String) ? name : null;
-  if (name?.startsWith("math_")) return isSubtype(type(i.operands[2]!), Number_) ? name : null;
+  if (name?.startsWith("math_") || name === "from_char_code") return isSubtype(type(i.operands[2]!), Number_) ? name : null;
   return null;
 }
 
@@ -148,7 +148,7 @@ export const specialize: Pass = {
       for (const b of fn.blocks)
         for (const i of b.instrs) {
           /* typed code trusts the built-ins: s.charCodeAt(i), a string's unit; Math.sqrt(x), C's.
-             Reading the method (and Math) does nothing else: it goes when nothing else reads it. */
+             Reading the method (and Math, String) does nothing else: it goes when nothing else reads it. */
           const trusted = trustedBuiltin(i, (v) => v.type);
           if (trusted) {
             edges ||= i.mayThrow;
@@ -157,7 +157,7 @@ export const specialize: Pass = {
             if (method.mayThrow) edges = true;
             if (uses.get(method) === 1) {
               unread.add(method);
-              const holder = method.operands[0]!;  /* Math */
+              const holder = method.operands[0]!;  /* Math, String */
               if (trusted !== "char_code_at" && holder.op === "global_name" && uses.get(holder) === 2) {  /* the callee's and `this` */
                 unread.add(holder);
                 edges = true;
@@ -166,6 +166,9 @@ export const specialize: Pass = {
             if (trusted === "char_code_at") {
               i.op = "char_code_at";
               i.operands = [i.operands[1]!, i.operands[2]!];
+            } else if (trusted === "from_char_code") {
+              i.op = "from_char_code";
+              i.operands = [i.operands[2]!];
             } else {
               i.op = "math";
               i.target = trusted.slice("math_".length);
