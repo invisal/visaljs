@@ -35,6 +35,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # an older branch has no compile cache yet
+      - if: hashFiles('.github/actions/compile-cache/action.yml') != ''
+        uses: ./.github/actions/compile-cache
+        with:
+          name: test262-${{ matrix.shard }}
       # the runner's own tests, with the harness files the checkout brings: once, on the first shard
       - if: matrix.shard == 1
         run: npx vitest run tests/runner

@@ -25,6 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
+        with:
+          compile-cache: nodejs-${{ matrix.shard }}
       # one build at a time, two C files at once: a test that runs away on memory stops at its heap
       # limit, and the builds stay well within the runner's memory; --failures: why each failing
       # test fails, in the log

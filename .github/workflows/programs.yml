@@ -29,6 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
+        with:
+          compile-cache: programs-${{ matrix.shard }}${{ inputs.gc-stress && '-gc-stress' || '' }}
       # the runtime's and the host's libraries, compiled once before the tests build programs in
       # parallel, and hello world with the driver's defaults
       - run: node cli/src/cli.ts build tests/programs/hello.js -o hello

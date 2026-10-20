@@ -1,0 +1,36 @@
+# The C a job compiles, kept from its last run on this pull request (or main): the runtime's
+# libraries and the test262 host (~/.cache/visaljs, by a hash of what they're built from), and on
+# Linux, every compile through ccache ($CC), so a test whose C didn't change isn't compiled again.
+# A cache is saved when the job passes, under its own name: shards compile different C.
+name: Compile cache
+description: ccache and visaljs's library cache, restored and saved per job
+inputs:
+  name:
+    description: the job's cache, e.g. nodejs-3
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: ccache
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get install -y -qq ccache >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ccache >/dev/null; }
+        {
+          echo "CC=ccache clang"
+          echo "CCACHE_DIR=$HOME/.cache/ccache"
+          # a build's scratch directory is new each time (cc.ts compiles from it, by short names)
+          echo "CCACHE_NOHASHDIR=true"
+          echo "CCACHE_MAXSIZE=500M"
+        } >> "$GITHUB_ENV"
+    - uses: actions/cache@v6
+      with:
+        path: |
+          ~/.cache/visaljs
+          ~/.cache/ccache
+        key: compile-${{ runner.os }}-${{ inputs.name }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: compile-${{ runner.os }}-${{ inputs.name }}-
+    # nothing evicts a library whose sources changed: drop what was built over a week ago (ccache
+    # makes building it again cheap), or the cache only grows
+    - shell: bash
+      run: find ~/.cache/visaljs -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} + 2>/dev/null || true

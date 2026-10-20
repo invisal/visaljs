@@ -48,7 +48,7 @@ export function findCompilers(): string[] {
   }
   const found = new Map<string, string>();
   for (const cc of ["clang", "cc", "gcc", "zig cc"]) {
-    const path = onPath(command(cc)[0]);
+    const path = onPath(compilerCommand(cc)[0]);
     if (path && !found.has(path) && compilerVersion(cc)) found.set(path, cc);
   }
   if (found.size === 0) throw new Error("no C compiler found (set CC)");
@@ -79,27 +79,27 @@ const STRIP = process.platform === "darwin" ? ["-Wl,-S,-x"] : ["-s"];
 export const linkMapFlags = (file: string) => [`-Wl,-map,${file}`];
 
 /** A compiler's command line, split like make splits $(CC): "zig cc", "ccache gcc". */
-function command(cc: string): [string, ...string[]] {
+export function compilerCommand(cc: string): [string, ...string[]] {
   const [program = cc, ...args] = cc.trim().split(/\s+/);
   return [program, ...args];
 }
 
 function runCompiler(cc: string, args: string[], options: Parameters<typeof execFileSync>[2]) {
-  const [program, ...prefix] = command(cc);
+  const [program, ...prefix] = compilerCommand(cc);
   return execFileSync(program, [...prefix, ...args], options);
 }
 
 /** Zig compiles C with its clang, and archives with its own ar: a machine without a C
  *  toolchain usually lacks binutils' ar too. */
 function isZig(cc: string): boolean {
-  return /^zig(\.exe)?$/i.test(basename(command(cc)[0]));
+  return /^zig(\.exe)?$/i.test(basename(compilerCommand(cc)[0]));
 }
 
 /** "GCC 13.3.0", "clang 18.1.3", "Zig 0.16.0": the compiler's name and version, else its command. */
 export function describeCompiler(cc: string): string {
   if (isZig(cc)) {
     try {
-      return `Zig ${execFileSync(command(cc)[0], ["version"], { encoding: "utf8" }).trim()}`;
+      return `Zig ${execFileSync(compilerCommand(cc)[0], ["version"], { encoding: "utf8" }).trim()}`;
     } catch {
       return cc;
     }
@@ -166,7 +166,7 @@ export function buildArchive(cc: string, lib: CLibrary, archive: string,
   compileAll(lib.sources.map((src, i) => [...compileCommand(cc, src, common), ...flags, "-DNDEBUG", ...lib.flags, "-c", src, "-o", join(objects, outputs[i]!)]));
   /* from the objects' directory, by their short names: BoringSSL's 400 full paths can pass
    * Windows' 32K command line */
-  const [ar, ...arPrefix] = isZig(cc) ? [command(cc)[0], "ar"] : ["ar"];
+  const [ar, ...arPrefix] = isZig(cc) ? [compilerCommand(cc)[0], "ar"] : ["ar"];
   execFileSync(ar!, [...arPrefix, ...arFlags, "rcs", resolve(archive), ...outputs], { cwd: objects, stdio: ["ignore", "inherit", "inherit"] });
   rmSync(objects, { recursive: true, force: true });
 }
@@ -177,8 +177,8 @@ const cxx = (common: readonly string[]) => ["-std=c++17", "-fno-exceptions", "-f
 const CXX = cxx(COMMON);
 
 function compileCommand(cc: string, src: string, common: readonly string[]): string[] {
-  if (!src.endsWith(".cc")) return [...command(cc), ...common];
-  const cmd = command(cc);
+  if (!src.endsWith(".cc")) return [...compilerCommand(cc), ...common];
+  const cmd = compilerCommand(cc);
   if (isZig(cc)) return [...cmd.map((w) => (w === "cc" ? "c++" : w)), ...cxx(common)];
   return [...cmd, "-x", "c++", ...cxx(common)];
 }
@@ -299,17 +299,22 @@ export async function compileProgram(tc: Toolchain, cFiles: readonly string[], o
   /* a stripped binary drops the debug info -g makes, which takes the compilers half their memory and
    * a fifth of their time; it never changes the code */
   const flags = [...COMMON, ...tc.opt, ...(tc.strip ? ["-g0"] : []), ...extraFlags];
-  const link = [...archives, "-lm", ...LINK, ...(tc.strip ? STRIP : []), ...(mapFile ? linkMapFlags(mapFile) : []), "-o", output];
-  if (cFiles.length === 1 && !mapFile) return runCompilerAsync(tc.cc, [...flags, `-I${RUNTIME_INCLUDE}`, cFiles[0]!, ...link]);
+  const link = [...archives.map((a) => (a.startsWith("-l") ? a : resolve(a))), "-lm", ...LINK, ...(tc.strip ? STRIP : []),
+    ...(mapFile ? linkMapFlags(resolve(mapFile)) : []), "-o", resolve(output)];
+  /* from the C's directory, by short names, and each file to an object even when there's one: the
+   * scratch directory's name changes every build, and ccache ($CC) only caches a compile (-c) whose
+   * input path is the same */
+  const cwd = dirname(resolve(cFiles[0]!));
+  const sources = cFiles.map((f) => relative(cwd, resolve(f)));
+  const objects = sources.map((f) => f.replace(/\.c$/, ".o"));
   /* the biggest first: they take longest, and the small ones fill in around them */
-  const objects = cFiles.map((f) => f.replace(/\.c$/, ".o"));
   const order = cFiles.map((_, i) => i).sort((a, b) => statSync(cFiles[b]!).size - statSync(cFiles[a]!).size);
   let next = 0, done = 0;
   const worker = async () => {
     while (next < order.length) {
       const i = order[next++]!;
       try {
-        await runCompilerAsync(tc.cc, [...flags, `-I${RUNTIME_INCLUDE}`, "-c", cFiles[i]!, "-o", objects[i]!]);
+        await runCompilerAsync(tc.cc, [...flags, `-I${RUNTIME_INCLUDE}`, "-c", sources[i]!, "-o", objects[i]!], cwd);
       } catch (e) {
         next = order.length;  /* start no more: the others finish, then the build fails */
         throw e;
@@ -320,7 +325,7 @@ export async function compileProgram(tc: Toolchain, cFiles: readonly string[], o
   const results = await Promise.allSettled(Array.from({ length: Math.min(jobs, cFiles.length) }, worker));
   const failure = results.find((r) => r.status === "rejected");
   if (failure) throw failure.reason;
-  await runCompilerAsync(tc.cc, [...flags, ...objects, ...link]);
+  await runCompilerAsync(tc.cc, [...flags, ...objects, ...link], cwd);
 }
 
 /** How many of a split program's files compile at once: one per processor and per `perJob` bytes
@@ -332,11 +337,11 @@ export function compileJobs(perJob = 1.5e9): number {
 
 /** Runs the compiler; its stderr passes through (but for notes the program can't act on), and its
  *  tail is kept to recognize a broken toolchain. Rejects when it fails. */
-function runCompilerAsync(cc: string, args: readonly string[]): Promise<void> {
+function runCompilerAsync(cc: string, args: readonly string[], cwd?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     let errors = "";
-    const [program, ...prefix] = command(cc);
-    const child = spawn(program!, [...prefix, ...args], { stdio: ["ignore", "inherit", "pipe"] });
+    const [program, ...prefix] = compilerCommand(cc);
+    const child = spawn(program!, [...prefix, ...args], { cwd, stdio: ["ignore", "inherit", "pipe"] });
     const filter = new DiagnosticFilter((text) => process.stderr.write(text));
     child.stderr.on("data", (chunk: Buffer) => {
       filter.write(chunk.toString());
