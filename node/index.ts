@@ -159,6 +159,8 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
    * fs.open(…)`: the bundle renames fs) */
   { file: join(preludeDir, "internal", "fs_filehandle.js"), reached: (_code, program) =>
       FS_OPEN.test(program) || /\bFileHandle\b/.test(program) || (/\bpromises\b/.test(program) && /\.\s*open\s*\(/.test(program)) },
+  /* crypto.X509Certificate, and the TLS sockets' getters that give one */
+  { file: join(preludeDir, "internal", "crypto_x509.js"), reached: (_code, program) => /\b(?:X509Certificate|get(?:Peer)?X509Certificate)\b/.test(program) },
   /* process's other members (some link libuv): named as process's, or by a distinctive name */
   { file: join(preludeDir, "internal", "process_more.js"), reached: (_code, program) => PROCESS_MORE.test(program) },
   /* process.memoryUsage(): it links libuv */
@@ -377,17 +379,29 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   tlsContextAddCA: { c: "js_tls_context_add_ca", length: 2 },  // (context, der) → 0 | error
   tlsContextSetCert: { c: "js_tls_context_set_cert", length: 2 },  // (context, [der, …]) → 0 | error
   tlsContextSetKey: { c: "js_tls_context_set_key", length: 2 },    // (context, key handle) → 0 | 1 unusable | 2 not the cert's
+  tlsContextAddCredential: { c: "js_tls_context_add_credential", length: 3 },  // (context, [der, …], key handle) → 0 | 1 unusable | 2 not the cert's
+  tlsContextAllowPartialChain: { c: "js_tls_context_allow_partial_chain", length: 1 },
+  tlsContextTicketKeys: { c: "js_tls_context_ticket_keys", length: 2 },  // (context, keys | null) → Buffer: its 48 bytes
+  tlsContextSetSessions: { c: "js_tls_context_set_sessions", length: 3 },  // (context, timeout | null, sessionIdContext | null)
+  tlsPkcs12: { c: "js_tls_pkcs12", length: 2 },               // (der, password | null) → [pkcs8 | null, cert | null, [der, …]] | reason
   tlsRootCertificates: { c: "js_tls_root_certificates", length: 0 },  // () → [pem, …]
   tlsCiphers: { c: "js_tls_ciphers", length: 0 },             // () → [OpenSSL name, …]
+  /* crypto.X509Certificate's checks (runtime/src/crypto_tls.c) */
+  x509Check: { c: "js_x509_check", length: 4 },               // (der, 0 host | 1 email | 2 ip, value, flags) → the name matched | undefined
+  x509CheckIssued: { c: "js_x509_check_issued", length: 2 },  // (der, issuer der) → boolean
+  x509CheckKey: { c: "js_x509_check_key", length: 2 },        // (der, key handle) → public: signed it; private: its key
   tlsNew: { c: "js_tls_new", length: 7 },                     // (context, server, servername, alpn, session, requestCert, alpnStrict) → connection | error
-  tlsRun: { c: "js_tls_run", length: 3 },                     // (connection, records | null, data | null) → [records, data, taken, state, error, handshakes]
+  tlsRun: { c: "js_tls_run", length: 3 },                     // (connection, records | null, data | null) → [records, data, taken, state, error, handshakes, keylog]
   tlsShutdown: { c: "js_tls_shutdown", length: 1 },           // (connection) → records: our close_notify
   tlsInfo: { c: "js_tls_info", length: 1 },                   // → [version, cipher, alpn | false, servername | null, resumed, group]
   tlsPeerCerts: { c: "js_tls_peer_certs", length: 1 },        // → [der, …]
   tlsVerifyError: { c: "js_tls_verify_error", length: 1 },    // → 0 | X509_V_ERR_* | -1 none received
   tlsSession: { c: "js_tls_session", length: 1 },             // → Buffer | undefined
+  tlsTicket: { c: "js_tls_ticket", length: 1 },               // → Buffer | undefined: a client's session ticket
   tlsExportKeyingMaterial: { c: "js_tls_export_keying_material", length: 4 },
   tlsSetNoRenegotiation: { c: "js_tls_set_no_renegotiation", length: 1 },
+  tlsEnableKeylog: { c: "js_tls_enable_keylog", length: 1 },
+  tlsSetMaxSendFragment: { c: "js_tls_set_max_send_fragment", length: 2 },  // (connection, size 512–16384)
   tlsFinished: { c: "js_tls_finished", length: 2 },           // (connection, peer) → Buffer | undefined
   /* node:http: llhttp on node:net's sockets (src/host_http.c); a connection is its socket's handle id */
   httpParsers: { c: "js_host_http_parsers", length: 6 },      // (onHead, onBody, onComplete, onUpgrade, onError, onDrain) → parsers

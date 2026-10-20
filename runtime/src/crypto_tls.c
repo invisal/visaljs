@@ -20,6 +20,7 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/pkcs8.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
@@ -263,6 +264,24 @@ PRIMITIVE(js_tls_context_set_cert) {
     return js_int32(0);
 }
 
+/* A key (handle) as BoringSSL's, from its PKCS#8 or SPKI DER, or NULL for one BoringSSL can't use */
+static EVP_PKEY *pkey_of(const JSKeyData *k) {
+    bool private = k->type == JS_KEY_PRIVATE;
+    if (!private && k->type != JS_KEY_PUBLIC) return NULL;
+    JSBytesOut der = { 0 };
+    if (js_key_export_der(k, private ? JS_KEY_ENC_PKCS8 : JS_KEY_ENC_SPKI, &der) != 0) {
+        free(der.p);
+        return NULL;
+    }
+    CBS cbs;
+    CBS_init(&cbs, der.p, der.n);
+    EVP_PKEY *pkey = private ? EVP_parse_private_key(&cbs) : EVP_parse_public_key(&cbs);
+    memset(der.p, 0, der.n);
+    free(der.p);
+    ERR_clear_error();
+    return pkey;
+}
+
 /* tlsContextSetKey(context, key handle) → 0 | 1 a key TLS can't use | 2 not the certificate's key */
 PRIMITIVE(js_tls_context_set_key) {
     UNUSED_ARGS;
@@ -270,25 +289,202 @@ PRIMITIVE(js_tls_context_set_key) {
     JSKeyData *k = js_key_data(ARG(1));
     if (!o || !k) return js_throw_type_error(ctx, "tlsContextSetKey: a context and a key expected");
     if (k->type != JS_KEY_PRIVATE) return js_int32(1);
-    JSBytesOut der = { 0 };
-    if (js_key_export_der(k, JS_KEY_ENC_PKCS8, &der) != 0) {
-        free(der.p);
-        return js_int32(1);
-    }
-    CBS cbs;
-    CBS_init(&cbs, der.p, der.n);
-    EVP_PKEY *pkey = EVP_parse_private_key(&cbs);
-    memset(der.p, 0, der.n);
-    free(der.p);
-    if (!pkey) {
-        ERR_clear_error();
-        return js_int32(1);
-    }
+    EVP_PKEY *pkey = pkey_of(k);
+    if (!pkey) return js_int32(1);
     int ok = SSL_CTX_use_PrivateKey(o->ctx, pkey);
     EVP_PKEY_free(pkey);
     ERR_clear_error();
     if (!ok) return js_int32(2);
     return js_int32(0);
+}
+
+/* tlsContextAddCredential(context, [der, …], key handle) → 0 | 1 a key TLS can't use | 2 not the
+ * certificate's key: one of a server's identities (a chain, leaf first, and its key), which
+ * BoringSSL chooses among by what the client accepts, as OpenSSL does by key type */
+PRIMITIVE(js_tls_context_add_credential) {
+    UNUSED_ARGS;
+    TlsContextObject *o = context_arg(ARG(0));
+    JSKeyData *k = js_key_data(ARG(2));
+    if (!o || !js_is_array(ARG(1)) || !k) return js_throw_type_error(ctx, "tlsContextAddCredential: a context, certificates and a key expected");
+    uint32_t n = js_array_length(js_as_object(ARG(1)));
+    if (n == 0 || n > 16) return js_throw_type_error(ctx, "tlsContextAddCredential: 1 to 16 certificates expected");
+    CRYPTO_BUFFER *certs[16] = { 0 };
+    int result = 0;
+    for (uint32_t i = 0; i < n && result == 0; i++) {
+        const uint8_t *p;
+        size_t len;
+        if (!bytes_arg(js_get_value(ctx, ARG(1), js_index_key(i)), &p, &len) || !(certs[i] = CRYPTO_BUFFER_new(p, len, NULL))) result = 1;
+    }
+    EVP_PKEY *pkey = result == 0 && k->type == JS_KEY_PRIVATE ? pkey_of(k) : NULL;
+    SSL_CREDENTIAL *cred = SSL_CREDENTIAL_new_x509();
+    if (result == 0 && (!pkey || !cred)) result = 1;
+    if (result == 0 && !SSL_CREDENTIAL_set1_cert_chain(cred, certs, n)) result = 1;
+    if (result == 0 && !SSL_CREDENTIAL_set1_private_key(cred, pkey)) result = 2;
+    if (result == 0 && !SSL_CTX_add1_credential(o->ctx, cred)) result = 1;
+    SSL_CREDENTIAL_free(cred);
+    EVP_PKEY_free(pkey);
+    for (uint32_t i = 0; i < n; i++) CRYPTO_BUFFER_free(certs[i]);
+    ERR_clear_error();
+    return js_int32(result);
+}
+
+/* tlsContextAllowPartialChain(context): a trusted intermediate ends a chain, as a root does
+ * (allowPartialTrustChain); on the context's parameters, as its store may be the shared roots' */
+PRIMITIVE(js_tls_context_allow_partial_chain) {
+    UNUSED_ARGS;
+    TlsContextObject *o = context_arg(ARG(0));
+    if (!o) return js_throw_type_error(ctx, "tlsContextAllowPartialChain: a context expected");
+    X509_VERIFY_PARAM_set_flags(SSL_CTX_get0_param(o->ctx), X509_V_FLAG_PARTIAL_CHAIN);
+    return JS_UNDEFINED;
+}
+
+/* tlsContextTicketKeys(context, keys | null) → the 48 bytes the context's session tickets are
+ * encrypted with (after setting them to `keys`) */
+PRIMITIVE(js_tls_context_ticket_keys) {
+    UNUSED_ARGS;
+    TlsContextObject *o = context_arg(ARG(0));
+    if (!o) return js_throw_type_error(ctx, "tlsContextTicketKeys: a context expected");
+    const uint8_t *p;
+    size_t n;
+    if (bytes_arg(ARG(1), &p, &n)) {
+        if (n != 48 || !SSL_CTX_set_tlsext_ticket_keys(o->ctx, p, n)) return js_throw_type_error(ctx, "tlsContextTicketKeys: 48 bytes expected");
+    }
+    uint8_t keys[48];
+    SSL_CTX_get_tlsext_ticket_keys(o->ctx, keys, sizeof keys);
+    return js_new_buffer_from_bytes(ctx, keys, sizeof keys);
+}
+
+/* tlsContextSetSessions(context, timeout | null, sessionIdContext | null): how long a session can
+ * be resumed (seconds), and the context its id is valid in */
+PRIMITIVE(js_tls_context_set_sessions) {
+    UNUSED_ARGS;
+    TlsContextObject *o = context_arg(ARG(0));
+    if (!o) return js_throw_type_error(ctx, "tlsContextSetSessions: a context expected");
+    if (js_is_number(ARG(1))) SSL_CTX_set_timeout(o->ctx, (uint32_t)js_as_number(ARG(1)));
+    char *sid = string_dup(ctx, ARG(2));
+    if (sid) {
+        /* OpenSSL's limit, which Node passes through */
+        size_t n = strlen(sid);
+        SSL_CTX_set_session_id_context(o->ctx, (const uint8_t *)sid, n > SSL_MAX_SID_CTX_LENGTH ? SSL_MAX_SID_CTX_LENGTH : n);
+        free(sid);
+    }
+    return JS_UNDEFINED;
+}
+
+/* tlsPkcs12(der, password | null) → [private key (PKCS#8 DER) | null, certificate (DER) | null,
+ * [the other certificates' DER, …]] | the reason it can't be read (OpenSSL's words) */
+PRIMITIVE(js_tls_pkcs12) {
+    UNUSED_ARGS;
+    const uint8_t *p;
+    size_t n;
+    if (!bytes_arg(ARG(0), &p, &n)) return js_throw_type_error(ctx, "tlsPkcs12: bytes expected");
+    char *password = string_dup(ctx, ARG(1));
+    PKCS12 *p12 = d2i_PKCS12(NULL, &p, (long)n);
+    EVP_PKEY *pkey = NULL;
+    X509 *cert = NULL;
+    STACK_OF(X509) *others = NULL;
+    bool ok = p12 && PKCS12_parse(p12, password, &pkey, &cert, &others);
+    if (password) {
+        memset(password, 0, strlen(password));
+        free(password);
+    }
+    PKCS12_free(p12);
+    if (!ok) {
+        const char *reason = ERR_reason_error_string(ERR_peek_last_error());
+        ERR_clear_error();
+        return js_new_string_cstr(ctx, reason ? reason : "Unknown error");
+    }
+    JSValue parts[3] = { JS_NULL, JS_NULL, JS_NULL };
+    if (pkey) {
+        CBB cbb;
+        uint8_t *der;
+        size_t len;
+        if (CBB_init(&cbb, 0) && EVP_marshal_private_key(&cbb, pkey) && CBB_finish(&cbb, &der, &len)) {
+            parts[0] = js_new_buffer_from_bytes(ctx, der, len);
+            OPENSSL_cleanse(der, len);
+            OPENSSL_free(der);
+        } else {
+            CBB_cleanup(&cbb);
+        }
+    }
+    uint8_t *der = NULL;
+    int len;
+    if (cert && (len = i2d_X509(cert, &der)) > 0) parts[1] = js_new_buffer_from_bytes(ctx, der, (size_t)len);
+    OPENSSL_free(der);
+    size_t count = others ? sk_X509_num(others) : 0;
+    parts[2] = js_new_array(ctx, 0);
+    for (size_t i = 0; i < count; i++) {
+        der = NULL;
+        if ((len = i2d_X509(sk_X509_value(others, i), &der)) > 0 &&
+            js_array_append(ctx, parts[2], js_new_buffer_from_bytes(ctx, der, (size_t)len)) < 0) {
+            OPENSSL_free(der);
+            parts[2] = JS_EXCEPTION;
+            break;
+        }
+        OPENSSL_free(der);
+    }
+    EVP_PKEY_free(pkey);
+    X509_free(cert);
+    sk_X509_pop_free(others, X509_free);
+    ERR_clear_error();
+    return js_is_exception(parts[2]) ? JS_EXCEPTION : js_new_array_from(ctx, parts, 3);
+}
+
+/* ---- Certificates (crypto.X509Certificate's checks, as OpenSSL's) ---------------------------------- */
+
+/* x509Check(der, kind, value, flags) → the name matched (kind 0: a host, 1: an email address,
+ * 2: an IP address) or undefined; flags are X509_CHECK_FLAG_*'s */
+PRIMITIVE(js_x509_check) {
+    UNUSED_ARGS;
+    X509 *x = x509_arg(ARG(0));
+    char *value = string_dup(ctx, ARG(2));
+    if (!x || !value || !js_is_number(ARG(1))) {
+        X509_free(x);
+        free(value);
+        ERR_clear_error();
+        return js_throw_type_error(ctx, "x509Check: a certificate, a kind and a value expected");
+    }
+    unsigned flags = js_is_number(ARG(3)) ? (unsigned)js_as_number(ARG(3)) : 0;
+    size_t n = strlen(value);
+    char *peer = NULL;
+    int r;
+    switch ((int)js_as_number(ARG(1))) {
+        case 0: r = X509_check_host(x, value, n, flags, &peer); break;
+        case 1: r = X509_check_email(x, value, n, flags); break;
+        default: r = X509_check_ip_asc(x, value, flags); break;
+    }
+    JSValue out = JS_UNDEFINED;
+    if (r == 1) out = js_new_string_utf8(ctx, peer ? peer : value, strlen(peer ? peer : value));
+    OPENSSL_free(peer);
+    free(value);
+    X509_free(x);
+    ERR_clear_error();
+    return out;
+}
+
+/* x509CheckIssued(der, issuerDer) → whether the issuer's name, key identifier and key usage fit (X509_check_issued) */
+PRIMITIVE(js_x509_check_issued) {
+    UNUSED_ARGS;
+    X509 *x = x509_arg(ARG(0)), *issuer = x509_arg(ARG(1));
+    bool ok = x && issuer && X509_check_issued(issuer, x) == X509_V_OK;
+    X509_free(x);
+    X509_free(issuer);
+    ERR_clear_error();
+    return js_bool(ok);
+}
+
+/* x509CheckKey(der, key handle) → for a public key, whether it signed the certificate; for a
+ * private one, whether it is the certificate's */
+PRIMITIVE(js_x509_check_key) {
+    UNUSED_ARGS;
+    X509 *x = x509_arg(ARG(0));
+    JSKeyData *k = js_key_data(ARG(1));
+    EVP_PKEY *pkey = k ? pkey_of(k) : NULL;
+    bool ok = x && pkey && (k->type == JS_KEY_PRIVATE ? X509_check_private_key(x, pkey) : X509_verify(x, pkey)) == 1;
+    EVP_PKEY_free(pkey);
+    X509_free(x);
+    ERR_clear_error();
+    return js_bool(ok);
 }
 
 /* ---- Connections -------------------------------------------------------------------------------- */
@@ -301,10 +497,13 @@ typedef struct TlsConnData {
     uint32_t     handshakes;
     bool         in_handshake;
     SSL_SESSION *new_session;       /* the last session (or ticket) the peer gave: tlsRun reports it once */
+    SSL_SESSION *offered_session;   /* a client's, to resume */
     bool         session_reported;
     uint8_t     *alpn;              /* a server's protocols, in the wire format */
     size_t       alpn_len;
     bool         alpn_strict;
+    bool         keylog_on;
+    JSBytesOut   keylog;            /* NSS key log lines since tlsRun last reported them */
 } TlsConnData;
 
 typedef struct TlsConnObject {
@@ -346,7 +545,9 @@ static void conn_finalize(JSRuntime *rt, JSCell *cell) {
     if (!d) return;
     SSL_free(d->ssl);  /* and its BIOs */
     SSL_SESSION_free(d->new_session);
+    SSL_SESSION_free(d->offered_session);
     free(d->alpn);
+    free(d->keylog.p);
     free(d);
 }
 
@@ -419,7 +620,7 @@ PRIMITIVE(js_tls_new) {
         if (bytes_arg(ARG(4), &sp, &spn)) {
             SSL_SESSION *s = SSL_SESSION_from_bytes(sp, spn, cx->ctx);
             if (s) SSL_set_session(d->ssl, s);
-            SSL_SESSION_free(s);
+            d->offered_session = s;  /* the reference from_bytes gave */
         }
     }
     ERR_clear_error();
@@ -437,7 +638,8 @@ static bool fatal(int e) {
 
 /* tlsRun(connection, records | null, data | null) → [records out | null, data received | null,
  * bytes of `data` taken, state (1 established, 2 failed, 4 the peer's close_notify, 8 a new
- * session to report), error ([library, reason, name] | 0), handshakes finished]: feeds the
+ * session to report), error ([library, reason, name] | 0), handshakes finished, key log lines |
+ * null]: feeds the
  * engine what it was given and runs it until it can't go on. `data` is taken once the handshake
  * is done (and not during a renegotiation); what isn't is given again later. */
 PRIMITIVE(js_tls_run) {
@@ -515,16 +717,18 @@ PRIMITIVE(js_tls_run) {
         d->session_reported = true;
         state |= TLS_NEW_SESSION;
     }
+    JSValue keylog = bytes_or_null(ctx, &d->keylog);
+    d->keylog = (JSBytesOut){ 0 };
     JSBytesOut out = { 0 };
     const uint8_t *p;
     size_t n;
     if (BIO_mem_contents(d->out, &p, &n) && n) out_append(&out, p, n);
     BIO_reset(d->out);
     ERR_clear_error();
-    JSValue items[6] = { JS_NULL, JS_NULL, js_number((double)taken), js_int32(state), err, js_number(d->handshakes) };
+    JSValue items[7] = { JS_NULL, JS_NULL, js_number((double)taken), js_int32(state), err, js_number(d->handshakes), keylog };
     items[0] = bytes_or_null(ctx, &out);
     items[1] = bytes_or_null(ctx, &app);
-    return js_new_array_from(ctx, items, 6);
+    return js_new_array_from(ctx, items, 7);
 }
 
 /* tlsShutdown(connection) → the records to send | null: our close_notify; reading goes on until
@@ -605,8 +809,9 @@ PRIMITIVE(js_tls_session) {
     UNUSED_ARGS;
     TlsConnData *d = conn_arg(ARG(0));
     if (!d || !d->established) return JS_UNDEFINED;
+    /* OpenSSL's, which Node returns: a TLS 1.3 session before its tickets too (it won't resume) */
     SSL_SESSION *s = d->new_session ? d->new_session : SSL_get_session(d->ssl);
-    if (!s || !SSL_SESSION_is_resumable(s)) return JS_UNDEFINED;
+    if (!s) return JS_UNDEFINED;
     uint8_t *p;
     size_t n;
     if (!SSL_SESSION_to_bytes(s, &p, &n)) {
@@ -616,6 +821,21 @@ PRIMITIVE(js_tls_session) {
     JSValue v = js_new_buffer_from_bytes(ctx, p, n);
     OPENSSL_free(p);
     return v;
+}
+
+/* tlsTicket(connection) → Buffer | undefined: the session ticket a client was given */
+PRIMITIVE(js_tls_ticket) {
+    UNUSED_ARGS;
+    TlsConnData *d = conn_arg(ARG(0));
+    if (!d) return JS_UNDEFINED;
+    /* resumed, a TLS 1.3 session is a copy without the ticket: the one offered had it */
+    SSL_SESSION *s = d->new_session ? d->new_session
+                   : SSL_session_reused(d->ssl) && d->offered_session ? d->offered_session : SSL_get_session(d->ssl);
+    const uint8_t *p;
+    size_t n;
+    if (!s || !SSL_SESSION_has_ticket(s)) return JS_UNDEFINED;
+    SSL_SESSION_get0_ticket(s, &p, &n);
+    return js_new_buffer_from_bytes(ctx, p, n);
 }
 
 /* tlsExportKeyingMaterial(connection, length, label, context | undefined) → Buffer | null (RFC 5705) */
@@ -670,9 +890,35 @@ PRIMITIVE(js_tls_ciphers) {
 
 /* tlsSetNoRenegotiation(connection): a server's requests to renegotiate are refused (BoringSSL
  * renegotiates only as a client, when a server asks; it never starts one) */
+static void on_keylog(const SSL *ssl, const char *line) {
+    TlsConnData *d = SSL_get_app_data(ssl);
+    if (!d || !d->keylog_on) return;
+    out_append(&d->keylog, line, strlen(line));
+    out_append(&d->keylog, "\n", 1);
+}
+
+/* tlsEnableKeylog(connection): its key log lines come with tlsRun's results (the 'keylog' event) */
+PRIMITIVE(js_tls_enable_keylog) {
+    UNUSED_ARGS;
+    TlsConnData *d = conn_arg(ARG(0));
+    if (!d) return JS_UNDEFINED;
+    d->keylog_on = true;
+    /* the context's: BoringSSL forms the lines only for a context that has a callback */
+    SSL_CTX_set_keylog_callback(SSL_get_SSL_CTX(d->ssl), on_keylog);
+    return JS_UNDEFINED;
+}
+
 PRIMITIVE(js_tls_set_no_renegotiation) {
     UNUSED_ARGS;
     TlsConnData *d = conn_arg(ARG(0));
     if (d && !d->server) SSL_set_renegotiate_mode(d->ssl, ssl_renegotiate_never);
+    return JS_UNDEFINED;
+}
+
+/* tlsSetMaxSendFragment(connection, size): the largest record's plaintext (512 to 16384) */
+PRIMITIVE(js_tls_set_max_send_fragment) {
+    UNUSED_ARGS;
+    TlsConnData *d = conn_arg(ARG(0));
+    if (d && js_is_number(ARG(1))) SSL_set_max_send_fragment(d->ssl, (size_t)js_as_number(ARG(1)));
     return JS_UNDEFINED;
 }

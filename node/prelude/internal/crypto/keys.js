@@ -359,7 +359,9 @@ function parseKey(data, format, type, wantPrivate, passphrase) {
     return wantPrivate || !isPrivate ? handle : cryptoKeyPublic(handle);
   }
   const text = typeof data === "string" ? data : viewBytes(data).toString("latin1");
-  const m = /-----BEGIN ([A-Z0-9 ]+)-----\r?\n([\s\S]*?)-----END \1-----/.exec(text);
+  /* the first block that holds a key, as OpenSSL's PEM reader: an EC PARAMETERS block may come before it */
+  const m = [...text.matchAll(/-----BEGIN ([A-Z0-9 ]+)-----\r?\n([\s\S]*?)-----END \1-----/g)]
+    .find((b) => b[1] === "ENCRYPTED PRIVATE KEY" || Object.hasOwn(PEM_TYPES, b[1])) ?? null;
   if (m === null) throw keyError(1);
   let label = m[1], body = m[2], der;
   if (label === "ENCRYPTED PRIVATE KEY") {
