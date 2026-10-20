@@ -4,12 +4,13 @@
 // here; DER is the runtime's.
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import {
-  cryptoHashInfo, cryptoKeyEquals, cryptoRandomFill, cryptoKeyExport, cryptoKeyFromParts, cryptoKeyGenerate, cryptoKeyHandleOf, cryptoKeyInfo,
+  cryptoCipherInfo, cryptoEcPoint, cryptoHashInfo, cryptoKeyEquals, cryptoRandomFill, cryptoKeyExport, cryptoKeyFromParts, cryptoKeyGenerate, cryptoKeyHandleOf, cryptoKeyInfo,
   cryptoKeyParse, cryptoKeyParts, cryptoKeyPublic, cryptoKeySecret, cryptoKeySecretBytes, cryptoToCryptoKey,
 } from "visaljs:host";
 import { codeError, invalidArgType, invalidArgValue, notSupported, outOfRange, validateFunction, validateString } from "../errors.js";
 import { dhKeyParts, dhParameters } from "./diffiehellman.js";
 import { kKeyType } from "./key_type.js";
+import { checkPemPassphrase, decryptPemBody, decryptPkcs8, encryptPemBody, encryptPkcs8, isEncryptedPkcs8 } from "./key_encryption.js";
 import { isAnyArrayBuffer, isArrayBufferView, kHandle, validateNumber, validateObject } from "./util.js";
 
 const kAsymmetricKeyType = Symbol("kAsymmetricKeyType");
@@ -203,6 +204,7 @@ class PublicKeyObject extends AsymmetricKeyObject {
 
   export(options) {
     if (options && options.format === "jwk") return exportJwk(this[kHandle], false);
+    if (options && options.format === "raw-public") return exportRawPublic(this[kHandle], options.type);
     const { format, type } = parseKeyEncoding(options, this.asymmetricKeyType, true);
     return exportKey(this[kHandle], format, type, false);
   }
@@ -214,13 +216,13 @@ class PrivateKeyObject extends AsymmetricKeyObject {
   }
 
   export(options) {
-    if (options && options.format === "jwk") {
-      if (options.passphrase !== undefined) throw incompatible("jwk", "does not support encryption");
-      return exportJwk(this[kHandle], true);
+    if (options?.passphrase !== undefined && options.format !== "pem" && options.format !== "der") {
+      throw incompatible(options.format, "does not support encryption");
     }
-    const { format, type, cipher } = parseKeyEncoding(options, this.asymmetricKeyType, false);
-    if (cipher != null) throw notSupported("Encrypting a private key");
-    return exportKey(this[kHandle], format, type, true);
+    if (options && options.format === "jwk") return exportJwk(this[kHandle], true);
+    if (options && (options.format === "raw-private" || options.format === "raw-seed")) return exportRawPrivate(this[kHandle], options.format);
+    const { format, type, cipher, passphrase } = parseKeyEncoding(options, this.asymmetricKeyType, false);
+    return exportKey(this[kHandle], format, type, true, cipher, passphrase);
   }
 }
 
@@ -270,31 +272,66 @@ function parseKeyEncoding(enc, keyType, isPublic, objName) {
   const format = parseKeyFormat(enc.format, isInput ? "pem" : undefined, option("format", objName));
   const isRequired = (!isInput || format === "der") && format !== "jwk";
   const type = parseKeyType(enc.type, isRequired, keyType, isPublic, option("type", objName));
-  let cipher, passphrase;
+  let cipher, passphrase, encoding;
   if (isPublic !== true) {
-    ({ cipher, passphrase } = enc);
+    ({ cipher, passphrase, encoding } = enc);
     if (!isInput) {
       if (cipher != null) {
         if (typeof cipher !== "string") throw invalidArgValue(option("cipher", objName), "is invalid", cipher);
         if (format === "der" && (type === "pkcs1" || type === "sec1")) throw incompatible(type, "does not support encryption");
       } else if (passphrase !== undefined) {
-        throw invalidArgValue(option("cipher", objName), "is invalid", cipher);
+        throw invalidArgValue(option("cipher", objName), "is required when a passphrase is specified", cipher);
       }
     }
+    if ((isInput && passphrase !== undefined && !isStringOrBuffer(passphrase)) || (!isInput && cipher != null && !isStringOrBuffer(passphrase))) {
+      throw invalidArgValue(option("passphrase", objName), "is invalid", passphrase);
+    }
+    /* as Node's: an unknown cipher before any work (a key pair isn't generated for nothing) */
+    if (!isInput && cipher != null && cryptoCipherInfo(cipher) === null) throw codeError(Error, "ERR_CRYPTO_UNKNOWN_CIPHER", "Unknown cipher");
   }
+  if (passphrase !== undefined) passphrase = passphraseBytes(passphrase, encoding);
   return { format, type, cipher, passphrase };
 }
 
 const PEM_LABELS = { [SPKI]: "PUBLIC KEY", [PKCS8]: "PRIVATE KEY", [SEC1]: "EC PRIVATE KEY" };
 
-function exportKey(handle, format, type, isPrivate) {
+/* Node's IsRSAPrivateKey: an RSAPrivateKey begins with its version, a one-byte INTEGER 0 or 1, where
+ * an RSAPublicKey begins with its modulus */
+function isRsaPrivateDer(der) {
+  if (der.length < 2 || der[0] !== 0x30) return false;
+  const lengthBytes = der[1] & 0x80 ? der[1] & 0x7f : 0;
+  const i = 2 + lengthBytes;
+  return der[i] === 0x02 && der[i + 1] === 1 && (der[i + 2] === 0 || der[i + 2] === 1);
+}
+
+/* an ArrayBuffer's or a view's (a DataView too) bytes, not copied */
+const viewBytes = (v) => (isAnyArrayBuffer(v) ? Buffer.from(v) : Buffer.from(v.buffer, v.byteOffset, v.byteLength));
+
+/* Node's getArrayBufferOrView: a passphrase's bytes (a string in `encoding`, else UTF-8) */
+function passphraseBytes(passphrase, encoding) {
+  if (typeof passphrase === "string") return Buffer.from(passphrase, Buffer.isEncoding(encoding) ? encoding : "utf8");
+  return viewBytes(passphrase);
+}
+
+const pem = (label, headers, der) => {
+  const body = der.toString("base64").replace(/(.{64})/g, "$1\n").replace(/\n$/, "");
+  return `-----BEGIN ${label}-----\n${headers}${body}\n-----END ${label}-----\n`;
+};
+
+function exportKey(handle, format, type, isPrivate, cipher, passphrase) {
   const encoding = ENCODING_NAMES[type];
-  const der = cryptoKeyExport(handle, encoding);
+  let der = cryptoKeyExport(handle, encoding);
   if (typeof der === "number") throw keyError(der);
+  const encrypt = cipher != null;
+  if (encrypt && encoding === PKCS8) {
+    der = encryptPkcs8(der, cipher, passphrase);
+    return format === "der" ? der : pem("ENCRYPTED PRIVATE KEY", "", der);
+  }
   if (format === "der") return der;
   const label = encoding === PKCS1 ? (isPrivate ? "RSA PRIVATE KEY" : "RSA PUBLIC KEY") : PEM_LABELS[encoding];
-  const body = der.toString("base64").replace(/(.{64})/g, "$1\n").replace(/\n$/, "");
-  return `-----BEGIN ${label}-----\n${body}\n-----END ${label}-----\n`;
+  if (!encrypt) return pem(label, "", der);
+  const { headers, body } = encryptPemBody(der, cipher, passphrase);
+  return pem(label, headers, body);
 }
 
 /* A PEM's label → the encoding it holds, and whether it is private */
@@ -309,23 +346,97 @@ const PEM_TYPES = {
 
 /** A key handle from PEM or DER: the private key when `wantPrivate`, else a public one (a
  *  private key's public part, as createPublicKey takes it). */
-function parseKey(data, format, type, wantPrivate) {
+function parseKey(data, format, type, wantPrivate, passphrase) {
   if (format === "der") {
     const encoding = ENCODING_NAMES[type];
-    const isPrivate = encoding === PKCS8 || encoding === SEC1 || (encoding === PKCS1 && wantPrivate);
+    const isPrivate = encoding === PKCS8 || encoding === SEC1 || (encoding === PKCS1 && (wantPrivate || isRsaPrivateDer(viewBytes(data))));
+    if (encoding === PKCS8) {
+      const bytes = viewBytes(data);
+      if (isEncryptedPkcs8(bytes)) data = decryptPkcs8(bytes, passphrase);
+    }
     const handle = cryptoKeyParse(data, encoding, isPrivate);
     if (typeof handle === "number") throw keyError(handle);
     return wantPrivate || !isPrivate ? handle : cryptoKeyPublic(handle);
   }
-  const text = typeof data === "string" ? data : Buffer.from(isAnyArrayBuffer(data) ? new Uint8Array(data) : data).toString("latin1");
+  const text = typeof data === "string" ? data : viewBytes(data).toString("latin1");
   const m = /-----BEGIN ([A-Z0-9 ]+)-----\r?\n([\s\S]*?)-----END \1-----/.exec(text);
   if (m === null) throw keyError(1);
-  if (m[1] === "ENCRYPTED PRIVATE KEY" || m[2].includes(":")) throw notSupported("An encrypted private key");
-  const known = PEM_TYPES[m[1]];
+  let label = m[1], body = m[2], der;
+  if (label === "ENCRYPTED PRIVATE KEY") {
+    checkPemPassphrase(passphrase);
+    der = decryptPkcs8(Buffer.from(body, "base64"), passphrase);
+    label = "PRIVATE KEY";
+  } else if (/^Proc-Type:\s*4,ENCRYPTED/m.test(body)) {
+    const split = body.search(/\r?\n\r?\n/);
+    der = decryptPemBody(body.slice(0, split), Buffer.from(body.slice(split), "base64"), passphrase);
+  } else {
+    der = Buffer.from(body, "base64");
+  }
+  const known = PEM_TYPES[label];
   if (known === undefined || (wantPrivate && !known[1])) throw keyError(1);
-  const handle = cryptoKeyParse(Buffer.from(m[2], "base64"), known[0], known[1]);
+  const handle = cryptoKeyParse(der, known[0], known[1]);
   if (typeof handle === "number") throw keyError(handle);
   return known[1] && !wantPrivate ? cryptoKeyPublic(handle) : handle;
+}
+
+/* ---- raw keys (Node 24): the public point or key, the private scalar or key -------------------- */
+
+/* the curves raw keys name (Node takes the JWK names too): [OpenSSL's name, JWK's, scalar bytes] */
+const P256 = ["prime256v1", "P-256", 32], P384 = ["secp384r1", "P-384", 48], P521 = ["secp521r1", "P-521", 66];
+const RAW_CURVES = {
+  "P-256": P256, prime256v1: P256, "P-384": P384, secp384r1: P384, "P-521": P521, secp521r1: P521, secp256k1: ["secp256k1", "secp256k1", 32],
+};
+const RAW_KINDS = new Set(["ec", "ed25519", "x25519"]);
+const rawUnsupported = (format) => incompatible(format, "is not supported for this key type");
+
+function exportRawPublic(handle, type = "uncompressed") {
+  const [, kind, namedCurve] = cryptoKeyInfo(handle);
+  if (!RAW_KINDS.has(kind)) throw rawUnsupported("raw-public");
+  const point = cryptoKeyParts(handle)[0];
+  if (kind !== "ec") return point;
+  if (type !== "compressed" && type !== "uncompressed") throw invalidArgValue("options.type", "must be one of: 'compressed', 'uncompressed'", type);
+  return type === "uncompressed" ? point : cryptoEcPoint(namedCurve, point, 2);
+}
+
+function exportRawPrivate(handle, format) {
+  const [, kind] = cryptoKeyInfo(handle);
+  if (format === "raw-seed" || !RAW_KINDS.has(kind)) throw rawUnsupported(format);
+  return cryptoKeyParts(handle)[1];
+}
+
+/** A key handle from raw bytes: { key, format, asymmetricKeyType, namedCurve }. */
+function rawKeyHandle(key, format, wantPrivate) {
+  const { key: data, asymmetricKeyType: kind } = key;
+  if (wantPrivate && format === "raw-public") throw invalidArgValue("key.format", "is invalid", format);
+  if (!isArrayBufferView(data) && !isAnyArrayBuffer(data)) {
+    throw invalidArgType("key.key", "an instance of ArrayBuffer, Buffer, TypedArray, or DataView", data);
+  }
+  validateString(kind, "key.asymmetricKeyType");
+  if (kind === "ec") validateString(key.namedCurve, "key.namedCurve");
+  if (kind === "rsa" || kind === "rsa-pss" || kind === "dsa" || kind === "dh") throw rawUnsupported(format);
+  if (!RAW_KINDS.has(kind)) throw invalidArgValue("key.asymmetricKeyType", "is invalid: Invalid asymmetricKeyType", kind);
+  if (format === "raw-seed") throw rawUnsupported(format);
+  const bytes = viewBytes(data);
+  const isPrivate = format === "raw-private";
+  let handle;
+  if (kind === "ec") {
+    const curve = RAW_CURVES[key.namedCurve];
+    if (curve === undefined) throw codeError(TypeError, "ERR_CRYPTO_INVALID_CURVE", "Invalid EC curve name");
+    const [name, jwk, size] = curve;
+    let point;
+    if (isPrivate) {
+      if (bytes.length !== size) throw invalidArgValue("key.key", "is invalid", data);
+    } else {
+      point = cryptoEcPoint(name, bytes, 4);
+      if (typeof point === "number") throw invalidArgValue("key.key", "is invalid", data);
+    }
+    handle = cryptoKeyFromParts("ec", isPrivate, jwk, isPrivate ? [undefined, bytes] : [point]);
+  } else {
+    if (bytes.length !== 32) throw invalidArgValue("key.key", "is invalid", data);
+    handle = cryptoKeyFromParts(kind, isPrivate, undefined, isPrivate ? [undefined, bytes] : [bytes]);
+  }
+  if (typeof handle === "number") throw invalidArgValue("key.key", "is invalid", data);
+  return isPrivate && !wantPrivate ? cryptoKeyPublic(handle) : handle;
 }
 
 /* ---- JWK --------------------------------------------------------------------------------------- */
@@ -447,12 +558,13 @@ function prepareAsymmetricKey(key, ctx) {
       validateObject(data, "key.key");
       return { key: keyFromJwk(data, !wantPrivate) };
     }
+    if (format === "raw-public" || format === "raw-private" || format === "raw-seed") return { key: rawKeyHandle(key, format, wantPrivate) };
     if (!isStringOrBuffer(data)) {
       throw invalidArgType("key.key", "of type string or an instance of ArrayBuffer, Buffer, TypedArray, or DataView", data);
     }
-    const { format: fmt, type } = parseKeyEncoding(key, undefined, wantPrivate ? false : undefined, "key");
+    const { format: fmt, type, passphrase } = parseKeyEncoding(key, undefined, wantPrivate ? false : undefined, "key");
     const bytes = typeof data === "string" && fmt === "der" ? Buffer.from(data, encoding ?? "utf8") : data;
-    return { key: parseKey(bytes, fmt, type, wantPrivate) };
+    return { key: parseKey(bytes, fmt, type, wantPrivate, passphrase) };
   }
   /* Node 24 lists URL where a private key is wanted (an OpenSSL store's; not visaljs's yet) */
   const expected = ctx === CREATE_PRIVATE
@@ -528,17 +640,34 @@ export function generateKey(type, options, callback) {
   later(() => callback(null, key));
 }
 
+/* Node's parseKeyFormatAndType for the raw formats of a key pair's encodings */
+function rawEncoding(enc, isPublic) {
+  const { format, type } = enc;
+  const name = isPublic ? "options.publicKeyEncoding" : "options.privateKeyEncoding";
+  if (format === "raw-public") {
+    if (!isPublic) throw invalidArgValue(`${name}.format`, "is invalid", format);
+    if (type !== undefined && type !== "uncompressed" && type !== "compressed") throw invalidArgValue(`${name}.type`, "is invalid", type);
+    return { format, type };
+  }
+  if (format === "raw-private" || format === "raw-seed") {
+    if (isPublic) throw invalidArgValue(`${name}.format`, "is invalid", format);
+    if (type !== undefined) throw invalidArgValue(`${name}.type`, "is invalid", type);
+    if (enc.cipher != null || enc.passphrase !== undefined) throw incompatible("raw format", "does not support encryption");
+    return { format };
+  }
+  return undefined;
+}
+
 function pairEncodings(keyType, options) {
   const { publicKeyEncoding, privateKeyEncoding } = options ?? {};
   let pub, priv;
   if (publicKeyEncoding != null) {
     if (typeof publicKeyEncoding !== "object") throw invalidArgValue("options.publicKeyEncoding", "is invalid", publicKeyEncoding);
-    pub = publicKeyEncoding.format === "jwk" ? { format: "jwk" } : parseKeyEncoding(publicKeyEncoding, keyType, true, "options.publicKeyEncoding");
+    pub = publicKeyEncoding.format === "jwk" ? { format: "jwk" } : rawEncoding(publicKeyEncoding, true) ?? parseKeyEncoding(publicKeyEncoding, keyType, true, "options.publicKeyEncoding");
   }
   if (privateKeyEncoding != null) {
     if (typeof privateKeyEncoding !== "object") throw invalidArgValue("options.privateKeyEncoding", "is invalid", privateKeyEncoding);
-    priv = privateKeyEncoding.format === "jwk" ? { format: "jwk" } : parseKeyEncoding(privateKeyEncoding, keyType, false, "options.privateKeyEncoding");
-    if (priv.cipher != null) throw notSupported("Encrypting a private key");
+    priv = privateKeyEncoding.format === "jwk" ? { format: "jwk" } : rawEncoding(privateKeyEncoding, false) ?? parseKeyEncoding(privateKeyEncoding, keyType, false, "options.privateKeyEncoding");
   }
   return { pub, priv };
 }
@@ -646,3 +775,5 @@ export function generateKeyPair(type, options, callback) {
   }
   later(() => callback(null, result.publicKey, result.privateKey));
 }
+/* as Node's: util.promisify(generateKeyPair) resolves to { publicKey, privateKey } */
+Object.defineProperty(generateKeyPair, Symbol.for("visaljs.util.customPromisifyArgs"), { value: ["publicKey", "privateKey"] });

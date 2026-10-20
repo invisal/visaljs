@@ -267,6 +267,7 @@ const char *js_ec_curve_jwk(int curve);
 typedef enum JSWebAlg {
     JS_WEB_HMAC = 1, JS_WEB_PBKDF2, JS_WEB_HKDF, JS_WEB_AES_CTR, JS_WEB_AES_CBC, JS_WEB_AES_GCM, JS_WEB_AES_KW,
     JS_WEB_RSASSA, JS_WEB_RSA_PSS, JS_WEB_RSA_OAEP, JS_WEB_ECDSA, JS_WEB_ECDH, JS_WEB_X25519, JS_WEB_ED25519,
+    JS_WEB_CHACHA20_POLY1305,
 } JSWebAlg;
 
 /* KeyUsage, as bits in this order */

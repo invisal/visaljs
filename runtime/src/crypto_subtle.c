@@ -226,14 +226,15 @@ static int arg_enum(Call *c, JSValue v, const char *const *values, int count, co
                                     c->op, where, shown, type));
 }
 
-enum { FORMAT_RAW, FORMAT_SPKI, FORMAT_PKCS8, FORMAT_JWK };
-static const char *const FORMATS[] = { "raw", "spki", "pkcs8", "jwk" };
+/* the raw-* formats (Node 24's, from WebCrypto's Modern Algorithms draft) say which key raw is */
+enum { FORMAT_RAW, FORMAT_SPKI, FORMAT_PKCS8, FORMAT_JWK, FORMAT_RAW_PUBLIC, FORMAT_RAW_PRIVATE, FORMAT_RAW_SEED, FORMAT_RAW_SECRET };
+static const char *const FORMATS[] = { "raw", "spki", "pkcs8", "jwk", "raw-public", "raw-private", "raw-seed", "raw-secret" };
 static const char *const USAGES[] = { "encrypt", "decrypt", "sign", "verify", "deriveKey", "deriveBits", "wrapKey", "unwrapKey" };
 
 static int arg_format(Call *c, JSValue v, int i) {
     char where[32];
     snprintf(where, sizeof where, "%s argument", ORDINALS[i]);
-    return arg_enum(c, v, FORMATS, 4, "KeyFormat", where);
+    return arg_enum(c, v, FORMATS, 8, "KeyFormat", where);
 }
 
 /* sequence<KeyUsage>: a new array of the strings, in order (duplicates kept, as Node keeps them),
@@ -373,7 +374,7 @@ typedef enum Op {
 
 /* Parameter dictionaries, and their members (alphabetical, as WebIDL converts them) */
 typedef enum Dict {
-    DICT_NONE, DICT_HMAC_IMPORT, DICT_HMAC_KEYGEN, DICT_PBKDF2, DICT_HKDF, DICT_AES_CBC, DICT_AES_CTR, DICT_AES_GCM, DICT_AES_KEYGEN,
+    DICT_NONE, DICT_HMAC_IMPORT, DICT_HMAC_KEYGEN, DICT_PBKDF2, DICT_HKDF, DICT_AES_CBC, DICT_AES_CTR, DICT_AES_GCM, DICT_AEAD, DICT_AES_KEYGEN,
     DICT_AES_DERIVED, DICT_RSA_HASHED_IMPORT, DICT_RSA_HASHED_KEYGEN, DICT_RSA_PSS, DICT_RSA_OAEP, DICT_EC_IMPORT, DICT_EC_KEYGEN,
     DICT_ECDSA, DICT_ECDH_DERIVE,
 } Dict;
@@ -402,6 +403,7 @@ static const struct {
     [DICT_AES_CBC] = { "AesCbcParams", { M_IV, M_END }, 1, 0 },
     [DICT_AES_CTR] = { "AesCtrParams", { M_COUNTER, M_LENGTH, M_END }, 3, 255 },
     [DICT_AES_GCM] = { "AesGcmParams", { M_ADDITIONAL_DATA, M_IV, M_TAG_LENGTH, M_END }, 2, 0 },
+    [DICT_AEAD] = { "AeadParams", { M_ADDITIONAL_DATA, M_IV, M_TAG_LENGTH, M_END }, 2, 0 },
     [DICT_AES_KEYGEN] = { "AesKeyGenParams", { M_LENGTH, M_END }, 1, 65535 },
     [DICT_AES_DERIVED] = { "AesDerivedKeyParams", { M_LENGTH, M_END }, 1, 65535 },
     [DICT_RSA_HASHED_IMPORT] = { "RsaHashedImportParams", { M_HASH, M_END }, 1, 0 },
@@ -446,6 +448,8 @@ static const struct {
       { [OP_IMPORT_KEY] = DICT_EC_IMPORT, [OP_GENERATE_KEY] = DICT_EC_KEYGEN, [OP_DERIVE_BITS] = DICT_ECDH_DERIVE } },
     { "X25519", JS_WEB_X25519, KEY_OPS | BIT(OP_DERIVE_BITS), { [OP_DERIVE_BITS] = DICT_ECDH_DERIVE } },
     { "Ed25519", JS_WEB_ED25519, KEY_OPS | BIT(OP_SIGN) | BIT(OP_VERIFY), { 0 } },
+    { "ChaCha20-Poly1305", JS_WEB_CHACHA20_POLY1305, BIT(OP_IMPORT_KEY) | BIT(OP_GENERATE_KEY) | BIT(OP_ENCRYPT) | BIT(OP_DECRYPT),
+      { [OP_ENCRYPT] = DICT_AEAD, [OP_DECRYPT] = DICT_AEAD } },
 };
 
 /* A normalized algorithm: its registry entry and the members its dictionary has. */
@@ -714,6 +718,7 @@ static bool is_aes(uint8_t alg) { return alg >= JS_WEB_AES_CTR && alg <= JS_WEB_
 /* A JWK's `alg` for a secret key: HS256, A128GCM, … */
 static void jwk_alg(uint8_t alg, const JSHashAlg *hash, uint32_t length, char *out, size_t cap) {
     if (alg == JS_WEB_HMAC) snprintf(out, cap, "HS%s", hash->web + 4);
+    else if (alg == JS_WEB_CHACHA20_POLY1305) snprintf(out, cap, "C20P");
     else snprintf(out, cap, "A%u%s", length, web_alg_name(alg) + 4);
 }
 
@@ -726,6 +731,14 @@ static JSValue aes_algorithm(JSContext *ctx, const char *name, uint32_t length) 
     put(ctx, o, "name", str(ctx, name));
     put(ctx, o, "length", js_number(length));
     return o;
+}
+
+/* a secret key's algorithm object: { name, length } for AES; ChaCha20-Poly1305's, { name } */
+static JSValue secret_algorithm(JSContext *ctx, uint8_t alg, const char *name, uint32_t length) {
+    if (alg != JS_WEB_CHACHA20_POLY1305) return aes_algorithm(ctx, name, length);
+    JSValue a = js_new_object(ctx);
+    put(ctx, a, "name", str(ctx, name));
+    return a;
 }
 
 static JSValue import_aes(JSContext *ctx, int format, JSValue key_data, const JWK *jwk, Params *p, bool extractable, JSValue usages,
@@ -750,7 +763,7 @@ static JSValue import_aes(JSContext *ctx, int format, JSValue key_data, const JW
         return dom_error(ctx, "NotSupportedError", m);
     }
     uint32_t length = (uint32_t)raw.n * 8;
-    if (length != 128 && length != 192 && length != 256) {
+    if (alg == JS_WEB_CHACHA20_POLY1305 ? length != 256 : length != 128 && length != 192 && length != 256) {
         bytes_free(&raw);
         return dom_error(ctx, "DataError", "Invalid key length");
     }
@@ -764,7 +777,7 @@ static JSValue import_aes(JSContext *ctx, int format, JSValue key_data, const JW
     }
     JSValue data = js_new_secret_key(ctx, raw.p, raw.n);
     bytes_free(&raw);
-    return js_new_crypto_key(ctx, data, alg, NULL, length, aes_algorithm(ctx, p->name, length), usages, mask, extractable);
+    return js_new_crypto_key(ctx, data, alg, NULL, length, secret_algorithm(ctx, alg, p->name, length), usages, mask, extractable);
 }
 
 /* ---- Asymmetric keys: RSA, EC, X25519 and Ed25519 ------------------------------------------------- */
@@ -1048,6 +1061,18 @@ static JSValue generate_asym(JSContext *ctx, Params *p, bool extractable, uint16
     return pair;
 }
 
+/* A raw-* format as raw for the algorithm it fits (raw-secret: a secret key's; raw-public: an EC,
+ * X25519 or Ed25519 public key's), other formats as they are; -1 where it doesn't fit (raw-private
+ * and raw-seed are ML-DSA's and ML-KEM's). */
+static int raw_alias(int alg, int format) {
+    if (format == FORMAT_RAW && alg == JS_WEB_CHACHA20_POLY1305) return -1;  /* Node: raw-secret only */
+    if (format < FORMAT_RAW_PUBLIC) return format;
+    bool secret = !is_asym_alg(alg);
+    if (format == FORMAT_RAW_SECRET && secret) return FORMAT_RAW;
+    if (format == FORMAT_RAW_PUBLIC && !secret && alg != JS_WEB_RSASSA && alg != JS_WEB_RSA_PSS && alg != JS_WEB_RSA_OAEP) return FORMAT_RAW;
+    return -1;
+}
+
 /* importKey's steps after the `this` check, for subtle.importKey and deriveKey. */
 static JSValue import_key(JSContext *ctx, uint32_t argc, const JSValue *argv) {
     Call c = { ctx, "importKey" };
@@ -1066,6 +1091,14 @@ static JSValue import_key(JSContext *ctx, uint32_t argc, const JSValue *argv) {
         params_free(&p);
         return JS_EXCEPTION;
     }
+    int raw = raw_alias(REGISTRY[p.entry].alg, format);
+    if (raw < 0) {
+        char m[96];
+        snprintf(m, sizeof m, "Unable to import %s using %s format", p.name, FORMATS[format]);
+        params_free(&p);
+        return dom_error(ctx, "NotSupportedError", m);
+    }
+    format = raw;
     JSValue key;
     switch (REGISTRY[p.entry].alg) {
     case JS_WEB_HMAC:
@@ -1075,6 +1108,7 @@ static JSValue import_key(JSContext *ctx, uint32_t argc, const JSValue *argv) {
     case JS_WEB_AES_CBC:
     case JS_WEB_AES_GCM:
     case JS_WEB_AES_KW:
+    case JS_WEB_CHACHA20_POLY1305:
         key = import_aes(ctx, format, argv[1], &jwk, &p, extractable, usages, mask);
         break;
     case JS_WEB_RSASSA:
@@ -1121,6 +1155,14 @@ static JSValue export_key(JSContext *ctx, uint32_t argc, const JSValue *argv) {
         return dom_error(ctx, "NotSupportedError", m);
     }
     if (!k->extractable) return dom_error(ctx, "InvalidAccessError", "key is not extractable");
+    int raw = raw_alias(k->alg, format);
+    if (raw < 0 || (format == FORMAT_RAW_PUBLIC && js_key_data(k->data)->type != JS_KEY_PUBLIC)) {
+        uint8_t type = js_key_data(k->data)->type;
+        snprintf(m, sizeof m, "Unable to export %s %s key using %s format", web_alg_name(k->alg),
+                 type == JS_KEY_SECRET ? "secret" : type == JS_KEY_PUBLIC ? "public" : "private", FORMATS[format]);
+        return dom_error(ctx, "NotSupportedError", m);
+    }
+    format = raw;
     if (is_asym_alg(k->alg)) return export_asym(ctx, format, k);
     JSKeyData *d = js_key_data(k->data);
     if (format == FORMAT_RAW) return array_buffer_of(ctx, d->bytes, d->len);
@@ -1229,6 +1271,9 @@ static JSValue generate_key(JSContext *ctx, uint32_t argc, const JSValue *argv) 
         if (p.has_length && p.length == 0) return dom_error(ctx, "OperationError", "HmacKeyGenParams.length cannot be 0");
         length = p.has_length ? p.length : (uint32_t)p.hash->block_len * 8;
         if (has_any_not_in(mask, JS_USAGE_SIGN | JS_USAGE_VERIFY)) return dom_error(ctx, "SyntaxError", "Unsupported key usage for HMAC key");
+    } else if (alg == JS_WEB_CHACHA20_POLY1305) {
+        length = 256;
+        if (has_any_not_in(mask, aes_usages(alg))) return usage_error(ctx, p.name);
     } else {
         length = p.length;
         if (length != 128 && length != 192 && length != 256)
@@ -1245,7 +1290,7 @@ static JSValue generate_key(JSContext *ctx, uint32_t argc, const JSValue *argv) 
     JSValue data = js_new_secret_key(ctx, bytes, n);
     free(bytes);
     if (js_array_length(js_as_object(usages)) == 0) return dom_error(ctx, "SyntaxError", "Usages cannot be empty when creating a key.");
-    JSValue algorithm = alg == JS_WEB_HMAC ? hmac_algorithm(ctx, p.hash, length) : aes_algorithm(ctx, p.name, length);
+    JSValue algorithm = alg == JS_WEB_HMAC ? hmac_algorithm(ctx, p.hash, length) : secret_algorithm(ctx, alg, p.name, length);
     return js_new_crypto_key(ctx, data, alg, p.hash, length, algorithm, usages, mask, extractable);
 }
 
@@ -1562,6 +1607,20 @@ static JSValue aes_cipher(JSContext *ctx, bool encrypt, JSCryptoKey *k, Params *
         ok = encrypt ? run_cipher(alg, true, d, p->iv.p, p->iv.n, (long)tag_n, &p->additional_data, NULL, 0, data->p, data->n, &out)
                      : run_cipher(alg, false, d, p->iv.p, p->iv.n, (long)tag_n, &p->additional_data, data->p + data->n - tag_n, tag_n,
                                   data->p, data->n - tag_n, &out);
+        break;
+    }
+    case JS_WEB_CHACHA20_POLY1305: {
+        uint32_t tag_bits = p->has_tag_length ? p->tag_length : 128;
+        if (tag_bits != 128) {
+            char m[64];
+            snprintf(m, sizeof m, "%u is not a valid ChaCha20-Poly1305 tag length", tag_bits);
+            return dom_error(ctx, "OperationError", m);
+        }
+        if (p->iv.n != 12) return dom_error(ctx, "OperationError", "algorithm.iv must contain exactly 12 bytes");
+        if (!encrypt && data->n < 16) return op_failed(ctx);
+        const JSCipherAlg *alg = js_cipher_by_name("chacha20-poly1305");
+        ok = encrypt ? run_cipher(alg, true, d, p->iv.p, 12, 16, &p->additional_data, NULL, 0, data->p, data->n, &out)
+                     : run_cipher(alg, false, d, p->iv.p, 12, 16, &p->additional_data, data->p + data->n - 16, 16, data->p, data->n - 16, &out);
         break;
     }
     default: { /* AES-KW, with RFC 3394's default IV */
