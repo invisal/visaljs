@@ -1456,6 +1456,7 @@ test-tls-session-reuse-different-servername.js
 test-tls-session-timeout-errors.js
 test-tls-set-ciphers-error.js
 test-tls-set-default-ca-certificates-append-https-request.js
+test-tls-set-default-ca-certificates-basic.js
 test-tls-set-default-ca-certificates-error.js
 test-tls-set-default-ca-certificates-mixed-types.js
 test-tls-set-default-ca-certificates-precedence-bundled.js
