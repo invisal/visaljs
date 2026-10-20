@@ -124,7 +124,7 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "buffer_transcode.js"), reached: (_code, program) => /\btranscode\b/.test(program) },
   /* events.on as a call (bare, or of events or EventEmitter): `.on(` is an emitter's method */
   { file: join(preludeDir, "internal", "events_on.js"), reached: (_code, program) =>
-      EVENTS_ON.test(program) || (/readline|readLines/i.test(program) && /\bfor\s+await\b|\basyncIterator\b/.test(program)) },
+      EVENTS_ON.test(program) || (/readline|readLines|createInterface/i.test(program) && /\bfor\s+await\b|\basyncIterator\b/.test(program)) },
   /* node:stream's rarer parts: compose, Duplex.from and duplexPair; the operators (map, filter, …
    * on a Readable: drop, take, flatMap and toArray by name, the others named with streams); the
    * conversions to and from web streams */
@@ -167,7 +167,7 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
       FS_OPEN.test(program) || /\bFileHandle\b/.test(program) || (/\bpromises\b/.test(program) && /\.\s*open\s*\(/.test(program)) },
   /* readline's terminal line editor: a readline program that reads stdin or names a terminal's parts */
   { file: join(preludeDir, "internal", "readline_editor.js"), reached: (_code, program) =>
-      READLINE_EDITOR.test(program) || (/readline/i.test(program) && /\b(?:stdin|terminal)\b/.test(program)) },
+      READLINE_EDITOR.test(program) || (/readline|createInterface/i.test(program) && /\b(?:stdin|terminal)\b/.test(program)) },
   /* dns.Resolver and the resolve* functions (c-ares): named, or node:dns's resolve(…) or reverse(…) */
   { file: join(preludeDir, "internal", "dns_resolver.js"), reached: (_code, program) =>
       DNS_RESOLVER.test(program) || DNS_RESOLVE_RRTYPE.test(program) || DNS_MODULE_RESOLVE.test(program) },
