@@ -9,7 +9,7 @@ import {
 import { PromisesResolver as PromisesResolverWrapper, Resolver as ResolverWrapper } from "./dns_classes.js";
 import { domainToASCII } from "../url.js";
 import { bindContext } from "./async_context.js";
-import { codeError, invalidArgType, invalidArgValue, outOfRange, validateFunction, validateString } from "./errors.js";
+import { codeError, invalidArgType, invalidArgValue, outOfRange, validateFunction, validatePort, validateString } from "./errors.js";
 import { features, provideClass } from "./features.js";
 import { isIP } from "./net.js";
 
@@ -150,12 +150,6 @@ function validateOptions(options) {
   return [timeout, tries, maxTimeout];
 }
 
-function validatePort(port, name = "Port") {
-  if ((typeof port !== "number" && typeof port !== "string") || (typeof port === "string" && port.trim().length === 0) ||
-      +port !== (+port >>> 0) || port > 0xFFFF) {
-    throw codeError(RangeError, "ERR_SOCKET_BAD_PORT", `${name} should be >= 0 and < 65536. Received ${typeof port === "string" ? `type string ('${port}')` : `type number (${port})`}.`);
-  }
-}
 
 const invalidIP = (ip) => codeError(TypeError, "ERR_INVALID_IP_ADDRESS", `Invalid IP address: ${ip}`);
 

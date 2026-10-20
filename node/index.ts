@@ -207,7 +207,7 @@ const DNS_MODULE_RESOLVE = /\b(?:dns|dns_default|require_dns\(\))\s*\.\s*(?:prom
 /* resolve(name, "MX"): a record type names it, whatever the module's binding is called */
 const DNS_RESOLVE_RRTYPE = /\.\s*resolve\s*\([^,()]+,\s*["'`](?:A|AAAA|ANY|CAA|CNAME|MX|NAPTR|NS|PTR|SOA|SRV|TLSA|TXT)["'`]/;
 /* a stdio stream's write replaced, the console's streams set, or the console's diagnostics channels */
-const STDIO_WRITE_REPLACED = /\b(?:stdout|stderr|stream)\s*\.\s*write\s*=(?![=>])|\b_std(?:out|err)\s*=(?!=)|["'`]console\.(?:log|info|debug|warn|error)["'`]/;
+const STDIO_WRITE_REPLACED = /\b(?:stdout|stderr|stream)\s*\.\s*write\s*=(?![=>])|\b_std(?:out|err)\s*=(?!=)|\b(?:channel|subscribe)\s*\(\s*["'`]console\.(?:log|info|debug|warn|error)["'`]/;
 const STDIO_STREAM_USE = /\.\s*(?:pipe|on|once|end|cork|uncork|destroy|removeListener|addListener|prependListener)\s*\(|\b(?:pipeline|finished)\b|\bwritable(?:Length|HighWaterMark|NeedDrain|Ended|Finished)\b/;
 const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";
 const PROCESS_COMMON = "title|ppid|release|config|ref|unref|abort|report|domain|assert|binding|finalization";

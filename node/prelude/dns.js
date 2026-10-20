@@ -5,7 +5,7 @@
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import { dnsLookup, dnsLookupService, errnoName } from "visaljs:host";
 import { bindContext } from "./internal/async_context.js";
-import { codeError, invalidArgType, invalidArgValue, validateFunction, validateString } from "./internal/errors.js";
+import { codeError, invalidArgType, invalidArgValue, validateFunction, validatePort, validateString } from "./internal/errors.js";
 import { PromisesResolver, Resolver } from "./internal/dns_classes.js";
 import { lazyFunction } from "./internal/features.js";
 import { isIP } from "./internal/net.js";
@@ -77,13 +77,6 @@ function validateStringWithoutNullBytes(value, name) {
   if (value.includes("\u0000")) throw invalidArgValue(name, "must be a string without null bytes", value);
 }
 
-function validatePort(port, name = "Port") {
-  if ((typeof port !== "number" && typeof port !== "string") || (typeof port === "string" && port.trim().length === 0) ||
-      +port !== (+port >>> 0) || port > 0xFFFF) {
-    throw codeError(RangeError, "ERR_SOCKET_BAD_PORT",
-      `${name} should be >= 0 and < 65536. Received ${typeof port === "string" ? `type string ('${port}')` : `type number (${port})`}.`);
-  }
-}
 
 function validateHints(hints) {
   if ((hints & ~(ADDRCONFIG | ALL | V4MAPPED)) !== 0) throw invalidArgValue("hints", "is invalid", hints);
