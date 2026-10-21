@@ -19,6 +19,7 @@ jobs:
   test262:
     name: shard ${{ matrix.shard }}/${{ strategy.job-total }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -53,6 +54,7 @@ jobs:
     name: snapshot
     needs: test262
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:

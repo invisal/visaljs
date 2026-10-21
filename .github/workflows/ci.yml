@@ -27,6 +27,7 @@ jobs:
     # (CLAUDE.md); the runtime's unit tests, when the runtime does.
     name: Detect changed paths
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       runtime: ${{ steps.diff.outputs.runtime }}
       programs: ${{ steps.diff.outputs.programs }}
@@ -70,6 +71,7 @@ jobs:
   lint:
     name: Lint and typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -83,6 +85,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -103,6 +106,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup

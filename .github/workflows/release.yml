@@ -27,6 +27,7 @@ jobs:
     name: Publish to npm
     needs: prebuilt
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: npm
     permissions:
       contents: write # the GitHub release

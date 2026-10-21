@@ -9,6 +9,7 @@ jobs:
   runtime:
     name: ${{ matrix.cc }}, ${{ matrix.mode }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
