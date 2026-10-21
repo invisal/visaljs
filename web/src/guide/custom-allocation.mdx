@@ -112,19 +112,10 @@ typedef struct JSBlock {
 
 A cell is at least 16 bytes, so a block has at most 4096 cells, and 64 words of bits cover them.
 
-A new block comes from the operating system, with `mmap`. We place every block at an address that's a multiple of 64 KiB, and we'll see why that pays off in [Freeing](#freeing). `mmap` only promises a multiple of the page size, usually 4 KiB, so we map twice what we need, and give back the parts before and after the aligned 64 KiB.
+A new block comes from the operating system, with `mmap`. We place every block at an address that's a multiple of 64 KiB, and we'll see why that pays off in [Freeing](#freeing). `mmap` only promises a multiple of the page size, usually 4 KiB, so `map_aligned` maps twice what we need, and gives back the parts before and after the aligned 64 KiB.
 
 ```c
 #define JS_BLOCK_SIZE ((size_t)64 * 1024)
-
-static void *map_aligned(size_t size) {
-    uintptr_t p = (uintptr_t)mmap(NULL, 2 * size, PROT_READ | PROT_WRITE,
-                                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    uintptr_t start = (p + size - 1) & ~(size - 1);   /* round up to a multiple of size */
-    if (start > p) munmap((void *)p, start - p);
-    munmap((void *)(start + size), p + size - start);
-    return (void *)start;
-}
 
 static JSBlock *new_block(unsigned size_class) {
     JSBlock *b = map_aligned(JS_BLOCK_SIZE);
@@ -194,7 +185,7 @@ static inline JSCell *block_cell(JSBlock *b, uint32_t i) {
 
 Size classes fix *free memory we can't use*. But our `js_alloc` still has the other problem, *finding a hole takes time*. It starts from the first block every time, and checks one bit at a time. Once the first blocks are full, every allocation checks thousands of bits before it finds a free cell. That's much slower than `malloc`.
 
-So each size class gets an *allocator*, which remembers where it left off. It works on 64 cells at a time: one word of the allocation bitmap, its *window*. It turns the free cells of that word into a mask, `free`, and remembers where the window's first cell is, `base`, which is `block_cell` of that cell.
+So each size class gets an *allocator*, which remembers where it left off. It works on 64 cells at a time: one word of the allocation bitmap, its *window*. It turns the free cells of that word into a mask, `free`, and remembers where the window's first cell is, `base`. The heap keeps one allocator per size class, `heap.alloc[32]`, next to its lists of blocks.
 
 ```c
 typedef struct {
@@ -205,16 +196,24 @@ typedef struct {
 } JSAllocator;
 ```
 
-The heap keeps one allocator per size class, next to its lists of blocks.
+Now `js_alloc` doesn't search at all. It finds the size class of the size, and takes the lowest free cell of that class's window: the lowest set bit of its mask.
 
-```c
-typedef struct {
-+     JSAllocator alloc[32];   /* one per size class */
-    JSBlock    *blocks[32];  /* one list per size class */
-} JSHeap;
-```
+<Memory
+  x={16}
+  y={1}
+  items={[
+    { type: "used", offset: 0, size: 3 },
+    { type: "free", offset: 3, size: 1, selected: true, note: "Lowest set bit: cell 3" },
+    { type: "used", offset: 4, size: 1 },
+    { type: "free", offset: 5, size: 2 },
+    { type: "used", offset: 7, size: 4 },
+    { type: "free", offset: 11, size: 1 },
+    { type: "used", offset: 12, size: 2 },
+    { type: "free", offset: 14, size: 2 },
+  ]}
+/>
 
-Now `js_alloc` doesn't search at all. It finds the size class of the size, and takes the lowest set bit of that class's mask.
+`js_ctz64` counts the trailing zeros of the mask, which is the index of the lowest set bit: 3 here. `free & (free - 1)` clears that bit, so the next allocation gets cell 5.
 
 ```c
 static inline void *take_cell(JSAllocator *a) {
@@ -231,20 +230,11 @@ static inline void *js_alloc(size_t size) {
 }
 ```
 
-`js_size_class` is a few bit operations, and when the size is a constant, the C compiler works it out at compile time. `js_ctz64` counts trailing zeros, which is a single instruction. So finding a free cell is two loads, a few arithmetic instructions and a store, and it's inlined into the caller. There's no function call and no search.
+`js_size_class` is a few bit operations, and when the size is a constant, the C compiler works it out at compile time. `js_ctz64` is a single instruction. So finding a free cell is two loads, a few arithmetic instructions and a store, and it's inlined into the caller. There's no function call and no search.
 
 ### The slow path
 
-When the mask is empty, `js_alloc_slow` takes the next word of the block that has free cells, or another block of the class with room, or a new block from the operating system.
-
-```c
-void *js_alloc_slow(unsigned size_class) {
-    JSAllocator *a = &heap.alloc[size_class];
-    if (!next_window(a))                  /* the block's next word with free cells */
-        use_block(a, find_block(size_class));
-    return take_cell(a);
-}
-```
+When the mask is empty, `js_alloc_slow` moves the window: to the next word of the block that has free cells, or else to another block of the class with room, or else to a new block from the operating system. Then it takes a cell, like the fast path.
 
 Taking a word sets all its free cells' allocation bits up front. The fast path hands cells out without touching the bitmap, so the bits have to say "in use" before it does. It also zeroes those cells. Zero bits are `JS_EMPTY` in [our NaN-boxing](/guide/jsvalue), so a cell that's only half filled in is still safe for the collector to look at.
 
