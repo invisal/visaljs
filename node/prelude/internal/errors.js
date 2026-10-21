@@ -83,6 +83,15 @@ export function errnoException(errno, syscall) {
   return error;
 }
 
+/** Node's validatePort: a port as a number or numeric string, 0 to 65535 (1 to 65535 without allowZero) */
+export function validatePort(port, name = "Port", allowZero = true) {
+  if ((typeof port !== "number" && typeof port !== "string") || (typeof port === "string" && port.trim().length === 0) ||
+      +port !== (+port >>> 0) || port > 0xFFFF || (port === 0 && !allowZero)) {
+    throw withCode(new RangeError(`${name} should be ${allowZero ? ">=" : ">"} 0 and < 65536.${received(port)}.`), "ERR_SOCKET_BAD_PORT");
+  }
+  return +port;
+}
+
 export function validateString(value, name) {
   if (typeof value !== "string") throw invalidArgType(name, "of type string", value);
 }

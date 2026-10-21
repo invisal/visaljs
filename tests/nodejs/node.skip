@@ -180,6 +180,7 @@ test-child-process-spawnsync-non-string-args.js  process.execPath as Node
 test-child-process-stdout-flush-exit.js  process.execPath as Node
 test-child-process-stdout-flush.js       process.execPath as Node
 test-process-redirect-warnings-env.js    process.execPath as Node
+test-os-userinfo-handles-getter-errors.js  process.execPath as Node
 
 # Node's internals and command line: its bindings, and the options a Node takes
 test-process-binding-util.js             process.binding

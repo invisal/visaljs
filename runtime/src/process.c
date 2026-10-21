@@ -293,8 +293,7 @@ NATIVE(process_getgid) { UNUSED_ARGS; (void)ctx, (void)argc, (void)argv; return 
 NATIVE(process_getegid) { UNUSED_ARGS; (void)ctx, (void)argc, (void)argv; return js_number((double)getegid()); }
 #endif
 
-/* nextTick(callback, ...args): Node runs these before promise jobs; visaljs queues them
- * with them. */
+/* nextTick(callback, ...args): on the tick queue, which runs before the promise jobs */
 NATIVE(process_next_tick) {
     UNUSED_ARGS;
     if (!js_is_callable(ARG(0))) return invalid_arg_type(ctx, "callback", "of type function", ARG(0));
@@ -304,7 +303,7 @@ NATIVE(process_next_tick) {
         if (js_is_exception(args)) return args;
     }
     JSJob job = { JS_JOB_CALLBACK, NULL, argv[0], args, JS_UNDEFINED, JS_UNDEFINED };
-    js_enqueue_microtask(ctx, &job);
+    js_enqueue_tick(ctx, &job);
     return JS_UNDEFINED;
 }
 

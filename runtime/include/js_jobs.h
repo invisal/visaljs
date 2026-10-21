@@ -65,6 +65,8 @@ typedef enum JSRejectionMode {
 } JSRejectionMode;
 
 void js_enqueue_microtask(JSContext *ctx, const JSJob *job);
+/* process.nextTick's queue, which a checkpoint runs before the microtasks (Node's order) */
+void js_enqueue_tick(JSContext *ctx, const JSJob *job);
 /* The checkpoint: runs every queued job (and the ones they queue), then processes
  * unhandled rejections. A nested call does nothing. 0, or -1 after an uncaught error
  * or a strict unhandled rejection (already reported). */

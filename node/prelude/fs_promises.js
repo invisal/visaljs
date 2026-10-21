@@ -12,7 +12,15 @@ import { AbortError } from "./internal/streams/errors.js";
 import { validateAbortSignal, validateBoolean } from "./internal/streams/validators.js";
 import { resolve } from "./path.js";
 
-const promised = (fn) => async (...args) => fn(...args);
+/* done at once, settled on a later turn of the loop, as Node's run on its thread pool: what the
+ * caller's ticks and promise jobs do first (an abort) comes before */
+const promised = (fn) => (...args) => new Promise((resolve, reject) => {
+  try {
+    setImmediate(resolve, fn(...args));
+  } catch (e) {
+    setImmediate(reject, e);
+  }
+});
 
 function checkAborted(signal) {
   if (signal?.aborted) throw new AbortError(undefined, { cause: signal.reason });

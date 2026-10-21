@@ -23,14 +23,18 @@ export function lazyFunction(name, length = 0) {
   return f;
 }
 
+const kFeatureKey = Symbol("kFeatureKey");
+
 /** A class the program may construct, as a function the feature's module gives its prototype:
- *  `new Wrapper(…)` builds the feature's class, and instanceof holds. */
-export function lazyClass(name) {
+ *  `new Wrapper(…)` builds the feature's class, and instanceof holds. `key`, when two modules'
+ *  classes share a name (dns's and dns/promises' Resolver). */
+export function lazyClass(name, key = name) {
   const Wrapper = function (...args) {
     if (!new.target) throw new TypeError(`Class constructor ${name} cannot be invoked without 'new'`);
-    return Reflect.construct(feature(name), args, new.target);
+    return Reflect.construct(feature(key), args, new.target);
   };
   Object.defineProperty(Wrapper, "name", { value: name });
+  Object.defineProperty(Wrapper, kFeatureKey, { value: key });
   return Wrapper;
 }
 
@@ -48,7 +52,7 @@ export function lazyConstructor(name, length = 1) {
 
 /** Called by a feature's module for a lazyClass: the wrapper takes the class's prototype. */
 export function provideClass(Wrapper, Class) {
-  features[Wrapper.name] = Class;
+  features[Wrapper[kFeatureKey] ?? Wrapper.name] = Class;
   Wrapper.prototype = Class.prototype;
   Object.defineProperty(Class.prototype, "constructor", { value: Wrapper, writable: true, configurable: true });
   Object.setPrototypeOf(Wrapper, Object.getPrototypeOf(Class));

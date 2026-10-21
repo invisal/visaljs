@@ -3,7 +3,7 @@
 // Ported from Node.js (Copyright Node.js contributors, MIT): node/third_party/nodejs/LICENSE.
 import {
   errnoMessage, errnoName, osConstants, osCpus, osGetPriority, osHomedir, osHostname, osInterfaces, osLoadavg, osMemory, osParallelism,
-  osSetPriority, osTmpdir, osUname, osUptime, osUserInfo,
+  osSetPriority, osUname, osUptime, osUserInfo,
 } from "visaljs:host";
 import { codeError, invalidArgType } from "./internal/errors.js";
 
@@ -64,10 +64,18 @@ export function homedir() {
   return check(osHomedir(), "uv_os_homedir");
 }
 
+/* Node's: TEMP, TMP or %SystemRoot%\temp on Windows; elsewhere TMPDIR, TMP or TEMP (getTempDir), without a trailing separator */
 export function tmpdir() {
-  const dir = osTmpdir();
-  return typeof dir === "string" && dir !== "" ? dir : "/tmp";
+  const env = process.env;
+  if (process.platform === "win32") {
+    const path = env.TEMP || env.TMP || (env.SystemRoot || env.windir) + "\\temp";
+    return path.length > 1 && path.endsWith("\\") && path[path.length - 2] !== ":" ? path.slice(0, -1) : path;
+  }
+  const dir = env.TMPDIR || env.TMP || env.TEMP;
+  if (!dir) return "/tmp";
+  return dir.length > 1 && dir.endsWith("/") ? dir.slice(0, -1) : dir;
 }
+tmpdir[Symbol.toPrimitive] = () => tmpdir();
 
 export function totalmem() {
   return osMemory()[0];
@@ -200,7 +208,17 @@ export const constants = Object.freeze({
   }),
 });
 
-export default {
+/* as Node's: `${os.hostname}` and the like give their value */
+for (const f of [availableParallelism, freemem, hostname, version, type, release, machine, homedir, totalmem, uptime, arch, platform, endianness]) {
+  f[Symbol.toPrimitive] = () => f();
+}
+
+/* as Node's module object: EOL and devNull read-only (but configurable), constants fixed */
+export default Object.defineProperties({
   arch, availableParallelism, cpus, endianness, freemem, getPriority, homedir, hostname, loadavg, networkInterfaces, platform, release,
-  setPriority, tmpdir, totalmem, type, userInfo, uptime, version, machine, constants, EOL, devNull,
-};
+  setPriority, tmpdir, totalmem, type, userInfo, uptime, version, machine,
+}, {
+  constants: { configurable: false, enumerable: true, value: constants },
+  EOL: { configurable: true, enumerable: true, writable: false, value: EOL },
+  devNull: { configurable: true, enumerable: true, writable: false, value: devNull },
+});

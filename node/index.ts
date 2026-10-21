@@ -12,6 +12,7 @@ const LLHTTP = join(DIR, "third_party", "llhttp");
 const ZLIB = join(DIR, "third_party", "zlib");
 const BROTLI = join(DIR, "third_party", "brotli");
 const ZSTD = join(DIR, "third_party", "zstd");
+const CARES = join(DIR, "third_party", "c-ares");
 const INCLUDE = join(DIR, "include");
 
 const files = (dir: string, ext: string) => readdirSync(dir).filter((f) => f.endsWith(ext)).map((f) => join(dir, f));
@@ -98,6 +99,10 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   /* process.stdout and stderr as Writables: when the program's own code, or a package's, names
    * them and uses streams (pipes into them, listens on them, ends them) */
   { file: join(preludeDir, "internal", "process_stdio.js"), reached: (_code, program) => /\b(?:stdout|stderr)\b/.test(program) && STDIO_STREAM_USE.test(program) },
+  /* the global console as Node's, through process.stdout and stderr: when a program replaces one's write (or the console's streams) */
+  { file: join(preludeDir, "internal", "console_global.js"), reached: (_code, program) => STDIO_WRITE_REPLACED.test(program) },
+  /* console.Console, for a program that names it */
+  { file: join(preludeDir, "internal", "console_class.js"), reached: (_code, program) => /\bConsole\b/.test(program) },
   /* process.stdin, made when first read: when the program's own code, or a package's, names it */
   { file: join(preludeDir, "internal", "process_stdin.js"), reached: (_code, program) => /\bstdin\b/.test(program) },
   /* node:tty's ReadStream: it links node:net and libuv */
@@ -118,7 +123,8 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
   { file: join(preludeDir, "internal", "util_more.js"), reached: (_code, program) => UTIL_MORE.test(program) || UTIL_MORE_MEMBERS.test(program) },
   { file: join(preludeDir, "internal", "buffer_transcode.js"), reached: (_code, program) => /\btranscode\b/.test(program) },
   /* events.on as a call (bare, or of events or EventEmitter): `.on(` is an emitter's method */
-  { file: join(preludeDir, "internal", "events_on.js"), reached: (_code, program) => EVENTS_ON.test(program) },
+  { file: join(preludeDir, "internal", "events_on.js"), reached: (_code, program) =>
+      EVENTS_ON.test(program) || (/readline|readLines|createInterface/i.test(program) && /\bfor\s+await\b|\basyncIterator\b/.test(program)) },
   /* node:stream's rarer parts: compose, Duplex.from and duplexPair; the operators (map, filter, …
    * on a Readable: drop, take, flatMap and toArray by name, the others named with streams); the
    * conversions to and from web streams */
@@ -159,6 +165,12 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
    * fs.open(…)`: the bundle renames fs) */
   { file: join(preludeDir, "internal", "fs_filehandle.js"), reached: (_code, program) =>
       FS_OPEN.test(program) || /\bFileHandle\b/.test(program) || (/\bpromises\b/.test(program) && /\.\s*open\s*\(/.test(program)) },
+  /* readline's terminal line editor: a readline program that reads stdin or names a terminal's parts */
+  { file: join(preludeDir, "internal", "readline_editor.js"), reached: (_code, program) =>
+      READLINE_EDITOR.test(program) || (/readline|createInterface/i.test(program) && /\b(?:stdin|terminal)\b/.test(program)) },
+  /* dns.Resolver and the resolve* functions (c-ares): named, or node:dns's resolve(…) or reverse(…) */
+  { file: join(preludeDir, "internal", "dns_resolver.js"), reached: (_code, program) =>
+      DNS_RESOLVER.test(program) || DNS_RESOLVE_RRTYPE.test(program) || DNS_MODULE_RESOLVE.test(program) },
   /* crypto.X509Certificate, and the TLS sockets' getters that give one */
   { file: join(preludeDir, "internal", "crypto_x509.js"), reached: (_code, program) => /\b(?:X509Certificate|get(?:Peer)?X509Certificate)\b/.test(program) },
   /* process's other members (some link libuv): named as process's, or by a distinctive name */
@@ -188,6 +200,14 @@ export const implicitModules: readonly { file: string; reached: (code: string, p
 const FETCH = /(?<![.\w$#])fetch\s*\(|[=(,]\s*fetch\s*[;,)\n]|\btypeof\s+fetch\b|\b(?:globalThis|global|self)\s*(?:\.\s*fetch\b|\[\s*["'`]fetch["'`])/;
 /* a Readable's operators: the distinctive ones by name, the others with node:stream named */
 const STREAM_OPERATORS = /\.\s*(?:flatMap|toArray|drop|take|asIndexedPairs)\s*\(|\bReadable\b[\s\S]*\.\s*(?:map|filter|forEach|reduce|some|every|find)\s*\(/;
+const DNS_RESOLVER = /\b(?:Resolver|resolve(?:4|6|Any|Caa|Cname|Mx|Naptr|Ns|Ptr|Soa|Srv|Tlsa|Txt)|getServers|setServers|setLocalAddress)\b/;
+const READLINE_EDITOR = /\b(?:emitKeypressEvents|setRawMode|keypress|completer)\b/;
+/* dns.resolve(…), dns.promises.reverse(…), as the bundle names node:dns */
+const DNS_MODULE_RESOLVE = /\b(?:dns|dns_default|require_dns\(\))\s*\.\s*(?:promises\s*\.\s*)?(?:resolve|reverse)\b/;
+/* resolve(name, "MX"): a record type names it, whatever the module's binding is called */
+const DNS_RESOLVE_RRTYPE = /\.\s*resolve\s*\([^,()]+,\s*["'`](?:A|AAAA|ANY|CAA|CNAME|MX|NAPTR|NS|PTR|SOA|SRV|TLSA|TXT)["'`]/;
+/* a stdio stream's write replaced, the console's streams set, or the console's diagnostics channels */
+const STDIO_WRITE_REPLACED = /\b(?:stdout|stderr|stream)\s*\.\s*write\s*=(?![=>])|\b_std(?:out|err)\s*=(?!=)|\b(?:channel|subscribe)\s*\(\s*["'`]console\.(?:log|info|debug|warn|error)["'`]/;
 const STDIO_STREAM_USE = /\.\s*(?:pipe|on|once|end|cork|uncork|destroy|removeListener|addListener|prependListener)\s*\(|\b(?:pipeline|finished)\b|\bwritable(?:Length|HighWaterMark|NeedDrain|Ended|Finished)\b/;
 const PROCESS_DISTINCT = "chdir|umask|uptime|cpuUsage|threadCpuUsage|resourceUsage|availableMemory|constrainedMemory|setuid|setgid|seteuid|setegid|getgroups|setgroups|initgroups|reallyExit|execve|getBuiltinModule|loadEnvFile|hasUncaughtExceptionCaptureCallback|setUncaughtExceptionCaptureCallback|allowedNodeEnvironmentFlags|setSourceMapsEnabled|sourceMapsEnabled|getActiveResourcesInfo|moduleLoadList|openStdin|debugPort|dlopen";
 const PROCESS_COMMON = "title|ppid|release|config|ref|unref|abort|report|domain|assert|binding|finalization";
@@ -297,7 +317,6 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   osUname: { c: "js_host_os_uname", length: 0 },              // () → [sysname, release, version, machine]
   osHostname: { c: "js_host_os_hostname", length: 0 },
   osHomedir: { c: "js_host_os_homedir", length: 0 },
-  osTmpdir: { c: "js_host_os_tmpdir", length: 0 },
   osMemory: { c: "js_host_os_memory", length: 0 },            // () → [total, free]
   osUptime: { c: "js_host_os_uptime", length: 0 },
   osLoadavg: { c: "js_host_os_loadavg", length: 0 },
@@ -318,6 +337,7 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   processSpawnSync: { c: "js_host_process_spawn_sync", length: 11 },  // (file, args, envPairs, cwd, stdio, flags, uid, gid, timeout, maxBuffer, killSignal) → [error, pid, exitStatus, termSignal, output]
   /* node:util: the runtime's own (console uses them too) */
   utilInspect: { c: "js_util_inspect", length: 2 },
+  previewEntries: { c: "js_host_preview_entries", length: 2 },  // (value, isIterator) → entries | [entries, isKeyValue] | undefined
   utilFormat: { c: "js_util_format", length: 0 },
   utilFormatWithOptions: { c: "js_util_format_with_options", length: 1 },
   utilTypeTag: { c: "js_util_type_tag", length: 1 },          // (value) → its internal kind: "Date", "Proxy", "Uint8Array", … | ""
@@ -466,6 +486,17 @@ export const primitives: Readonly<Record<string, { c: string; length: number }>>
   ttyOpen: { c: "js_host_tty_open", length: 2 },              // (fd, cb) → id | -errno: a terminal's, read as a net handle
   ttySetRawMode: { c: "js_host_tty_set_raw_mode", length: 2 }, // (id, raw) → 0 | -errno
   dnsLookup: { c: "js_host_dns_lookup", length: 3 },          // (host, family, cb) → 0 | -errno; cb(errno, code, [[address, family], …])
+  dnsLookupService: { c: "js_host_dns_lookup_service", length: 3 },  // (ip, port, cb) → 0 | -errno; cb(errno, hostname, service, code)
+  /* dns.Resolver: c-ares channels on libuv (src/host_dns.c) */
+  dnsChannel: { c: "js_host_dns_channel", length: 3 },        // (timeoutMs, tries, maxTimeoutMs) → channel
+  dnsQuery: { c: "js_host_dns_query", length: 4 },            // (channel, name, type, cb) → 0; cb(status, answer | null)
+  dnsReverse: { c: "js_host_dns_reverse", length: 3 },        // (channel, ip, cb) → 0 | -EINVAL; cb(status, [name, …] | null)
+  dnsParse: { c: "js_host_dns_parse", length: 2 },            // (answer, kind) → [status, records, ttls, cname]
+  dnsGetServers: { c: "js_host_dns_get_servers", length: 1 }, // (channel) → [[ip, port], …]
+  dnsSetServers: { c: "js_host_dns_set_servers", length: 2 }, // (channel, [[family, ip, port], …]) → 0 | status
+  dnsSetLocalAddress: { c: "js_host_dns_set_local_address", length: 3 },  // (channel, ip4 | null, ip6 | null)
+  dnsCancel: { c: "js_host_dns_cancel", length: 1 },
+  dnsStrerror: { c: "js_host_dns_strerror", length: 1 },      // (status) → message
   /* node:zlib: Chromium's zlib, as Node has it (src/host_zlib.c); a stream is a handle. Failures are
    * [message, errno, code], as Node's binding passes them to its onerror */
   zlibNew: { c: "js_host_zlib_new", length: 1 },              // (mode) → handle
@@ -503,6 +534,10 @@ const UV_PLATFORM: Record<string, { sources: string[]; defines: string[]; link?:
   },
 };
 
+/* c-ares's source directories, and its configured headers by platform (Node's cares.gyp; Windows needs none) */
+const CARES_DIRS = ["", "dsa", "event", "legacy", "record", "str", "util"].map((d) => join(CARES, "src", "lib", d));
+const CARES_CONFIG: Record<string, string> = { linux: "linux", darwin: "darwin", freebsd: "freebsd", openbsd: "openbsd" };
+
 /* Brotli's platform macro, as Node's brotli.gyp defines it */
 const BROTLI_OS: Record<string, string> = { linux: "OS_LINUX", darwin: "OS_MACOSX", freebsd: "OS_FREEBSD" };
 
@@ -514,14 +549,18 @@ export function libraries(runtimeInclude: string, platform: NodeJS.Platform = pr
   const zlibHeaders = [...files(ZLIB, ".h"), ...files(join(ZLIB, "contrib", "optimizations"), ".h")];
   const brotliHeaders = ["common", "dec", "enc", join("include", "brotli")].flatMap((d) => files(join(BROTLI, d), ".h"));
   const zstdHeaders = ["", "common", "compress", "decompress"].flatMap((d) => files(join(ZSTD, d), ".h"));
+  const caresHeaders = [...files(join(CARES, "include"), ".h"), ...CARES_DIRS.flatMap((d) => files(d, ".h")), ...files(join(CARES, "src", "lib", "include"), ".h"),
+    ...files(join(CARES, "src", "lib", "thirdparty", "apple"), ".h"), ...(CARES_CONFIG[platform] ? files(join(CARES, "config", CARES_CONFIG[platform]), ".h") : [])];
   const uvHeaders = [join(UV, "include"), join(UV, "include", "uv"), join(UV, "src"), join(UV, "src", "unix"), join(UV, "src", "win")].flatMap((d) => files(d, ".h"));
   return [
     {
       name: "jsnode",
       sources: [...files(join(DIR, "src"), ".c"), ...files(LLHTTP, ".c")],
       /* the runtime's headers too: the host code is compiled against its structs (JSRuntime, …) */
-      headers: [...files(INCLUDE, ".h"), ...files(runtimeInclude, ".h"), ...files(LLHTTP, ".h"), ...uvHeaders, ...zlibHeaders, ...brotliHeaders, ...zstdHeaders],
-      flags: [`-I${INCLUDE}`, `-I${runtimeInclude}`, `-I${LLHTTP}`, `-I${join(UV, "include")}`, `-I${ZLIB}`, `-I${join(BROTLI, "include")}`, `-I${ZSTD}`],
+      headers: [...files(INCLUDE, ".h"), ...files(runtimeInclude, ".h"), ...files(LLHTTP, ".h"), ...uvHeaders, ...zlibHeaders, ...brotliHeaders, ...zstdHeaders,
+        ...caresHeaders],
+      flags: [`-I${INCLUDE}`, `-I${runtimeInclude}`, `-I${LLHTTP}`, `-I${join(UV, "include")}`, `-I${ZLIB}`, `-I${join(BROTLI, "include")}`, `-I${ZSTD}`,
+        `-I${join(CARES, "include")}`, "-DCARES_STATICLIB", "-DCARES_NO_DEPRECATED"],
     },
     {
       /* Chromium's zlib, as Node vendors it (deps/zlib): its portable C, whose output is the same
@@ -546,6 +585,17 @@ export function libraries(runtimeInclude: string, platform: NodeJS.Platform = pr
       flags: ["-w", "-DXXH_NAMESPACE=ZSTD_", "-DZSTD_MULTITHREAD", "-DZSTD_DISABLE_ASM", `-I${ZSTD}`],
     },
     {
+      /* c-ares 1.34.8, as Node vendors it (deps/cares): dns.Resolver's queries, on libuv's loop (src/host_dns.c) */
+      name: "cares",
+      sources: CARES_DIRS.flatMap((d) => files(d, ".c")),
+      headers: caresHeaders,
+      flags: ["-std=gnu11", "-w", "-DCARES_STATICLIB", "-D_LARGEFILE_SOURCE", "-D_FILE_OFFSET_BITS=64",
+        ...(platform === "win32" ? ["-DCARES_PULL_WS2TCPIP_H=1", "-D_WINSOCK_DEPRECATED_NO_WARNINGS"] : ["-DHAVE_CONFIG_H", "-D_GNU_SOURCE", "-D_DARWIN_USE_64_BIT_INODE=1"]),
+        ...(CARES_CONFIG[platform] ? [`-I${join(CARES, "config", CARES_CONFIG[platform])}`] : []),
+        `-I${join(CARES, "include")}`, `-I${join(CARES, "src", "lib")}`, `-I${join(CARES, "src", "lib", "include")}`],
+      link: platform === "win32" ? ["ws2_32", "iphlpapi", "advapi32"] : [],
+    },
+    {
       name: "uv",
       sources: uvSources,
       headers: uvHeaders,
@@ -566,6 +616,7 @@ export const notices = [
     files: [join(ZLIB, "LICENSE"), join(ZLIB, "LICENSE.chromium")] },
   { name: "Brotli", what: "Brotli compression", license: "MIT", files: [join(BROTLI, "LICENSE")] },
   { name: "Zstandard", what: "zstd compression", license: "BSD-3-Clause", files: [join(ZSTD, "LICENSE")] },
+  { name: "c-ares", what: "dns.Resolver's DNS queries", license: "MIT", files: [join(CARES, "LICENSE.md")] },
   { name: "punycode.js", what: "node:punycode", license: "MIT", files: [join(DIR, "third_party", "punycode", "LICENSE")] },
   { name: "parseargs", what: "util.parseArgs", license: "MIT", files: [join(DIR, "third_party", "parseargs", "LICENSE")] },
   { name: "HdrHistogram", what: "perf_hooks' histograms", license: "CC0-1.0 OR BSD-2-Clause", files: [join(DIR, "third_party", "hdrhistogram", "LICENSE")] },
