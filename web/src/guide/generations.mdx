@@ -1,0 +1,147 @@
+---
+title: "Young and Old Generations"
+group: "Memory"
+order: 5
+icon: "plant"
+files:
+  - "runtime/include/jscell.h"
+  - "runtime/include/jscontext.h"
+  - "runtime/src/gc.c"
+---
+
+Look at what a typical program allocates.
+
+```js
+for (const line of lines) {
+    const parts = line.split(",");          // dead by the next line
+    const user = { name: parts[0] };        // dead by the next line
+    users.set(user.name, parts[1]);         // kept for the whole run
+}
+```
+
+Most cells die young: the temporary strings, arrays and objects of a loop iteration or a function call. The few that survive, like `users`, tend to stay for a long time. This is the *generational hypothesis*, and it holds for almost every program.
+
+Our collector ignores it. Every collection marks every live cell, including the big table that has been sitting there unchanged for minutes. So we split the heap in two generations.
+
+- **Young.** Cells allocated since the last collection.
+- **Old.** Cells that survived a collection.
+
+A *young collection* marks only the young cells and assumes every old cell is alive. Most young cells are dead, so it's quick. Once in a while, a *full collection* marks everything, to free the old cells that died.
+
+## Generations without moving
+
+Most collectors give each generation its own space. Young cells are allocated in a nursery, and a young collection copies the survivors out into the old space. We can't do that, because [cells never move](/guide/mark-and-sweep#cells-never-move). So a cell's generation isn't where it is. It's a byte in its header.
+
+```c
+typedef struct JSCell {
+    uint8_t  kind;
++     uint8_t  gc;      /* young or old: the collector's */
++     uint16_t flags;
++     uint32_t aux;     /* kind-specific: a length, a count */
+} JSCell;
+```
+
+This is the final header, 8 bytes. A new cell is zeroed, and zero means young.
+
+```c
+#define JS_GC_YOUNG       0  /* allocated since the last collection */
+#define JS_GC_REMEMBERED  1  /* old, and in the remembered set */
+#define JS_GC_OLD         2  /* survived a collection */
+#define JS_GC_OLD_LARGE   3  /* old, and a large object */
+```
+
+When the marker marks a cell, it sets `gc` to `JS_GC_OLD`. A cell that survives one collection is old from then on.
+
+### Keeping the mark bits
+
+How does a young collection skip the old cells? It just doesn't clear the mark bits. After a collection, every survivor's mark bit is still set. In the next young collection, the marker reaches an old cell, sees its bit set, and stops there, the same way it stops at a cell it already marked. Only young cells, the ones with no bit, get marked and visited.
+
+The sweep works as before. It copies mark bits to allocation bits, and an old cell's bit is set, so it stays. A young collection only sweeps the blocks the allocator took since the last collection: the others hold no young cell, so nothing in them died.
+
+A full collection clears every mark bit first, and marks from scratch.
+
+## The old cell that points to a young one
+
+There's a problem. Marking starts from the roots and stops at old cells. But an old cell can point to a young one.
+
+```js
+const users = new Map();      // survives a collection: old
+// ...
+users.set("ana", { id: 1 });  // a young object, reachable only through users
+```
+
+The young collection never visits `users`, because it's old. Nothing else reaches `{ id: 1 }`, so the sweep frees it. That's the lost cell from [incremental marking](/guide/incremental-marking) again, and the fix is again the write barrier.
+
+When the program stores a young cell into an old one, the barrier remembers the old cell in the *remembered set*. A young collection treats the remembered cells as extra roots: it visits them, and marks the young cells they point to.
+
+```c
+void js_write_barrier_slow(JSContext *ctx, JSCell *owner, const void *slot, const JSCell *c) {
+    if (c->gc != JS_GC_YOUNG) return;   /* old into old: nothing to do */
+    if (owner->gc == JS_GC_OLD) {
+        owner->gc = JS_GC_REMEMBERED;   /* remembered once is enough */
+        push_remembered(&ctx->rt->heap, owner);
+    }
+}
+```
+
+A remembered cell's `gc` changes to `JS_GC_REMEMBERED`, so its next stores don't remember it again. After the young collection, every young cell it pointed to is old, and the cell goes back to `JS_GC_OLD`.
+
+### Large arrays: cards
+
+Remembering a cell means visiting all of it in the next young collection. For an object, that's a few slots. But an array with a million elements is a large object, and a loop that writes one young object into it would make every young collection read all million elements.
+
+So for a large object, the barrier remembers only where the store went. The object is split into *cards* of 512 bytes, and each card has a bit. The barrier sets the bit of the card it wrote. A young collection visits only the marked cards. That's what `JS_GC_OLD_LARGE` is for: it tells the barrier this owner has cards.
+
+## One barrier for both
+
+Now there are two reasons a store needs the barrier.
+
+- **Generations:** the owner is old, and might be given a young cell.
+- **Incremental marking:** the owner is black, and might be given a white cell.
+
+Both come down to the same thing. A black cell is marked, and marking sets `gc` to `JS_GC_OLD`. So in both cases, the owner's `gc` is at least `JS_GC_OLD`. Young cells and cells already remembered are below it, and they skip the barrier with one compare.
+
+```c
+static inline void js_store(JSContext *ctx, JSCell *owner, JSValue *slot, JSValue v) {
+    *slot = v;
+-     if (JS_UNLIKELY(ctx->rt->marking) && js_is_cell(v))
+-         mark(ctx->rt->marker, js_as_cell(v));
++     if (JS_UNLIKELY(owner->gc >= ctx->barrier_threshold) && js_is_cell(v))
++         js_write_barrier_slow(ctx, owner, slot, js_as_cell(v));
+}
+```
+
+`barrier_threshold` is `JS_GC_OLD`. The slow path decides which job it's doing.
+
+```c
+void js_write_barrier_slow(JSContext *ctx, JSCell *owner, const void *slot, const JSCell *c) {
+    JSHeap *h = &ctx->rt->heap;
++     if (JS_UNLIKELY(h->marker)) {         /* an incremental marking: mark what's stored */
++         shade(h->marker, (JSCell *)c);
++         return;
++     }
+    if (c->gc != JS_GC_YOUNG) return;
+    if (owner->gc == JS_GC_OLD) remember(h, owner);
+    else if (owner->gc == JS_GC_OLD_LARGE) mark_cards(h, owner, slot, sizeof(JSValue));
+}
+```
+
+During an incremental marking, there are no young collections. The marking cleared the old cells' mark bits, and a young collection needs them. So nothing has to be remembered, and the slow path only marks.
+
+An old cell the marker hasn't reached yet also takes the slow path. Marking what it's given is harmless: at worst, that cell survives one collection longer.
+
+## When to collect
+
+- **A young collection** comes when the program has allocated 4 MB since the last collection. That's the *nursery*, even though it's not a place.
+- **A full collection** comes when the old generation has outgrown its limit. After each full collection, we set the next limit so that full collections take about 5% of the program's time. A program that promotes slowly gets a lower limit, and one that promotes fast a higher one, between 1.25 and 2 times what survived. When the old generation is 8 MB or more, the full collection marks incrementally.
+
+## More
+
+There's more in the runtime's collector.
+
+- **Parallel marking.** On a machine with 4 or more processors, two helper threads join the marking in a pause, when there's enough to mark. A slice marks alone.
+- **Prefetching.** The marker spends most of its time waiting for cells to arrive from memory. So it prefetches each cell, and marks it 32 cells later, when it has arrived.
+- **Finalizers.** Some cells own memory outside the heap, like a buffer's bytes. Their class has a finalizer, which runs when the cell dies. Every dead cell is finalized before any memory is reused, because a finalizer may read other cells that died too.
+- **Giving memory back.** Empty blocks are kept for reuse, about a nursery's worth. The rest have their pages given back to the operating system, and a block still unused after another full collection is unmapped.
+- **Weak references.** `WeakMap`, `WeakRef` and `FinalizationRegistry` are handled after marking, before anything is freed. A `WeakMap` value lives only as long as its key.
+- **Idle collections.** When the event loop has nothing to do, it's a good time for a full collection.

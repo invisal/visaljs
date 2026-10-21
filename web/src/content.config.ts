@@ -19,9 +19,6 @@ export const collections = {
       order: z.number(),
       /** Not written yet: the sidebar and the front page mark it "Soon". */
       soon: z.boolean().default(false),
-      /** What the chapter's choice costs and buys; a chapter without a choice leaves them out. */
-      good: strings.default([]),
-      bad: strings.default([]),
       /** Where to read more: source files in the repository. */
       files: strings.default([]),
     }),

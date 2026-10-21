@@ -1,0 +1,144 @@
+---
+title: "Custom Allocation"
+group: "Memory"
+order: 2
+icon: "grid-four"
+files:
+  - "runtime/include/js_gc.h"
+  - "runtime/src/gc.c"
+---
+
+So far, every cell comes from `malloc`. But `malloc` is built for C programs, and JavaScript allocates very differently. It creates a huge number of small cells, like strings, objects and closures, and most of them die young. `malloc` isn't built for that.
+
+- **Fast allocation.** `malloc` is a function call that searches its free lists every time. For millions of small cells, we want a few instructions, inlined.
+- **Cheap freeing.** With `malloc`, every dead cell is another call to `free`. We'd rather free 64 cells with one write.
+- **Less fragmentation.** Cells of the same size kept together leave holes that fit the next cell of that size.
+
+A garbage collector also needs control and tracking that `malloc` doesn't give.
+
+- **Finding every cell.** The sweep has to visit the cells nobody reaches, and those are exactly the ones we can't find by following pointers. `malloc` won't tell us what it handed out.
+- **"Is this a cell?"** The stack scan asks that for every word on the stack. It has to be a few instructions, not a search.
+- **Somewhere for the mark bits.** Marking needs a bit per cell. If the bits sit together, clearing them all is one `memset`, and the sweep can read them without touching a single dead cell.
+
+So we stop asking `malloc` for memory. We take big chunks from the operating system and lay out the cells in them ourselves.
+
+## Blocks
+
+We take memory in *blocks* of 64 KiB. Each block starts at an address that's a multiple of 64 KiB, so for any address inside it, clearing the low 16 bits gives the start of the block.
+
+```c
+#define JS_BLOCK_SIZE ((size_t)64 * 1024)
+
+static inline JSBlock *js_block_of(const void *p) {
+    return (JSBlock *)((uintptr_t)p & ~(uintptr_t)(JS_BLOCK_SIZE - 1));
+}
+```
+
+The start of a block holds its header, and the cells come after it. Every cell in a block has the same size, so cell `i` is at a fixed place, and the address of a cell says its index.
+
+```c
+typedef struct JSBlock {
+    struct JSBlock *next;      /* the next block of its size class */
+    uint32_t cell_size;
+    uint32_t cell_count;
+    uint8_t  size_class;
+    uint64_t alloc_bits[64];   /* a bit per cell: in use */
+    uint64_t mark_bits[64];    /* a bit per cell: reachable */
+} JSBlock;
+```
+
+A cell is at least 16 bytes, so a block has at most 4096 cells, and 64 words of bits cover them.
+
+- **The allocation bitmap** says which cells are in use. Together with the list of blocks, it tells us where every cell is.
+- **The mark bitmap** is for the collector. A cell's mark bit lives here, not in the cell. We'll use it in [Mark and Sweep](/guide/mark-and-sweep).
+
+So the cell header stays as small as it was in Strings. Nothing in it is for the collector.
+
+## Size classes
+
+If every cell in a block has the same size, which sizes do we offer? One block per exact size would waste a block on every odd size. Instead, we round each size up to one of 32 *size classes*.
+
+| Size        | Classes                                       |
+| ----------- | --------------------------------------------- |
+| 16 to 128   | Every 16 bytes: 16, 32, 48, …, 128            |
+| 128 to 8192 | Four per doubling: 160, 192, 224, 256, 320, … |
+
+Small cells are the most common, so they get the finest steps. Above 128 bytes, the classes are a quarter of a doubling apart, so less than a fifth of a cell is ever wasted. A 40-byte string becomes a 48-byte cell, and a 130-byte one a 160-byte cell.
+
+The class of a size is a few bit operations, and when the size is a constant, which is most of the time, the C compiler works it out at compile time.
+
+Size classes also keep fragmentation in check. A dead cell leaves a hole that's exactly the right size for the next cell of its class.
+
+### Large objects
+
+A cell larger than 8 KiB, like a big array's elements, doesn't go in a block. It gets a mapping of its own, still aligned to 64 KiB, with the same header. The heap keeps these sorted by address.
+
+## Allocating
+
+Every cell is allocated by one function, `js_alloc_cell`. A small cell comes from its size class, and a large one gets its own mapping. Either way, the cell's `kind` is set before it's returned.
+
+```c
+JSCell *js_alloc_cell(JSCellKind kind, size_t size) {
+    JSCell *c = size <= JS_MAX_SMALL_SIZE ? js_alloc_small(js_size_class(size))
+                                          : alloc_large(size);
+    c->kind = kind;
+    return c;
+}
+```
+
+`js_size_class` turns a size into its class. When the size is a constant, the C compiler folds the whole call into a number.
+
+`js_new_string` from Strings now allocates from the heap.
+
+```c
+JSValue js_new_string(const char *chars, uint32_t length) {
+-     JSString *s = malloc(sizeof(JSString) + length);
+-     s->cell.kind = JS_CELL_STRING;
++     JSString *s = (JSString *)js_alloc_cell(JS_CELL_STRING, sizeof(JSString) + length);
+    ...
+}
+```
+
+### The fast path
+
+The allocator of each class works on 64 cells at a time, one word of the allocation bitmap. The free cells of that word become a mask, `free`. To allocate, we take the lowest set bit.
+
+```c
+typedef struct {
+    uint64_t  free;        /* a bit per free cell of the window */
+    uintptr_t base;        /* the window's first cell */
+    uintptr_t cell_size;
+    JSBlock  *block;
+} JSAllocator;
+
+static inline void *js_alloc_small(unsigned size_class) {
+    JSAllocator *a = &heap.alloc[size_class];
+    uint64_t free = a->free;
+    if (JS_LIKELY(free)) {
+        a->free = free & (free - 1);                        /* clear the lowest bit */
+        return (void *)(a->base + js_ctz64(free) * a->cell_size);
+    }
+    return js_alloc_slow(size_class);
+}
+```
+
+`js_ctz64` counts trailing zeros, which is a single instruction. So the fast path is two loads, a few arithmetic instructions and a store, and it's inlined. Compare that with `malloc`, a function call that searches its own free lists.
+
+### The slow path
+
+When the mask is empty, `js_alloc_slow` takes the next word of the block that has free cells, or another block of the class with room, or a new block from the operating system.
+
+```c
+void *js_alloc_slow(unsigned size_class) {
+    JSAllocator *a = &heap.alloc[size_class];
+    if (!next_window(a))                  /* the block's next word with free cells */
+        use_block(a, find_block(size_class));
+    return js_alloc_small(size_class);
+}
+```
+
+Taking a word sets all its free cells' allocation bits, since any of them may be handed out. It also zeroes those cells. Zero bits are `JS_EMPTY` in [our NaN-boxing](/guide/jsvalue), so a cell that's only half filled in is still safe for the collector to look at.
+
+## What's next?
+
+We now know where every cell is: every set bit of every block's allocation bitmap. And from any address, a mask finds its block, and a division finds its cell. That's exactly what scanning the stack needs. Next, we use it to find the garbage, in [Mark and Sweep](/guide/mark-and-sweep).
