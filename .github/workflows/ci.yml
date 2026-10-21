@@ -86,6 +86,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
+        with:
+          compile-cache: unit
       # the apps (tests/apps) aren't workspaces: each has its own lockfile (the HTTP differential tests run them)
       - run: npm run apps:install
       # the runtime's and the host's libraries, compiled once before the tests build programs in

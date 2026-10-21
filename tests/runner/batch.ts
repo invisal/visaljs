@@ -11,11 +11,11 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 import { analyze, CompileError, emitHarnessScript, emitUnit, firstUnsupported, lower, parseModule, parseScript, type HarnessLink, type Program } from "@visaljs/compiler";
 import { optimize } from "@visaljs/optimizer";
-import { findCompiler, gcCheckFlags, RUNTIME_DIR, runtimeArchives } from "visaljs/cc";
+import { compilerCommand, findCompiler, gcCheckFlags, RUNTIME_DIR, runtimeArchives } from "visaljs/cc";
 import { compileRegExps, regexpLiterals } from "visaljs/regexp";
 import { renderUnit, type CompileUnit, type Mode } from "./units.ts";
 
@@ -133,13 +133,14 @@ export function testHost(): string {
   const cache = process.env.VISALJS_CACHE ?? join(process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"), "visaljs");
   const host = join(cache, `test262-host-${key}`);
   if (!existsSync(host)) {
+    const [program, ...prefix] = compilerCommand(cc);
     const tmp = `${host}.${process.pid}.tmp`;
     mkdirSync(cache, { recursive: true });
     writeFileSync(`${tmp}.c`, harnessC);
     try {
       /* the harness at -O1: compiled once, run by every unit, and -O2 takes much longer on it */
-      execFileSync(cc, ["-std=c11", "-O1", ...GC_CHECKS, "-w", "-c", `-I${INCLUDE}`, `${tmp}.c`, "-o", `${tmp}.o`], { stdio: ["ignore", "inherit", "inherit"] });
-      execFileSync(cc, ["-std=c11", "-O2", "-g", src, `${tmp}.o`, "-rdynamic", "-Wl,--whole-archive", lib, "-Wl,--no-whole-archive", ...rest, "-ldl", "-lm", "-pthread", "-o", tmp], {
+      execFileSync(program, [...prefix, "-std=c11", "-O1", ...GC_CHECKS, "-w", "-c", `-I${INCLUDE}`, `${tmp}.c`, "-o", `${tmp}.o`], { stdio: ["ignore", "inherit", "inherit"] });
+      execFileSync(program, [...prefix, "-std=c11", "-O2", "-g", src, `${tmp}.o`, "-rdynamic", "-Wl,--whole-archive", lib, "-Wl,--no-whole-archive", ...rest, "-ldl", "-lm", "-pthread", "-o", tmp], {
         stdio: ["ignore", "inherit", "inherit"],
       });
     } finally {
@@ -200,12 +201,23 @@ export function setCcMemory(bytes: number) {
   ccMemory = bytes;
 }
 
+/** Compiles `files` (in `output`'s directory) to objects, then links them: ccache ($CC) only caches
+ *  a compile (-c), and only when its input path is the same, by its short name from its directory
+ *  (a batch's directory is new each time). */
 function buildLibrary(cc: string, files: string[], output: string): boolean {
-  const args = ["-std=c11", "-O0", ...GC_CHECKS, "-w", "-fPIC", "-shared", `-I${INCLUDE}`, ...files, "-o", output];
+  const dir = dirname(output);
+  const sources = files.map((f) => relative(dir, f));
+  const objects = sources.map((f) => f.replace(/\.c$/, ".o"));
+  return sources.every((f, i) => runCompiler(cc, ["-std=c11", "-O0", ...GC_CHECKS, "-w", "-fPIC", `-I${INCLUDE}`, "-c", f, "-o", objects[i]!], dir)) &&
+    runCompiler(cc, ["-shared", ...objects, "-o", output], dir);
+}
+
+function runCompiler(cc: string, args: string[], cwd: string): boolean {
+  const [program, ...prefix] = compilerCommand(cc);
   /* ulimit -v is in KiB; where the shell can't set it, the compile runs without */
   const r = ccMemory && process.platform === "linux"
-    ? spawnSync("sh", ["-c", `ulimit -v ${Math.floor(ccMemory / 1024)} 2>/dev/null; exec "$0" "$@"`, cc, ...args], { encoding: "utf8" })
-    : spawnSync(cc, args, { encoding: "utf8" });
+    ? spawnSync("sh", ["-c", `ulimit -v ${Math.floor(ccMemory / 1024)} 2>/dev/null; exec "$0" "$@"`, program, ...prefix, ...args], { cwd, encoding: "utf8" })
+    : spawnSync(program, [...prefix, ...args], { cwd, encoding: "utf8" });
   return r.status === 0;
 }
 

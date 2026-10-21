@@ -34,6 +34,8 @@ jobs:
           Add-Content $env:GITHUB_PATH $dir
           Add-Content $env:GITHUB_ENV "CC=zig cc"
       - uses: ./.github/actions/setup
+        with:
+          compile-cache: cross-platform
       - run: node tests/apps/check.ts --tier=fast
       # tests/programs runs on Linux (programs.yml): here, the programs about Windows' paths
       - if: runner.os == 'Windows'

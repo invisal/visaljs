@@ -1,10 +1,14 @@
 # What nearly every job does after its checkout: Node (.nvmrc's, unless node-version says
-# otherwise), with npm's cache, and the workspace's packages installed.
+# otherwise), with npm's cache, and the workspace's packages installed; with compile-cache, the
+# C it compiles cached too (.github/actions/compile-cache).
 name: Set up
 description: Node with npm's cache, and npm ci
 inputs:
   node-version:
     description: a Node version; .nvmrc's when empty
+    default: ""
+  compile-cache:
+    description: the job's compile cache's name (compile-cache's `name`); none when empty
     default: ""
 runs:
   using: composite
@@ -16,3 +20,7 @@ runs:
         cache: npm
     - run: npm ci
       shell: bash
+    - if: inputs.compile-cache != ''
+      uses: ./.github/actions/compile-cache
+      with:
+        name: ${{ inputs.compile-cache }}
