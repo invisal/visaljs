@@ -658,8 +658,8 @@ static JSCell *alloc_large(JSContext *ctx, size_t size) {
     b->is_large = 1;
     uint8_t shift = 9;  /* cards of 512 bytes, or more for a very large object */
     while ((size + ((size_t)1 << shift) - 1) >> shift > JS_LARGE_CARDS) shift++;
-    b->size_class = shift;
-    b->alloc_bits[0] = 1;
+    b->card_shift = shift;
+    b->large_alloc = 1;
 
     if (h->large_count == h->large_cap) {
         h->large_cap = h->large_cap ? h->large_cap * 2 : 16;
@@ -811,13 +811,12 @@ static void push_remembered(JSHeap *h, JSCell *c) {
  * next stores of young cells mark their own cards. */
 static void mark_cards(JSHeap *h, JSCell *c, const void *from, size_t bytes) {
     JSBlock *b = js_block_of(c);
-    unsigned shift = b->size_class;
+    unsigned shift = b->card_shift;
     size_t size = b->cell_size, off = (size_t)((const char *)from - (const char *)c);
     if (!from || (const char *)from < (const char *)c || off >= size) off = 0, bytes = size;
     if (!bytes) bytes = 1;
     size_t last = (off + bytes - 1 < size ? off + bytes - 1 : size - 1) >> shift;
-    uint64_t *cards = js_large_cards(b);
-    for (size_t k = off >> shift; k <= last; k++) cards[k / 64] |= UINT64_C(1) << (k % 64);
+    for (size_t k = off >> shift; k <= last; k++) b->cards[k / 64] |= UINT64_C(1) << (k % 64);
     if (!b->remembered) {
         b->remembered = 1;
         push_remembered(h, c);
@@ -918,6 +917,10 @@ static bool verify_edge(const JSTracer *trc, const JSCell *c) {
 /* Kinds that hold no cells: marked, never pushed or visited. */
 static const bool leaf_kind[JS_CELL_KIND_COUNT] = { [JS_CELL_STR_FLAT] = true, [JS_CELL_BIGINT] = true };
 
+static bool has_children(const JSCell *c) {
+    return !leaf_kind[c->kind] && !(c->kind == JS_CELL_HOST && !((const JSHostCell *)c)->cls->visit);
+}
+
 static JS_NOINLINE void grow_stack(JSTracer *trc) {
     trc->cap = trc->cap ? trc->cap * 2 : 4096;
     trc->stack = xrealloc(trc->stack, trc->cap * sizeof *trc->stack);
@@ -939,6 +942,18 @@ static inline void push(JSTracer *trc, JSCell *c) {
     trc->stack[trc->sp++] = c;
 }
 
+/* Sets heap cell `c`'s mark bit. Returns whether it was clear: this marker marked it, and it's old
+ * from now on. In a young collection every old cell's already is. */
+static inline bool mark_bit(JSTracer *trc, JSCell *c) {
+    JSBlock *b = js_block_of(c);
+    uint32_t i = cell_index(b, c);
+    if (!set_mark(trc, &b->mark_bits[i / 64], UINT64_C(1) << (i % 64))) return false;
+    c->gc = b->is_large ? JS_GC_OLD_LARGE : JS_GC_OLD;
+    trc->marked++;
+    trc->marked_bytes += b->is_large ? b->map_size : b->cell_size;
+    return true;
+}
+
 /* Marks `c`, and pushes it if it holds cells. Its header is read here, the first touch of the
  * cell: trace_cell prefetched it. */
 static inline void mark(JSTracer *trc, JSCell *c) {
@@ -947,14 +962,7 @@ static inline void mark(JSTracer *trc, JSCell *c) {
 #else
     if (js_cell_is_static(c)) return;
 #endif
-    JSBlock *b = js_block_of(c);
-    uint32_t i = cell_index(b, c);
-    if (!set_mark(trc, &b->mark_bits[i / 64], UINT64_C(1) << (i % 64))) return;  /* in a young collection, every old cell is */
-    c->gc = b->is_large ? JS_GC_OLD_LARGE : JS_GC_OLD;  /* it survives: old from now on */
-    trc->marked++;
-    trc->marked_bytes += b->is_large ? b->map_size : b->cell_size;
-    if (leaf_kind[c->kind] || (c->kind == JS_CELL_HOST && !((JSHostCell *)c)->cls->visit)) return;
-    push(trc, c);
+    if (mark_bit(trc, c) && has_children(c)) push(trc, c);
 }
 
 /* The marking barrier's: marked now, and on the marker's stack to be visited. */
@@ -1011,13 +1019,7 @@ static inline void mark_ool(JSTracer *trc, JSValueArray *a) {
     }
     if (verify_edge(trc, c)) return;
 #endif
-    JSBlock *b = js_block_of(c);
-    uint32_t i = cell_index(b, c);
-    if (set_mark(trc, &b->mark_bits[i / 64], UINT64_C(1) << (i % 64))) {
-        c->gc = b->is_large ? JS_GC_OLD_LARGE : JS_GC_OLD;
-        trc->marked++;
-        trc->marked_bytes += b->is_large ? b->map_size : b->cell_size;
-    }
+    mark_bit(trc, c);
     for (uint32_t k = 0; k < c->aux; k++) trace_value(trc, a->values[k]);
 }
 
@@ -1115,6 +1117,11 @@ static void add_task(JSMarkPool *p, JSCell *c, size_t from, size_t to) {
     atomic_store_int(&p->news, p->news + 1);
 }
 
+/* Bytes [from, to) of `c` as tasks of MARK_CHUNK bytes at most. */
+static void add_chunk_tasks(JSMarkPool *p, JSCell *c, size_t from, size_t to) {
+    for (; from < to; from += MARK_CHUNK) add_task(p, c, from, to - from > MARK_CHUNK ? from + MARK_CHUNK : to);
+}
+
 static void give_packet(JSTracer *trc, JSMarkPool *p) {
     size_t n = (trc->sp - trc->base) / 2;
     if (n > PACKET) n = PACKET;
@@ -1199,10 +1206,8 @@ static size_t splittable_bytes(const JSCell *c) {
 /* A large cell met while marking with others: its chunks but the first become tasks, for
  * whoever is free; this marker visits the first. */
 static void split_cell(JSTracer *trc, JSMarkPool *p, JSCell *c) {
-    size_t size = js_block_of(c)->cell_size;
     js_os_lock(p->lock);
-    for (size_t from = MARK_CHUNK; from < size; from += MARK_CHUNK)
-        add_task(p, c, from, size - from > MARK_CHUNK ? from + MARK_CHUNK : size);
+    add_chunk_tasks(p, c, MARK_CHUNK, js_block_of(c)->cell_size);
     js_os_cond_broadcast(p->work);
     js_os_unlock(p->lock);
 #ifdef JS_GC_VERIFY
@@ -1373,10 +1378,6 @@ static void drain(JSTracer *trc) {
 #endif
 }
 
-static bool has_children(const JSCell *c) {
-    return !leaf_kind[c->kind] && !(c->kind == JS_CELL_HOST && !((const JSHostCell *)c)->cls->visit);
-}
-
 /* The slots of `slots[0..n)` (at byte `base` of their cell) in bytes [from, to) of it. */
 static void trace_slots_in(JSTracer *trc, const JSValue *slots, size_t n, size_t base, size_t from, size_t to) {
     size_t first = from <= base ? 0 : (from - base) / sizeof(JSValue);
@@ -1416,42 +1417,49 @@ static bool visit_range(JSTracer *trc, JSCell *c, size_t from, size_t to) {
     return false;
 }
 
+/* Whether visit_range can visit part of `c`, not the whole cell whatever the range. */
+static bool visits_part(const JSCell *c) {
+    if (c->kind == JS_CELL_HOST) return ((const JSHostCell *)c)->cls->visit_range != NULL;
+    return splittable_bytes(c) != 0;
+}
+
+static bool card_marked(const JSBlock *b, size_t k) { return (b->cards[k / 64] >> (k % 64)) & 1; }
+
+/* The next run of large `b`'s cards from card *k that are marked (`marked`) or not: bytes
+ * [*from, *to) of its cell. Returns false when there's none left. */
+static bool next_card_run(const JSBlock *b, bool marked, size_t *k, size_t *from, size_t *to) {
+    unsigned shift = b->card_shift;
+    size_t n = (b->cell_size + ((size_t)1 << shift) - 1) >> shift;
+    while (*k < n && card_marked(b, *k) != marked) (*k)++;
+    if (*k == n) return false;
+    size_t end = *k + 1;
+    while (end < n && card_marked(b, end) == marked) end++;
+    *from = *k << shift;
+    *to = end << shift < b->cell_size ? end << shift : b->cell_size;
+    *k = end;
+    return true;
+}
+
+static void forget_cards(JSBlock *b) {
+    memset(b->cards, 0, sizeof b->cards);
+    b->remembered = 0;
+}
+
 /* A remembered large cell: visits its marked cards, a run of them at a time (`marked`), or, for
  * the barrier verifier, the others; then, when visiting the marked ones, forgets them. */
 static void visit_cards(JSTracer *trc, JSCell *c, bool marked) {
     JSBlock *b = js_block_of(c);
-    uint64_t *cards = js_large_cards(b);
-    unsigned shift = b->size_class;
-    size_t n = (b->cell_size + ((size_t)1 << shift) - 1) >> shift;
-    for (size_t k = 0; k < n;) {
-        if ((bool)((cards[k / 64] >> (k % 64)) & 1) != marked) {
-            k++;
-            continue;
-        }
-        size_t end = k + 1;
-        while (end < n && (bool)((cards[end / 64] >> (end % 64)) & 1) == marked) end++;
+    size_t from, to;
+    for (size_t k = 0; next_card_run(b, marked, &k, &from, &to);) {
 #ifdef JS_GC_VERIFY
         trc->visiting = c;
 #endif
-        size_t to = end << shift < b->cell_size ? end << shift : b->cell_size;
-        if (!visit_range(trc, c, k << shift, to) && !marked) return;  /* inexact: can't check part */
-        k = end;
+        if (!visit_range(trc, c, from, to) && !marked) return;  /* inexact: can't check part */
     }
-    if (marked) {
-        memset(cards, 0, JS_LARGE_CARDS / 8);
-        b->remembered = 0;
-    }
+    if (marked) forget_cards(b);
 }
 
 /* ---- Incremental marking: slices ---------------------------------------- */
-
-/* A large cell is visited this much at a time in a slice, when its kind's range visit is exact. */
-
-static bool visits_in_chunks(const JSCell *c) {
-    if (!js_block_of(c)->is_large || js_block_of(c)->cell_size <= MARK_CHUNK) return false;
-    return c->kind == JS_CELL_VALUE_ARRAY || c->kind == JS_CELL_ENV ||
-           (c->kind == JS_CELL_ELEMENTS && ((const JSElements *)c)->kind == JS_ELEMENTS_DENSE);
-}
 
 /* The next chunk of the partly visited cell. Returns the bytes it covered. */
 static size_t visit_chunk(JSTracer *trc) {
@@ -1489,7 +1497,7 @@ static bool drain_some(JSTracer *trc, size_t budget) {
             }
             if (!trc->sp) break;
             JSCell *c = trc->stack[--trc->sp];
-            if (visits_in_chunks(c)) {
+            if (splittable_bytes(c) > MARK_CHUNK) {
                 trc->partial = c;
                 trc->partial_from = 0;
                 continue;
@@ -1508,56 +1516,32 @@ static void drain_all(JSTracer *trc) {
     drain(trc);
 }
 
-/* A young collection's other roots: the old cells a store gave a young cell. They're marked
- * already, so they're pushed to be visited, dead or alive: a remembered cell that died since keeps
- * its young cells until the next collection, so nothing it points to is freed under it (a stale
- * stack word could still find it). Each becomes plain old again. */
 /* Below this much in marked cards, a young collection visits them itself. */
 #define PARALLEL_CARDS ((size_t)256 << 10)
-
-static bool exact_range(const JSCell *c) {
-    switch (c->kind) {
-    case JS_CELL_VALUE_ARRAY: case JS_CELL_ENV: return true;
-    case JS_CELL_ELEMENTS: return ((const JSElements *)c)->kind == JS_ELEMENTS_DENSE;
-    case JS_CELL_HOST: return ((const JSHostCell *)c)->cls->visit_range != NULL;
-    default: return false;
-    }
-}
-
 
 /* Large `c`'s marked card runs, as tasks of MARK_CHUNK bytes at most (the whole cell, once, for a
  * kind that can't visit part of it); then its cards are forgotten. Returns the tasks' bytes. */
 static size_t card_tasks(JSMarkPool *p, JSCell *c) {
     JSBlock *b = js_block_of(c);
-    uint64_t *cards = js_large_cards(b);
-    unsigned shift = b->size_class;
-    size_t n = (b->cell_size + ((size_t)1 << shift) - 1) >> shift, bytes = 0;
-    if (!exact_range(c)) {
+    size_t bytes = 0, from, to;
+    if (!visits_part(c)) {
         add_task(p, c, 0, b->cell_size);
         bytes = b->cell_size;
     } else {
-        for (size_t k = 0; k < n;) {
-            if (!((cards[k / 64] >> (k % 64)) & 1)) {
-                k++;
-                continue;
-            }
-            size_t end = k + 1;
-            while (end < n && ((cards[end / 64] >> (end % 64)) & 1)) end++;
-            size_t to = end << shift < b->cell_size ? end << shift : b->cell_size;
-            for (size_t from = k << shift; from < to; from += MARK_CHUNK) {
-                add_task(p, c, from, to - from > MARK_CHUNK ? from + MARK_CHUNK : to);
-                bytes += to - from > MARK_CHUNK ? MARK_CHUNK : to - from;
-            }
-            k = end;
+        for (size_t k = 0; next_card_run(b, true, &k, &from, &to);) {
+            add_chunk_tasks(p, c, from, to);
+            bytes += to - from;
         }
     }
-    memset(cards, 0, JS_LARGE_CARDS / 8);
-    b->remembered = 0;
+    forget_cards(b);
     return bytes;
 }
 
-/* A young collection's other roots: the remembered cells. With helpers, large cells' marked cards
- * become tasks that every marker takes a share of (drain), when there are enough of them. */
+/* A young collection's other roots: the old cells a store gave a young cell. They're marked
+ * already, so they're pushed to be visited, dead or alive: a remembered cell that died since keeps
+ * its young cells until the next collection, so nothing it points to is freed under it (a stale
+ * stack word could still find it). Each becomes plain old again. With helpers, large cells' marked
+ * cards become tasks that every marker takes a share of (drain), when there are enough of them. */
 static void mark_remembered(JSHeap *h, JSTracer *trc) {
     JSMarkPool *p = h->gc_helpers ? mark_pool(h) : NULL;
     size_t task_bytes = 0;
@@ -1588,10 +1572,7 @@ static void mark_remembered(JSHeap *h, JSTracer *trc) {
 static void forget_remembered(JSHeap *h) {
     for (size_t i = 0; i < h->remembered_count; i++) {
         JSCell *c = h->remembered[i];
-        if (c->gc != JS_GC_OLD_LARGE) continue;  /* JS_GC_OLD again when it's marked */
-        JSBlock *b = js_block_of(c);
-        memset(js_large_cards(b), 0, JS_LARGE_CARDS / 8);
-        b->remembered = 0;
+        if (c->gc == JS_GC_OLD_LARGE) forget_cards(js_block_of(c));  /* the others: JS_GC_OLD again when they're marked */
     }
     h->remembered_count = 0;
 }

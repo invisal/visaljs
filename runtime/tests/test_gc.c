@@ -504,15 +504,15 @@ TEST(gc_barrier_cards) {
     put_counted(ctx, &a->values[N - 1], 32);
     js_store(ctx, &a->cell, &a->values[4000], a->values[N - 1]);
     a->values[N - 1] = JS_UNDEFINED;  /* barrier: not a cell */
-    size_t card = ((size_t)((char *)&a->values[4000] - (char *)a)) >> b->size_class;
+    size_t card = ((size_t)((char *)&a->values[4000] - (char *)a)) >> b->card_shift;
     CHECK(b->remembered);
-    CHECK((js_large_cards(b)[card / 64] >> (card % 64)) & 1);
+    CHECK((b->cards[card / 64] >> (card % 64)) & 1);
     CHECK_EQ_INT(a->cell.gc, JS_GC_OLD_LARGE);  /* the next stores mark their own cards */
     scrub_stack();
     js_gc_young(ctx);
     CHECK_EQ_INT(finalized, 0);
     CHECK(!b->remembered);
-    CHECK(!((js_large_cards(b)[card / 64] >> (card % 64)) & 1));
+    CHECK(!((b->cards[card / 64] >> (card % 64)) & 1));
     js_remove_root(rt, root);
     free(root);
     js_context_free(ctx);

@@ -50,24 +50,27 @@ typedef struct JSBlock {
     size_t   map_size;           /* JS_BLOCK_SIZE, or the large object's mapping */
     uint32_t cell_size;
     uint32_t cell_count;
-    uint8_t  size_class;
+    uint8_t  size_class;         /* a small block's */
     uint8_t  is_large;
-    union {
-        uint8_t queued;          /* in its class's sweep queue */
-        uint8_t remembered;      /* a large object: in the remembered set, with cards marked */
-    };
+    uint8_t  queued;             /* in its class's sweep queue */
     uint8_t  has_finalizable;
     uint32_t index_magic;        /* ceil(2^32 / cell_size): a cell's index is (offset * magic) >> 32 */
     uint8_t  young;              /* the allocator took it since the last collection */
+    uint8_t  remembered;         /* a large object: in the remembered set, with cards marked */
+    uint8_t  card_shift;         /* a large object: a card is 2^card_shift bytes of it */
     uint64_t mark_bits[JS_BITMAP_WORDS];
-    uint64_t alloc_bits[JS_BITMAP_WORDS];  /* exact only while the world is stopped */
+    union {
+        uint64_t alloc_bits[JS_BITMAP_WORDS];  /* exact only while the world is stopped */
+        /* A large object's: its one cell's allocation bit, then its cards, a bit per card that a
+         * store gave a young cell since the last collection. */
+        struct {
+            uint64_t large_alloc;
+            uint64_t cards[JS_BITMAP_WORDS - 1];
+        };
+    };
 } JSBlock;
 
-/* A large object's cards: a bit per 2^card_shift bytes of the object
- * that a store gave a young cell since the last collection. They live in the allocation bitmap,
- * whose only other bit is bit 0 of word 0. A large object's size_class is its card_shift. */
 #define JS_LARGE_CARDS ((JS_BITMAP_WORDS - 1) * 64)
-static inline uint64_t *js_large_cards(JSBlock *b) { return &b->alloc_bits[1]; }
 
 #define JS_BLOCK_FIRST_CELL \
     ((sizeof(JSBlock) + JS_CELL_ALIGN - 1) & ~(size_t)(JS_CELL_ALIGN - 1))
