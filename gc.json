@@ -2,176 +2,176 @@
   {
     "program": "binary-trees",
     "node": {
-      "ms": 686.122521,
-      "rss": 213225472
+      "ms": 777.506448,
+      "rss": 213991424
     },
     "visaljs": {
-      "ms": 1563.663262,
-      "rss": 186253312,
+      "ms": 1501.617708,
+      "rss": 165412864,
       "gc": {
-        "collections": 277,
-        "young_collections": 266,
-        "pause_ms": 269.434,
-        "max_pause_ms": 11.178,
-        "mark_ms": 262.687,
-        "weak_ms": 5,
-        "finish_ms": 1.747,
-        "sweep_ms": 6.1,
-        "blocks_swept": 61414,
-        "allocated_bytes": 3229678320,
-        "peak_heap_bytes": 183107584,
-        "peak_rss_bytes": 186253312,
+        "collections": 276,
+        "young_collections": 265,
+        "pause_ms": 279.36,
+        "max_pause_ms": 14.315,
+        "mark_ms": 272.308,
+        "weak_ms": 5.148,
+        "finish_ms": 1.904,
+        "sweep_ms": 5.645,
+        "blocks_swept": 62534,
+        "allocated_bytes": 3229679808,
+        "peak_heap_bytes": 162201600,
+        "peak_rss_bytes": 165412864,
         "peak_external_bytes": 0,
         "idle_collections": 0,
-        "mark_slices": 203,
-        "parallel_markings": 59,
+        "mark_slices": 194,
+        "parallel_markings": 58,
         "gc_threads": 2
       },
-      "p99": 7.031
+      "p99": 10.512
     }
   },
   {
     "program": "buffers",
     "node": {
-      "ms": 833.287841,
-      "rss": 78372864
+      "ms": 537.871687,
+      "rss": 76070912
     },
     "visaljs": {
-      "ms": 68.953612,
-      "rss": 17440768,
+      "ms": 69.948343,
+      "rss": 17461248,
       "gc": {
         "collections": 256,
         "young_collections": 256,
-        "pause_ms": 9.93,
-        "max_pause_ms": 0.403,
-        "mark_ms": 0.57,
-        "weak_ms": 2.21,
-        "finish_ms": 7.15,
-        "sweep_ms": 0.066,
+        "pause_ms": 9.938,
+        "max_pause_ms": 0.397,
+        "mark_ms": 0.585,
+        "weak_ms": 2.245,
+        "finish_ms": 7.109,
+        "sweep_ms": 0.082,
         "blocks_swept": 1022,
         "allocated_bytes": 51311392,
         "peak_heap_bytes": 1114112,
-        "peak_rss_bytes": 17440768,
+        "peak_rss_bytes": 17461248,
         "peak_external_bytes": 4915200,
         "idle_collections": 0,
         "mark_slices": 0,
         "parallel_markings": 0,
         "gc_threads": 2
       },
-      "p99": 0.053
+      "p99": 0.057
     }
   },
   {
     "program": "closures",
     "node": {
-      "ms": 55.613386,
-      "rss": 57643008
+      "ms": 56.445568,
+      "rss": 58773504
     },
     "visaljs": {
-      "ms": 301.958868,
-      "rss": 17440768,
+      "ms": 308.03505,
+      "rss": 17461248,
       "gc": {
         "collections": 184,
         "young_collections": 184,
-        "pause_ms": 2.448,
-        "max_pause_ms": 0.47,
-        "mark_ms": 0.512,
-        "weak_ms": 1.818,
-        "finish_ms": 0.119,
-        "sweep_ms": 0.534,
+        "pause_ms": 2.977,
+        "max_pause_ms": 0.442,
+        "mark_ms": 0.608,
+        "weak_ms": 2.243,
+        "finish_ms": 0.127,
+        "sweep_ms": 0.608,
         "blocks_swept": 12604,
         "allocated_bytes": 784066560,
         "peak_heap_bytes": 5177344,
-        "peak_rss_bytes": 17440768,
+        "peak_rss_bytes": 17461248,
         "peak_external_bytes": 0,
         "idle_collections": 0,
         "mark_slices": 0,
         "parallel_markings": 0,
         "gc_threads": 2
       },
-      "p99": 0.026
+      "p99": 0.031
     }
   },
   {
     "program": "maps",
     "node": {
-      "ms": 1274.938835,
-      "rss": 334815232
+      "ms": 1549.023299,
+      "rss": 335310848
     },
     "visaljs": {
-      "ms": 1458.379211,
-      "rss": 108761088,
+      "ms": 1510.271092,
+      "rss": 108793856,
       "gc": {
         "collections": 177,
         "young_collections": 167,
-        "pause_ms": 224.67,
-        "max_pause_ms": 5.389,
-        "mark_ms": 214.532,
-        "weak_ms": 6.083,
-        "finish_ms": 4.055,
-        "sweep_ms": 5.36,
+        "pause_ms": 227.005,
+        "max_pause_ms": 4.838,
+        "mark_ms": 215.651,
+        "weak_ms": 6.955,
+        "finish_ms": 4.399,
+        "sweep_ms": 5.238,
         "blocks_swept": 57463,
         "allocated_bytes": 1203683024,
         "peak_heap_bytes": 111304704,
-        "peak_rss_bytes": 108761088,
+        "peak_rss_bytes": 108793856,
         "peak_external_bytes": 2097152,
         "idle_collections": 0,
         "mark_slices": 70,
         "parallel_markings": 101,
         "gc_threads": 2
       },
-      "p99": 2.48
+      "p99": 3.831
     }
   },
   {
     "program": "retained",
     "node": {
-      "ms": 289.434753,
-      "rss": 263364608
+      "ms": 299.821737,
+      "rss": 271167488
     },
     "visaljs": {
-      "ms": 518.084473,
-      "rss": 209924096,
+      "ms": 530.791687,
+      "rss": 209797120,
       "gc": {
         "collections": 195,
         "young_collections": 191,
-        "pause_ms": 97.894,
-        "max_pause_ms": 1.971,
-        "mark_ms": 92.856,
-        "weak_ms": 2.461,
-        "finish_ms": 2.578,
-        "sweep_ms": 2.13,
-        "blocks_swept": 39210,
+        "pause_ms": 105.311,
+        "max_pause_ms": 1.837,
+        "mark_ms": 99.433,
+        "weak_ms": 2.754,
+        "finish_ms": 3.123,
+        "sweep_ms": 2.498,
+        "blocks_swept": 39213,
         "allocated_bytes": 863077936,
         "peak_heap_bytes": 200974336,
-        "peak_rss_bytes": 209924096,
+        "peak_rss_bytes": 209797120,
         "peak_external_bytes": 0,
         "idle_collections": 0,
-        "mark_slices": 109,
+        "mark_slices": 108,
         "parallel_markings": 43,
         "gc_threads": 2
       },
-      "p99": 1.591
+      "p99": 1.295
     }
   },
   {
     "program": "strings",
     "node": {
-      "ms": 222.630414,
-      "rss": 92352512
+      "ms": 222.604421,
+      "rss": 92844032
     },
     "visaljs": {
-      "ms": 409.339645,
+      "ms": 410.413297,
       "rss": 18374656,
       "gc": {
         "collections": 223,
         "young_collections": 167,
-        "pause_ms": 45.04,
-        "max_pause_ms": 0.441,
-        "mark_ms": 25.213,
-        "weak_ms": 3.553,
-        "finish_ms": 16.274,
-        "sweep_ms": 0.9,
+        "pause_ms": 46.473,
+        "max_pause_ms": 0.479,
+        "mark_ms": 25.973,
+        "weak_ms": 3.996,
+        "finish_ms": 16.504,
+        "sweep_ms": 0.915,
         "blocks_swept": 19936,
         "allocated_bytes": 848899904,
         "peak_heap_bytes": 15695872,
@@ -182,7 +182,7 @@
         "parallel_markings": 0,
         "gc_threads": 2
       },
-      "p99": 0.388
+      "p99": 0.422
     }
   }
 ]
