@@ -4,77 +4,77 @@
     "size": 10,
     "feature": "default",
     "node": {
-      "ms": 75.50365
+      "ms": 84.305745
     },
     "visaljs": {
-      "ms": 228.747956,
-      "rss": 32243712,
-      "live": 9765888,
-      "young": {
-        "count": 143,
-        "p50": 0.027,
-        "p99": 0.622,
-        "max": 1.039
-      },
-      "full": {
-        "count": 2,
-        "max": 1.657
-      },
-      "maxPause": 1.657,
-      "pauseMs": 11.289,
-      "sweepMs": 1.066
-    }
-  },
-  {
-    "program": "live-heap",
-    "size": 10,
-    "feature": "no incremental",
-    "node": {
-      "ms": 75.50365
-    },
-    "visaljs": {
-      "ms": 347.873813,
-      "rss": 28573696,
-      "live": 9737216,
-      "young": {
-        "count": 144,
-        "p50": 0.042,
-        "p99": 0.633,
-        "max": 1.068
-      },
-      "full": {
-        "count": 2,
-        "max": 2.854
-      },
-      "maxPause": 2.854,
-      "pauseMs": 12.249,
-      "sweepMs": 1.379
-    }
-  },
-  {
-    "program": "live-heap",
-    "size": 10,
-    "feature": "no helper threads",
-    "node": {
-      "ms": 75.50365
-    },
-    "visaljs": {
-      "ms": 234.995473,
+      "ms": 245.161704,
       "rss": 32243712,
       "live": 9766912,
       "young": {
         "count": 143,
         "p50": 0.028,
-        "p99": 0.546,
-        "max": 0.789
+        "p99": 0.54,
+        "max": 1.496
       },
       "full": {
         "count": 2,
-        "max": 1.504
+        "max": 1.281
       },
-      "maxPause": 1.504,
-      "pauseMs": 10.817,
-      "sweepMs": 1.102
+      "maxPause": 1.496,
+      "pauseMs": 12.71,
+      "sweepMs": 1.074
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 10,
+    "feature": "no incremental",
+    "node": {
+      "ms": 84.305745
+    },
+    "visaljs": {
+      "ms": 220.7209,
+      "rss": 28704768,
+      "live": 9737216,
+      "young": {
+        "count": 144,
+        "p50": 0.026,
+        "p99": 0.728,
+        "max": 1.163
+      },
+      "full": {
+        "count": 2,
+        "max": 2.661
+      },
+      "maxPause": 2.661,
+      "pauseMs": 10.188,
+      "sweepMs": 1.025
+    }
+  },
+  {
+    "program": "live-heap",
+    "size": 10,
+    "feature": "no helper threads",
+    "node": {
+      "ms": 84.305745
+    },
+    "visaljs": {
+      "ms": 355.867692,
+      "rss": 32112640,
+      "live": 9766912,
+      "young": {
+        "count": 143,
+        "p50": 0.046,
+        "p99": 1.133,
+        "max": 1.175
+      },
+      "full": {
+        "count": 2,
+        "max": 2.804
+      },
+      "maxPause": 2.804,
+      "pauseMs": 20.581,
+      "sweepMs": 1.494
     }
   },
   {
@@ -82,25 +82,25 @@
     "size": 10,
     "feature": "neither",
     "node": {
-      "ms": 75.50365
+      "ms": 84.305745
     },
     "visaljs": {
-      "ms": 232.286441,
-      "rss": 28966912,
+      "ms": 253.933239,
+      "rss": 29097984,
       "live": 9737216,
       "young": {
         "count": 144,
-        "p50": 0.028,
-        "p99": 0.65,
-        "max": 0.662
+        "p50": 0.026,
+        "p99": 1.053,
+        "max": 1.143
       },
       "full": {
         "count": 2,
-        "max": 3.417
+        "max": 2.798
       },
-      "maxPause": 3.417,
-      "pauseMs": 10.982,
-      "sweepMs": 1.128
+      "maxPause": 2.798,
+      "pauseMs": 12.75,
+      "sweepMs": 1.096
     }
   },
   {
@@ -108,25 +108,25 @@
     "size": 100,
     "feature": "default",
     "node": {
-      "ms": 267.069645
+      "ms": 272.932852
     },
     "visaljs": {
-      "ms": 586.937447,
-      "rss": 200175616,
-      "live": 104403968,
+      "ms": 589.948346,
+      "rss": 198070272,
+      "live": 104129536,
       "young": {
-        "count": 166,
-        "p50": 0.144,
-        "p99": 2.057,
-        "max": 2.231
+        "count": 163,
+        "p50": 0.139,
+        "p99": 1.335,
+        "max": 1.879
       },
       "full": {
         "count": 4,
-        "max": 2.047
+        "max": 1.39
       },
-      "maxPause": 3.854,
-      "pauseMs": 113.565,
-      "sweepMs": 3.56
+      "maxPause": 3.766,
+      "pauseMs": 110.756,
+      "sweepMs": 3.339
     }
   },
   {
@@ -134,25 +134,25 @@
     "size": 100,
     "feature": "no incremental",
     "node": {
-      "ms": 267.069645
+      "ms": 272.932852
     },
     "visaljs": {
-      "ms": 554.889683,
-      "rss": 211947520,
-      "live": 96867328,
+      "ms": 835.77068,
+      "rss": 211955712,
+      "live": 96868352,
       "young": {
         "count": 193,
-        "p50": 0.127,
-        "p99": 1.024,
-        "max": 1.508
+        "p50": 0.231,
+        "p99": 1.491,
+        "max": 1.562
       },
       "full": {
         "count": 5,
-        "max": 29.575
+        "max": 36.866
       },
-      "maxPause": 29.575,
-      "pauseMs": 97.258,
-      "sweepMs": 3.107
+      "maxPause": 36.866,
+      "pauseMs": 134.305,
+      "sweepMs": 4.382
     }
   },
   {
@@ -160,25 +160,25 @@
     "size": 100,
     "feature": "no helper threads",
     "node": {
-      "ms": 267.069645
+      "ms": 272.932852
     },
     "visaljs": {
-      "ms": 553.107211,
-      "rss": 200151040,
-      "live": 104403968,
+      "ms": 625.152784,
+      "rss": 200093696,
+      "live": 104404992,
       "young": {
         "count": 166,
-        "p50": 0.13,
-        "p99": 2.12,
-        "max": 2.273
+        "p50": 0.173,
+        "p99": 2.465,
+        "max": 2.78
       },
       "full": {
         "count": 4,
-        "max": 2.835
+        "max": 2.893
       },
-      "maxPause": 3.534,
-      "pauseMs": 104.991,
-      "sweepMs": 3.323
+      "maxPause": 3.683,
+      "pauseMs": 112.499,
+      "sweepMs": 3.71
     }
   },
   {
@@ -186,25 +186,25 @@
     "size": 100,
     "feature": "neither",
     "node": {
-      "ms": 267.069645
+      "ms": 272.932852
     },
     "visaljs": {
-      "ms": 619.698748,
+      "ms": 627.01184,
       "rss": 216092672,
-      "live": 96867328,
+      "live": 96868352,
       "young": {
         "count": 193,
-        "p50": 0.132,
-        "p99": 1.112,
-        "max": 1.782
+        "p50": 0.13,
+        "p99": 1.18,
+        "max": 1.796
       },
       "full": {
         "count": 5,
-        "max": 71.22
+        "max": 66.383
       },
-      "maxPause": 71.22,
-      "pauseMs": 149.484,
-      "sweepMs": 2.903
+      "maxPause": 66.383,
+      "pauseMs": 148.259,
+      "sweepMs": 3.025
     }
   },
   {
@@ -212,25 +212,25 @@
     "size": 500,
     "feature": "default",
     "node": {
-      "ms": 972.071327
+      "ms": 1000.5284
     },
     "visaljs": {
-      "ms": 2377.603563,
-      "rss": 959094784,
+      "ms": 3081.743357,
+      "rss": 959164416,
       "live": 532528128,
       "young": {
         "count": 454,
-        "p50": 0.336,
-        "p99": 3.313,
-        "max": 12.294
+        "p50": 0.335,
+        "p99": 2.646,
+        "max": 10.279
       },
       "full": {
         "count": 6,
-        "max": 5.24
+        "max": 5.791
       },
-      "maxPause": 12.294,
-      "pauseMs": 503.285,
-      "sweepMs": 12.831
+      "maxPause": 10.279,
+      "pauseMs": 561.323,
+      "sweepMs": 13.424
     }
   },
   {
@@ -238,25 +238,25 @@
     "size": 500,
     "feature": "no incremental",
     "node": {
-      "ms": 972.071327
+      "ms": 1000.5284
     },
     "visaljs": {
-      "ms": 2009.627698,
-      "rss": 822366208,
+      "ms": 1994.462183,
+      "rss": 822562816,
       "live": 506949632,
       "young": {
         "count": 414,
-        "p50": 0.28,
-        "p99": 4.342,
-        "max": 12.816
+        "p50": 0.301,
+        "p99": 4.211,
+        "max": 12.902
       },
       "full": {
         "count": 7,
-        "max": 106.139
+        "max": 74.957
       },
-      "maxPause": 106.139,
-      "pauseMs": 398.245,
-      "sweepMs": 13.038
+      "maxPause": 74.957,
+      "pauseMs": 401.569,
+      "sweepMs": 13.737
     }
   },
   {
@@ -264,25 +264,25 @@
     "size": 500,
     "feature": "no helper threads",
     "node": {
-      "ms": 972.071327
+      "ms": 1000.5284
     },
     "visaljs": {
-      "ms": 2198.849243,
-      "rss": 959025152,
-      "live": 532528128,
+      "ms": 2734.973774,
+      "rss": 959152128,
+      "live": 532527104,
       "young": {
         "count": 454,
-        "p50": 0.245,
-        "p99": 4.561,
-        "max": 22.039
+        "p50": 0.299,
+        "p99": 5.333,
+        "max": 24.738
       },
       "full": {
         "count": 6,
-        "max": 5.013
+        "max": 5.393
       },
-      "maxPause": 22.039,
-      "pauseMs": 492.379,
-      "sweepMs": 11.086
+      "maxPause": 24.738,
+      "pauseMs": 558.802,
+      "sweepMs": 12.539
     }
   },
   {
@@ -290,25 +290,25 @@
     "size": 500,
     "feature": "neither",
     "node": {
-      "ms": 972.071327
+      "ms": 1000.5284
     },
     "visaljs": {
-      "ms": 2177.460882,
-      "rss": 844881920,
-      "live": 506949632,
+      "ms": 2363.063341,
+      "rss": 844939264,
+      "live": 506933248,
       "young": {
         "count": 414,
-        "p50": 0.284,
-        "p99": 9.175,
-        "max": 36.008
+        "p50": 0.381,
+        "p99": 9.755,
+        "max": 42.772
       },
       "full": {
         "count": 7,
-        "max": 231.759
+        "max": 246.544
       },
-      "maxPause": 231.759,
-      "pauseMs": 672.909,
-      "sweepMs": 12.579
+      "maxPause": 246.544,
+      "pauseMs": 731.965,
+      "sweepMs": 13.35
     }
   },
   {
@@ -316,25 +316,25 @@
     "size": 10000,
     "feature": "default",
     "node": {
-      "ms": 44.55763
+      "ms": 47.166696
     },
     "visaljs": {
-      "ms": 148.018468,
-      "rss": 20779008,
+      "ms": 162.97854,
+      "rss": 20971520,
       "live": 0,
       "young": {
         "count": 146,
         "p50": 0.01,
-        "p99": 0.026,
-        "max": 0.321
+        "p99": 0.028,
+        "max": 0.376
       },
       "full": {
         "count": 0,
         "max": 0
       },
-      "maxPause": 0.321,
-      "pauseMs": 1.825,
-      "sweepMs": 0.455
+      "maxPause": 0.376,
+      "pauseMs": 1.94,
+      "sweepMs": 0.457
     }
   },
   {
@@ -342,25 +342,25 @@
     "size": 100000,
     "feature": "default",
     "node": {
-      "ms": 90.941758
+      "ms": 98.728574
     },
     "visaljs": {
-      "ms": 201.230745,
-      "rss": 32178176,
+      "ms": 199.54529,
+      "rss": 32182272,
       "live": 4364288,
       "young": {
         "count": 144,
         "p50": 0.01,
-        "p99": 0.409,
-        "max": 0.473
+        "p99": 0.387,
+        "max": 0.554
       },
       "full": {
         "count": 1,
-        "max": 9.372
+        "max": 9.581
       },
-      "maxPause": 9.372,
-      "pauseMs": 12.068,
-      "sweepMs": 0.654
+      "maxPause": 9.581,
+      "pauseMs": 12.283,
+      "sweepMs": 0.627
     }
   },
   {
@@ -368,25 +368,25 @@
     "size": 1000000,
     "feature": "default",
     "node": {
-      "ms": 928.225939
+      "ms": 992.836615
     },
     "visaljs": {
-      "ms": 779.113349,
-      "rss": 181035008,
+      "ms": 831.474188,
+      "rss": 181166080,
       "live": 31272960,
       "young": {
         "count": 164,
         "p50": 0.014,
-        "p99": 2.998,
-        "max": 3.079
+        "p99": 2.946,
+        "max": 3.666
       },
       "full": {
         "count": 3,
-        "max": 81.479
+        "max": 94.748
       },
-      "maxPause": 81.479,
-      "pauseMs": 170.999,
-      "sweepMs": 2.617
+      "maxPause": 94.748,
+      "pauseMs": 190.379,
+      "sweepMs": 2.854
     }
   },
   {
@@ -394,25 +394,25 @@
     "size": 10000,
     "feature": "default",
     "node": {
-      "ms": 56.396872
+      "ms": 54.434175
     },
     "visaljs": {
-      "ms": 163.465689,
-      "rss": 20779008,
+      "ms": 174.878947,
+      "rss": 20971520,
       "live": 0,
       "young": {
         "count": 147,
         "p50": 0.011,
-        "p99": 0.116,
-        "max": 0.523
+        "p99": 0.184,
+        "max": 0.766
       },
       "full": {
         "count": 0,
         "max": 0
       },
-      "maxPause": 0.523,
-      "pauseMs": 2.253,
-      "sweepMs": 0.574
+      "maxPause": 0.766,
+      "pauseMs": 2.564,
+      "sweepMs": 0.505
     }
   },
   {
@@ -420,25 +420,25 @@
     "size": 100000,
     "feature": "default",
     "node": {
-      "ms": 202.394439
+      "ms": 192.229749
     },
     "visaljs": {
-      "ms": 278.463497,
+      "ms": 279.70778,
       "rss": 47448064,
       "live": 14757888,
       "young": {
         "count": 157,
         "p50": 0.011,
-        "p99": 0.439,
-        "max": 0.67
+        "p99": 0.472,
+        "max": 0.579
       },
       "full": {
         "count": 2,
-        "max": 1.341
+        "max": 1.526
       },
-      "maxPause": 1.341,
-      "pauseMs": 10.413,
-      "sweepMs": 0.697
+      "maxPause": 1.526,
+      "pauseMs": 9.934,
+      "sweepMs": 0.698
     }
   },
   {
@@ -446,25 +446,25 @@
     "size": 1000000,
     "feature": "default",
     "node": {
-      "ms": 1930.30688
+      "ms": 2001.670107
     },
     "visaljs": {
-      "ms": 2200.068888,
-      "rss": 432414720,
-      "live": 138923008,
+      "ms": 2216.870121,
+      "rss": 432697344,
+      "live": 143452160,
       "young": {
         "count": 310,
-        "p50": 0.188,
-        "p99": 0.588,
-        "max": 1.335
+        "p50": 0.18,
+        "p99": 0.65,
+        "max": 1.399
       },
       "full": {
         "count": 5,
-        "max": 14.071
+        "max": 15.622
       },
-      "maxPause": 14.071,
-      "pauseMs": 129.962,
-      "sweepMs": 2.748
+      "maxPause": 15.622,
+      "pauseMs": 135.294,
+      "sweepMs": 2.755
     }
   },
   {
@@ -472,25 +472,25 @@
     "size": 10000,
     "feature": "default",
     "node": {
-      "ms": 44.314786
+      "ms": 50.800136
     },
     "visaljs": {
-      "ms": 164.795112,
-      "rss": 20779008,
+      "ms": 171.946769,
+      "rss": 20971520,
       "live": 0,
       "young": {
         "count": 146,
         "p50": 0.011,
-        "p99": 0.03,
-        "max": 1.13
+        "p99": 0.029,
+        "max": 1.013
       },
       "full": {
         "count": 0,
         "max": 0
       },
-      "maxPause": 1.13,
-      "pauseMs": 2.802,
-      "sweepMs": 0.516
+      "maxPause": 1.013,
+      "pauseMs": 2.692,
+      "sweepMs": 0.546
     }
   },
   {
@@ -498,25 +498,25 @@
     "size": 100000,
     "feature": "default",
     "node": {
-      "ms": 128.701374
+      "ms": 150.554687
     },
     "visaljs": {
-      "ms": 195.275013,
+      "ms": 208.617795,
       "rss": 29757440,
       "live": 8777728,
       "young": {
         "count": 150,
         "p50": 0.011,
-        "p99": 2.122,
-        "max": 5.01
+        "p99": 2.12,
+        "max": 5.272
       },
       "full": {
         "count": 1,
-        "max": 7.067
+        "max": 4.996
       },
-      "maxPause": 7.067,
-      "pauseMs": 18.092,
-      "sweepMs": 0.436
+      "maxPause": 5.272,
+      "pauseMs": 16.113,
+      "sweepMs": 0.531
     }
   },
   {
@@ -524,25 +524,25 @@
     "size": 1000000,
     "feature": "default",
     "node": {
-      "ms": 607.630836
+      "ms": 637.307343
     },
     "visaljs": {
-      "ms": 738.076505,
-      "rss": 194260992,
+      "ms": 770.155654,
+      "rss": 194158592,
       "live": 128250880,
       "young": {
         "count": 175,
-        "p50": 0.01,
-        "p99": 2.882,
-        "max": 3.062
+        "p50": 0.011,
+        "p99": 2.787,
+        "max": 4.08
       },
       "full": {
         "count": 4,
-        "max": 163.795
+        "max": 170.258
       },
-      "maxPause": 163.795,
-      "pauseMs": 347.028,
-      "sweepMs": 0.662
+      "maxPause": 170.258,
+      "pauseMs": 351.211,
+      "sweepMs": 0.7
     }
   }
 ]
