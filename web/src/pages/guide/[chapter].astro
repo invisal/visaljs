@@ -6,6 +6,7 @@ import FloatTable from "../../components/FloatTable.astro";
 import GuideContents from "../../components/GuideContents.astro";
 import Heading from "../../components/Heading.astro";
 import InlineCode from "../../components/InlineCode.astro";
+import Memory from "../../components/Memory.astro";
 import Note from "../../components/Note.tsx";
 import Pair from "../../components/Pair.astro";
 import SubHeading from "../../components/SubHeading.astro";
@@ -22,7 +23,7 @@ const { chapter, prev, next } = Astro.props;
 const { title, files } = chapter.data;
 const { Content } = await render(chapter);
 /** What the guide's MDX may use without importing it. */
-const components = { CodeBlock, Pair, Note, FloatTable, h2: Heading, h3: SubHeading, code: InlineCode };
+const components = { CodeBlock, Pair, Note, FloatTable, Memory, h2: Heading, h3: SubHeading, code: InlineCode };
 const refs = files.map((f) => [f, f] as const);
 ---
 

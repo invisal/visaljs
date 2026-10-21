@@ -1,0 +1,105 @@
+---
+// Memory in the guide, drawn as a grid of x × y slots read left to right, top to bottom. An item
+// covers `size` slots from slot `offset`, and wraps onto the next row like memory does. Used
+// items are striped; free ones are plain. A selected item gets a dark, thicker ring, for the
+// prose to point at. A note sits just outside the grid, above an item in the top half and below
+// one in the bottom half, so it reads best on an item in the first or last row.
+interface Item {
+  type: "used" | "free";
+  offset: number;
+  size: number;
+  label?: string;
+  selected?: boolean;
+  note?: string;
+}
+
+interface Props {
+  x: number;
+  y: number;
+  items: Item[];
+  legend?: boolean;
+}
+
+const { x, y, items, legend = true } = Astro.props;
+
+/** an item split at the end of each row it crosses */
+const segments = items.flatMap((item) => {
+  const parts = [];
+  for (let start = item.offset, left = item.size; left > 0; ) {
+    const col = start % x;
+    const span = Math.min(left, x - col);
+    parts.push({ item, row: Math.floor(start / x), col, span, first: start === item.offset });
+    start += span;
+    left -= span;
+  }
+  return parts;
+});
+
+/** the note's band repeats the grid's columns, gap and padding, so its leader lines up with the item */
+const columns = `grid-template-columns: repeat(${x}, minmax(0, 1fr))`;
+const notes = segments
+  .filter((s) => s.first && s.item.note)
+  .map((s) => ({ ...s, note: s.item.note!, above: s.row < y / 2, leftHalf: s.col < x / 2 }));
+
+const STRIPES = "background: repeating-linear-gradient(135deg, currentColor 0 1px, transparent 1px 6px)";
+const SLOT = "relative overflow-hidden rounded-sm bg-kumo-base";
+const LEGEND = [
+  ["used", "In use", "text-kumo-default"],
+  ["free", "Free", "text-kumo-subtle"],
+] as const;
+---
+
+<figure class="flex max-w-[400px] flex-col">
+  {
+    notes.map((n) => (
+      <div class:list={["grid gap-x-1 px-[5px] text-xs text-kumo-strong", n.above ? "order-first" : "order-1"]} style={columns}>
+        <div class="flex justify-center" style={`grid-row: ${n.above ? 2 : 1}; grid-column: ${n.col + 1} / span ${n.span}`}>
+          <span class="h-3 w-px bg-kumo-contrast" />
+        </div>
+        <div
+          class:list={["whitespace-nowrap", !n.leftHalf && "text-right"]}
+          style={`grid-row: ${n.above ? 1 : 2}; grid-column: ${n.leftHalf ? `${n.col + 1} / -1` : `1 / ${n.col + n.span + 1}`}`}
+        >
+          {n.note}
+        </div>
+      </div>
+    ))
+  }
+  <div
+    class="grid gap-1 rounded border border-kumo-line bg-kumo-elevated p-1"
+    style={`${columns}; grid-template-rows: repeat(${y}, 1.5rem)`}
+  >
+    {
+      segments.map(({ item, row, col, span, first }) => (
+        <div
+          class:list={[
+            SLOT,
+            "flex min-w-0 items-center",
+            item.selected ? "z-10 ring-2 ring-kumo-contrast" : "ring ring-kumo-line",
+            item.type === "used" ? "text-kumo-default" : "text-kumo-subtle",
+          ]}
+          style={`grid-row: ${row + 1}; grid-column: ${col + 1} / span ${span}`}
+        >
+          {item.type === "used" && <span aria-hidden="true" class="absolute inset-0 opacity-20" style={STRIPES} />}
+          {first && item.label && <span class="relative truncate px-1 font-mono text-xs leading-none">{item.label}</span>}
+        </div>
+      ))
+    }
+  </div>
+  {
+    legend && (
+      <figcaption class="order-2 mt-2 flex gap-4 text-xs text-kumo-subtle">
+        {
+          LEGEND.map(([type, name, text]) => (
+            <span class="flex items-center gap-1.5">
+              <span class:list={[SLOT, "inline-block size-3 ring ring-kumo-line", text]}>
+                {type === "used" && <span aria-hidden="true" class="absolute inset-0 opacity-20" style={STRIPES} />}
+              </span>
+              {name}
+            </span>
+          ))
+        }
+      </figcaption>
+    )
+  }
+</figure>

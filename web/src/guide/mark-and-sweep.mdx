@@ -78,6 +78,21 @@ static JSHeap heap;
 
 ## Marking
 
+Where do we keep a cell's mark? A bit in the cell's header would work, but then forgetting the last collection's marks means writing to every cell, and the sweep would have to read every cell, dead or alive, to see its mark. So the marks sit next to the allocation bits, in a second bitmap per block.
+
+```c
+typedef struct JSBlock {
+    struct JSBlock *next;
+    uint32_t cell_size;
+    uint32_t cell_count;
+    uint8_t  size_class;
+    uint64_t alloc_bits[64];   /* a bit per cell: in use */
++     uint64_t mark_bits[64];    /* a bit per cell: reachable */
+} JSBlock;
+```
+
+Clearing every mark of a block is one `memset`, and the cell header stays as small as it was in Strings. Nothing in it is for the collector.
+
 Marking a cell sets its bit in its block's mark bitmap. The block and the index both come from the cell's address.
 
 ```c
@@ -186,7 +201,7 @@ The scan asks, for every word on the stack, "is this the address of a cell?" Tha
 static JSCell *find_cell(uintptr_t w) {
     if (w < heap.min_addr || w >= heap.max_addr) return NULL;   /* outside the heap */
     uintptr_t base = w & ~(uintptr_t)(JS_BLOCK_SIZE - 1);
-    if (!block_set_contains(base)) return find_large(w);
+    if (!block_set_contains(base)) return NULL;
     JSBlock *b = (JSBlock *)base;
     uint32_t i = (w - base - JS_BLOCK_FIRST_CELL) / b->cell_size;
     return bit_get(b->alloc_bits, i) ? block_cell(b, i) : NULL;
@@ -194,7 +209,7 @@ static JSCell *find_cell(uintptr_t w) {
 ```
 
 - **The range check.** The heap knows the lowest and highest addresses it has mapped. NaN-boxing helps here: every double and every integer `JSValue` has a tag in its top 16 bits, so it's far outside the range. A pointer `JSValue` is the address itself.
-- **The block set.** Masking gives a 64 KiB-aligned address, but is it one of our blocks? The heap keeps a hash set of its blocks. If not, it may be in a large object, which a binary search over their sorted addresses finds.
+- **The block set.** Masking gives a 64 KiB-aligned address, but is it one of our blocks? The heap keeps a hash set of its blocks.
 - **The index.** Dividing gives the cell the word points into. It doesn't have to point at the start: the C compiler may keep a pointer into the middle of a cell, like into a string's characters, and that still keeps the cell alive.
 - **The allocation bit.** The word may point at a free cell. Only a cell in use counts.
 
@@ -212,7 +227,7 @@ JS_NOINLINE void js_gc(void) {
 
 ## Sweeping
 
-After marking, a cell is in use if and only if it's marked. So sweeping a block is copying its mark bits to its allocation bits.
+In [Custom Allocation](/guide/custom-allocation), freeing a cell was clearing its allocation bit. We could call `free_cell` on every unmarked cell, but there's a shortcut. After marking, a cell is in use if and only if it's marked. So sweeping a block is copying its mark bits to its allocation bits, and one write frees 64 cells.
 
 ```c
 static uint32_t sweep_block(JSBlock *b) {
