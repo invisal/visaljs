@@ -349,7 +349,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
     }
     const opt = [...(options.debug ? ["-O0"] : ["-O2"]), ...gcCheckFlags()];
     const sizeReport = options.reports.includes("size");
-    const strip = !options.debug && !options.symbols && !sizeReport;  /* --report size strips after measuring */
+    const strip = !debugInfo(options);  /* --report size strips after measuring */
     const mapFile = sizeReport ? join(dir, "link.map") : undefined;
     /* measured now, with the compiler's worker and its heap gone */
     const jobs = options.jobs === undefined ? compileJobs(strip ? 0.8e9 : 1.5e9) : Number(options.jobs);
@@ -369,7 +369,7 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
           mapFile,
           compiled: (done, total) => report.relabel(done < total ? `${compiling} (${done}/${total} files, ${Math.min(jobs, total)} at a time)` : `Linking with ${describeCompiler(cc)}`),
         }),
-          () => `Compiled the binary with ${describeCompiler(cc)} (${[...opt, ...(parallel ? [parallel] : [])].join(", ")}, ${tc.strip ? "stripped" : "with debug info"})`);
+          ({ cached }) => `Compiled the binary with ${describeCompiler(cc)} (${[...opt, ...(parallel ? [parallel] : []), ...(cached ? [`${cached === cFiles.length ? "all" : `${cached} of ${cFiles.length}`} from the cache ⚡`] : [])].join(", ")}, ${tc.strip ? "stripped" : "with debug info"})`);
       });
       if (mapFile) {
         sizes = await report.step("📏", "Measuring where the binary's bytes come from",
@@ -390,6 +390,11 @@ async function build(entry: string, options: BuildOptions, io: Io): Promise<numb
   if (sizes) io.stdout(formatSizeReport(sizes, bytes, options.verbose === true));
   pipeline?.done(resolve(output));
   return 0;
+}
+
+/** Whether the binary is built with debug info, which names the C's variables to a debugger. */
+function debugInfo(options: BuildOptions): boolean {
+  return options.debug === true || options.symbols === true || options.reports.includes("size");
 }
 
 /** --emit bundle's files: the bundle, its map, and each "use static" file at its path from the
@@ -515,6 +520,7 @@ async function compileToC(source: string, entry: string, map: SourceMap | undefi
       hostPrimitives: primitives,
       ...(typed ? { harness: { atoms: new Map(typed.atoms), register: `${typed.prefix}register`, scripts: [typed.prefix] } } : {}),
       partSize: Number(process.env.VISALJS_PART_SIZE) || PART_SIZE,  /* another: tests that split small programs */
+      names: options.emit === "c" || debugInfo(options),
     });
     /* each file written as it comes: only its name and size are kept */
     const out = { names: [] as string[], lines: 0, bytes: 0 };

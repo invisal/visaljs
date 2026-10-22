@@ -25,8 +25,10 @@ runs:
         } >> "$GITHUB_ENV"
     - uses: actions/cache@v6
       with:
+        # not visaljs's cache of program objects: ccache holds them, and it would double the cache
         path: |
           ~/.cache/visaljs
+          !~/.cache/visaljs/objects
           ~/.cache/ccache
         key: compile-${{ runner.os }}-${{ inputs.name }}-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: compile-${{ runner.os }}-${{ inputs.name }}-

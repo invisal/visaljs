@@ -42,7 +42,8 @@ Not tested yet: the Pages Router, middleware and `next/image`. Not supported: a 
 Needs Node 22 or later and a C compiler (`cc`, `gcc` or `clang`). Linux and macOS; on Windows,
 a clang-family compiler: [Zig](https://ziglang.org/) (`winget install zig.zig`) or LLVM-MinGW
 (MSVC isn't supported yet).
-The C runtime is built on first use and cached in `~/.cache/visaljs`. The third-party C libraries
+The C runtime is built on first use and cached in `~/.cache/visaljs`, and so is each of a program's C
+files once compiled (up to 2 GB): a rebuild compiles only the files whose C changed. The third-party C libraries
 (BoringSSL, libuv, zlib, Brotli, zstd) come prebuilt in the package for Linux (x64, arm64; glibc
 and musl), macOS and Windows x64; on another platform, the first build compiles them too, which
 takes a minute. `VISALJS_PREBUILT=0` builds them anyway.

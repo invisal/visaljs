@@ -2,7 +2,7 @@
 // unless it comes prebuilt (prebuiltArchive).
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync } from "node:fs";
 import { availableParallelism, homedir, tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, relative, resolve } from "node:path";
 
@@ -292,10 +292,12 @@ export function programArchives(tc: Toolchain, hosts: readonly HostPackage[], bu
 
 /** Compiles the program's C files and links them with `archives` (programArchives), stripping at
  *  this link when asked. A split program's files compile `jobs` at once; `compiled` hears as each
- *  is done. `mapFile`: the link writes its map there (linkMapFlags), and each C file's object stays
- *  beside it, for the debug info. Asynchronous, so the build's report keeps drawing. */
+ *  is done. A file compiled before with the same text and toolchain takes its object from the
+ *  cache (objectKey); returns how many did. `mapFile`: the link writes its map there
+ *  (linkMapFlags), and each C file's object stays beside it, for the debug info. Asynchronous, so
+ *  the build's report keeps drawing. */
 export async function compileProgram(tc: Toolchain, cFiles: readonly string[], output: string, archives: readonly string[],
-  { extraFlags = [], jobs = compileJobs(), compiled, mapFile }: { extraFlags?: readonly string[]; jobs?: number; compiled?: (done: number, total: number) => void; mapFile?: string | undefined } = {}): Promise<void> {
+  { extraFlags = [], jobs = compileJobs(), compiled, mapFile }: { extraFlags?: readonly string[]; jobs?: number; compiled?: (done: number, total: number) => void; mapFile?: string | undefined } = {}): Promise<{ cached: number }> {
   /* a stripped binary drops the debug info -g makes, which takes the compilers half their memory and
    * a fifth of their time; it never changes the code */
   const flags = [...COMMON, ...tc.opt, ...(tc.strip ? ["-g0"] : []), ...extraFlags];
@@ -309,15 +311,23 @@ export async function compileProgram(tc: Toolchain, cFiles: readonly string[], o
   const objects = sources.map((f) => f.replace(/\.c$/, ".o"));
   /* the biggest first: they take longest, and the small ones fill in around them */
   const order = cFiles.map((_, i) => i).sort((a, b) => statSync(cFiles[b]!).size - statSync(cFiles[a]!).size);
-  let next = 0, done = 0;
+  const args = [...flags, `-I${RUNTIME_INCLUDE}`];
+  const store = join(cacheRoot(), "objects");
+  let next = 0, done = 0, cached = 0;
   const worker = async () => {
     while (next < order.length) {
       const i = order[next++]!;
-      try {
-        await runCompilerAsync(tc.cc, [...flags, `-I${RUNTIME_INCLUDE}`, "-c", sources[i]!, "-o", objects[i]!], cwd);
-      } catch (e) {
-        next = order.length;  /* start no more: the others finish, then the build fails */
-        throw e;
+      const object = join(cwd, objects[i]!);
+      const entry = join(store, `${objectKey(tc.cc, args, readFileSync(cFiles[i]!, "utf8"))}.o`);
+      if (reuseObject(entry, object)) cached++;
+      else {
+        try {
+          await runCompilerAsync(tc.cc, [...args, "-c", sources[i]!, "-o", objects[i]!], cwd);
+        } catch (e) {
+          next = order.length;  /* start no more: the others finish, then the build fails */
+          throw e;
+        }
+        keepObject(object, entry);
       }
       compiled?.(++done, cFiles.length);
     }
@@ -326,6 +336,84 @@ export async function compileProgram(tc: Toolchain, cFiles: readonly string[], o
   const failure = results.find((r) => r.status === "rejected");
   if (failure) throw failure.reason;
   await runCompilerAsync(tc.cc, [...flags, ...objects, ...link], cwd);
+  pruneObjects(store);
+  return { cached };
+}
+
+/** What a C file's object depends on: the compiler, its flags and the environment it reads
+ *  headers by, the runtime's headers, and the file. Without debug info, not its #line lines, which
+ *  then change only diagnostics: a bundle's renamed file (a content-hashed chunk) or a line moved
+ *  in it leaves the object as it was. */
+function objectKey(cc: string, args: readonly string[], text: string): string {
+  const env = ["CPATH", "C_INCLUDE_PATH", "SDKROOT", "MACOSX_DEPLOYMENT_TARGET"].map((v) => `${v}=${process.env[v] ?? ""}`);
+  if (!versions.has(cc)) versions.set(cc, compilerVersion(cc));
+  const hash = createHash("sha256").update(`visaljs object 1\n${cc}\n${versions.get(cc)}\n${args.join(" ")}\n${env.join("\n")}\n${headersHash()}\n`);
+  const debugInfo = args.lastIndexOf("-g") > args.lastIndexOf("-g0");
+  hash.update(debugInfo ? text : text.replace(/^#line .*\n/gm, ""));
+  return hash.digest("hex").slice(0, 32);
+}
+
+const versions = new Map<string, string>();
+let headers: string | undefined;
+
+function headersHash(): string {
+  if (headers === undefined) {
+    const hash = createHash("sha256");
+    for (const f of readdirSync(RUNTIME_INCLUDE).sort()) hash.update(`${f}\n`).update(readFileSync(join(RUNTIME_INCLUDE, f)));
+    headers = hash.digest("hex");
+  }
+  return headers;
+}
+
+/** The cached object at `entry` copied to `object`, marked as just used; false when there's none. */
+function reuseObject(entry: string, object: string): boolean {
+  try {
+    copyFileSync(entry, object);
+  } catch {
+    return false;
+  }
+  try {
+    const now = new Date();
+    utimesSync(entry, now, now);
+  } catch {
+    /* the copy is good: the mark only orders what pruning drops */
+  }
+  return true;
+}
+
+/** Caches `object` at `entry`: written beside it, then renamed, so a concurrent build sees all of
+ *  it or none. A cache that can't be written (a full disk) only costs the next build its time. */
+function keepObject(object: string, entry: string) {
+  const tmp = `${entry}.${process.pid}.tmp`;
+  try {
+    mkdirSync(dirname(entry), { recursive: true });
+    copyFileSync(object, tmp);
+    renameSync(tmp, entry);
+  } catch {
+    rmSync(tmp, { force: true });
+  }
+}
+
+/** The object cache's size limit: a large app's objects take about 100 MB a build. */
+const OBJECT_CACHE_BYTES = 2 * 2 ** 30;
+
+/** Drops the least recently used objects once the cache passes its limit, to three quarters of it. */
+function pruneObjects(store: string) {
+  try {
+    const entries = readdirSync(store).map((name) => {
+      const { size, mtimeMs } = statSync(join(store, name));
+      return { name, size, mtimeMs };
+    });
+    let total = entries.reduce((sum, e) => sum + e.size, 0);
+    if (total <= OBJECT_CACHE_BYTES) return;
+    for (const e of entries.sort((a, b) => a.mtimeMs - b.mtimeMs)) {
+      if (total <= OBJECT_CACHE_BYTES * 0.75) break;
+      rmSync(join(store, e.name), { force: true });
+      total -= e.size;
+    }
+  } catch {
+    /* another build pruning at the same time */
+  }
 }
 
 /** How many of a split program's files compile at once: one per processor and per `perJob` bytes
