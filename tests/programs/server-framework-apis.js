@@ -55,6 +55,11 @@ const server = http.createServer((req, res) => {
   } else if (req.url === "/flush") {
     res.flushHeaders();
     res.end("flushed");
+  } else if (req.url === "/compression") {
+    /* compression's write after Next.js's flushHeaders: the implicit head only while _header is unset */
+    res.flushHeaders();
+    if (!res._header) res._implicitHeader();
+    res.end("compressed");
   } else if (req.url === "/no-message") {
     res.statusMessage = "";  /* Next.js's route handlers: the standard one goes out */
     res.end("{}");
@@ -66,7 +71,7 @@ const server = http.createServer((req, res) => {
   }
 });
 const port = await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server.address().port)));
-for (const path of ["/write", "/end", "/implicit", "/flush", "/no-message", "/empty", "/plain"]) {
+for (const path of ["/write", "/end", "/implicit", "/flush", "/compression", "/no-message", "/empty", "/plain"]) {
   const raw = await new Promise((resolve) => {
     let data = "";
     const socket = net.connect(port, "127.0.0.1", () => socket.write(`GET ${path} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n`));
