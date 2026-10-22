@@ -95,7 +95,7 @@ implementations, and are kept unchanged from their sources:
   and gives them as stdin.
 - **Ours**, [`kernels/*.js`](kernels): one language feature each.
 - **`"use static"` code**, [`kernels/static/`](kernels/static): typed TypeScript kernels (sieve,
-  collatz, spectral-norm, fib, an HTTP token check), each with a C reference of the same
+  collatz, spectral-norm, fib, an HTTP token check, nbody on classes), each with a C reference of the same
   algorithm. Their table adds two columns: the same files built as plain TypeScript
   (`--no-static`), and the C reference built with `cc -O2`. Every build's output must equal
   Node's, so the kernels stay where C's integers and JavaScript's numbers agree.

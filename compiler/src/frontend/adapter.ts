@@ -133,6 +133,10 @@ function typeOnly(node: ts.ImportDeclaration): boolean {
   return !clause.name && bindings !== undefined && ts.isNamedImports(bindings) && bindings.elements.every((e) => e.isTypeOnly);
 }
 
+const TYPE_ONLY_MODIFIERS = new Set<ts.SyntaxKind>([
+  ts.SyntaxKind.PublicKeyword, ts.SyntaxKind.PrivateKeyword, ts.SyntaxKind.ProtectedKeyword, ts.SyntaxKind.ReadonlyKeyword,
+]);
+
 /** TypeScript rejects `a?.#x` (still parsed as usual); ES2022 allows it. */
 const PRIVATE_IN_OPTIONAL_CHAIN = 18030;
 
@@ -256,6 +260,11 @@ class Converter {
     if (this.unit) return;
     if (node.type) this.fail("SyntaxError", "type annotations are TypeScript, not JavaScript", node.type);
     if (node.typeParameters || node.typeArguments) this.fail("SyntaxError", "type arguments are TypeScript, not JavaScript", node);
+  }
+
+  /** A static unit's class member modifier that only tsc reads (subset.ts allows no other). */
+  private typeOnly(m: ts.ModifierLike): boolean {
+    return this.unit !== undefined && TYPE_ONLY_MODIFIERS.has(m.kind);
   }
 
   /** "use strict" as the first directives of a body (only exact, unescaped text counts). */
@@ -770,11 +779,12 @@ class Converter {
     for (const m of f.modifiers ?? []) {
       if (m.kind === ts.SyntaxKind.AsyncKeyword && (ts.isFunctionExpression(f) || ts.isMethodDeclaration(f))) continue;
       if (m.kind === ts.SyntaxKind.StaticKeyword && cls && !cls.ctor) continue;
+      if (cls && this.typeOnly(m)) continue;
       if (m.kind === ts.SyntaxKind.Decorator) this.fail("NotSupported", "decorators", m);
       this.fail("SyntaxError", `'${m.getText(this.sf)}' modifier`, m);
     }
     if (!f.body) this.fail("SyntaxError", "function without a body", f);
-    if (ts.isMethodDeclaration(f) && f.questionToken) this.fail("SyntaxError", "optional methods are TypeScript", f);
+    if (ts.isMethodDeclaration(f) && f.questionToken && !this.unit) this.fail("SyntaxError", "optional methods are TypeScript", f);
     if (ts.isGetAccessor(f) && f.parameters.length) this.fail("SyntaxError", "Getter must not have any formal parameters.", f);
     if (ts.isSetAccessor(f) && (f.parameters.length !== 1 || f.parameters[0]!.dotDotDotToken))
       this.fail("SyntaxError", "Setter must have exactly one formal parameter.", f);
@@ -877,11 +887,11 @@ class Converter {
       if (ts.isPropertyDeclaration(m)) {
         this.noTypes(m);
         for (const x of modifiers) {
-          if (x.kind === ts.SyntaxKind.StaticKeyword) continue;
+          if (x.kind === ts.SyntaxKind.StaticKeyword || this.typeOnly(x)) continue;
           if (x.kind === ts.SyntaxKind.AccessorKeyword) this.fail("NotSupported", "auto-accessors (decorators proposal)", x);
           this.fail("SyntaxError", `'${x.getText(this.sf)}' modifier`, x);
         }
-        if (m.questionToken || m.exclamationToken) this.fail("SyntaxError", "optional or definite fields are TypeScript", m);
+        if ((m.questionToken || m.exclamationToken) && !this.unit) this.fail("SyntaxError", "optional or definite fields are TypeScript", m);
         const value = m.initializer ? this.expression(m.initializer) : null;
         let field: A.DefineField;
         if (ts.isPrivateIdentifier(m.name)) {

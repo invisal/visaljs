@@ -102,8 +102,8 @@ function elementNode(checker: ts.TypeChecker, node: ts.TypeNode | undefined): ts
   return declaration && ts.isTypeAliasDeclaration(declaration) ? elementNode(checker, declaration.type) : undefined;
 }
 
-/** The array type annotation an expression's value was declared with, if one says: a variable's
- *  or parameter's (or its initializer's), a call's declared return type, a cast's. */
+/** The array type annotation an expression's value was declared with, if one says: a variable's,
+ *  parameter's or field's (or its initializer's), a call's declared return type, a cast's. */
 function declaredArrayType(checker: ts.TypeChecker, node: ts.Expression): ts.TypeNode | undefined {
   if (ts.isParenthesizedExpression(node) || ts.isNonNullExpression(node)) return declaredArrayType(checker, node.expression);
   if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) return node.type;
@@ -111,9 +111,9 @@ function declaredArrayType(checker: ts.TypeChecker, node: ts.Expression): ts.Typ
     const declaration = checker.getResolvedSignature(node)?.getDeclaration();
     return declaration && !ts.isJSDocSignature(declaration) ? declaration.type : undefined;
   }
-  if (!ts.isIdentifier(node)) return undefined;
-  const declaration = checker.getSymbolAtLocation(node)?.valueDeclaration;
-  if (!declaration || !(ts.isVariableDeclaration(declaration) || ts.isParameter(declaration))) return undefined;
+  if (!ts.isIdentifier(node) && !ts.isPropertyAccessExpression(node)) return undefined;
+  const declaration = checker.getSymbolAtLocation(ts.isIdentifier(node) ? node : node.name)?.valueDeclaration;
+  if (!declaration || !(ts.isVariableDeclaration(declaration) || ts.isParameter(declaration) || ts.isPropertyDeclaration(declaration))) return undefined;
   if (declaration.type) return declaration.type;
   return declaration.initializer ? declaredArrayType(checker, declaration.initializer) : undefined;
 }
