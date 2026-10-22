@@ -100,20 +100,53 @@ export function hexFloat(d: number): string {
 /** A file-level datum: its definition (`static` in a single file) and, for a split program,
  *  the declaration the other files see it by. */
 interface Decl {
+  /** The C symbol. */
+  name: string;
   define(storage: string): string;
   declare: string;
+  /** A static cell (a string, a BigInt): code only takes its address, so a function's file
+   *  declares it as a bare JSCell, the same whatever its length. */
+  cell: boolean;
 }
 
 function datum(type: string, name: string, init: string): Decl {
-  return { define: (storage) => `${storage}const ${type} ${name} = ${init};`, declare: `extern const ${type} ${name};` };
+  return {
+    name: name.replace(/\[\]$/, ""),
+    define: (storage) => `${storage}const ${type} ${name} = ${init};`,
+    declare: `extern const ${type} ${name};`,
+    cell: /^JS_STATIC_\w+_TYPE\(/.test(type),
+  };
 }
 
 /** One datum or the other, by the limb size the C file is compiled with. */
 function byLimbBits(d64: Decl, d32: Decl): Decl {
   return {
+    name: d64.name,
     define: (storage) => `#if JS_LIMB_BITS == 64\n${d64.define(storage)}\n#else\n${d32.define(storage)}\n#endif`,
     declare: `#if JS_LIMB_BITS == 64\n${d64.declare}\n#else\n${d32.declare}\n#endif`,
+    cell: d64.cell && d32.cell,
   };
+}
+
+/** What a framework's build makes anew each time: an id (a UUID, a hex digest), a content-hashed
+ *  file name (vite's app-elements-C_46KJcM.js). A string that holds one is named by where it's
+ *  used, not by what it says, and a binding named after one without it: by its content, the name
+ *  would change every build, and with it the text of every file that uses it. Only C names
+ *  depend on it: a string it misses or takes for one is only a file recompiled. */
+const BUILD_SPECIFIC = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,}|[-_~](?=[\w-]{0,7}[0-9A-Z])[\w-]{8}(?=\.[cm]?js\b|\.css\b)/;
+const BUILD_SPECIFIC_SUFFIX = /_(?=\w{0,7}[0-9A-Z])\w{8}(?=_exports$|$)/;
+
+/** A 53-bit hash of a datum's content (cyrb53), in base 36: its C name's. */
+function contentHash(s: string): string {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 
 /** String literals and property names: static atoms, registered at startup,
@@ -139,6 +172,27 @@ class Strings {
     this.external = external;
   }
 
+  private readonly taken = new Set<string>();
+  private readonly counts = new Map<string, number>();
+  /** A split program's: names that don't move with what's emitted before (named). */
+  stable = false;
+
+  /** A datum's C name: in a split program, by its content, not by how many came before it, so that
+   *  a file that uses it reads the same whatever else the program holds, and so does its cached
+   *  object; else by its kind's count (jss_0, jss_1, …). */
+  private named(kind: string, content: string): string {
+    if (!this.stable) {
+      const n = this.counts.get(kind) ?? 0;
+      this.counts.set(kind, n + 1);
+      return `${this.prefix}${kind}_${n}`;
+    }
+    const base = `${this.prefix}${kind}_${contentHash(content)}`;
+    let name = base;
+    for (let n = 2; this.taken.has(name); n++) name = `${base}_${n}`;  /* a hash collision */
+    this.taken.add(name);
+    return name;
+  }
+
   /** The atoms this file defines, by string: what a file emitted after it can refer to. */
   get atoms(): ReadonlyMap<string, string> {
     return this.names;
@@ -152,7 +206,7 @@ class Strings {
   bigint(value: string): string {
     let name = this.bigints.get(value);
     if (!name) {
-      name = `${this.prefix}jsb_${this.bigints.size}`;
+      name = this.named("jsb", value);
       this.bigints.set(value, name);
       const decl = (bits: number, suffix: string) => {
         const limbs = bigintLimbs(BigInt(value), bits).map((l) => `0x${l.toString(16)}${suffix}`);
@@ -168,12 +222,12 @@ class Strings {
     const key = regexpKey(pattern, flags);
     let name = this.regexps.get(key);
     if (!name) {
-      name = `${this.prefix}jsrl_${this.regexps.size}`;
+      name = this.named("jsrl", key);
       this.regexps.set(key, name);
       const bc = this.bytecode.get(key);
       let code = "NULL";
       if (bc) {
-        code = `${this.prefix}jsr_${this.regexps.size - 1}`;
+        code = this.named("jsr", key);
         this.decls.push(datum("uint8_t", `${code}[]`, `{ ${[...bc].join(", ")} }`));
       }
       this.decls.push(datum("JSRegExpLiteral", name, `{ ${code}, ${this.cellPointer(pattern)}, ${flagBits(flags) ?? 0} }`));
@@ -185,6 +239,32 @@ class Strings {
 
   private readonly plain = new Map<string, string>();
 
+  private texts = new Map<string, string>();
+  /** A split program's file being emitted: the stem of its texts' and build-specific strings'
+   *  names, and how many it has. */
+  private file: { stem: string; named: number } | null = null;
+
+  /** A C string the runtime reports with (a callee's text, a file name): a literal; in a split
+   *  program, a datum, which each file has its own of (texts aren't atoms: two of the same are
+   *  fine), named in its order there, not by what it says, which a bundler changes (a
+   *  content-hashed file name): the file's text, and its cached object, then stay as they were. */
+  text(s: string): string {
+    if (!this.file) return cString(s);
+    let name = this.texts.get(s);
+    if (!name) {
+      name = `jst_${this.file.stem}_${this.file.named++}`;
+      this.texts.set(s, name);
+      this.decls.push(datum("char", `${name}[]`, cString(s)));
+    }
+    return name;
+  }
+
+  /** A split program's next file, named `stem`. */
+  startFile(stem: string) {
+    this.file = { stem, named: 0 };
+    this.texts = new Map();
+  }
+
   private readonly switches = new Map<string, string>();
 
   /** A switch's case strings (js_switch_string): a static array of `const JSString *`, shared by
@@ -193,7 +273,7 @@ class Strings {
     const key = JSON.stringify(cases);
     let name = this.switches.get(key);
     if (!name) {
-      name = `${this.prefix}jsw_${this.switches.size}`;
+      name = this.named("jsw", key);
       this.switches.set(key, name);
       this.decls.push(datum("JSString *const", `${name}[]`, `{ ${cases.map((s) => this.cellPointer(s)).join(", ")} }`));
     }
@@ -214,7 +294,7 @@ class Strings {
       /* not an atom: the one-unit atoms are the runtime's, and a name needn't be an atom */
       let name = this.plain.get(s);
       if (!name) {
-        name = `${this.prefix}jsn_${this.plain.size}`;
+        name = this.named("jsn", s);
         this.plain.set(s, name);
         this.decls.push(datum("JS_STATIC_LATIN1_TYPE(1)", name, `JS_STATIC_LATIN1_INIT(1, 0, ${cString(Uint8Array.of(s.charCodeAt(0)))})`));
       }
@@ -235,13 +315,13 @@ class Strings {
         /* as a bare cell: only its address is taken, and every unit of a batch file declares it the same */
         this.declared.add(external);
         const declare = `extern const JSCell ${external};`;
-        this.decls.push({ define: () => declare, declare });
+        this.decls.push({ name: external, define: () => declare, declare, cell: true });
       }
       return `JS_STATIC_STR(${external})`;
     }
     let name = this.names.get(s);
     if (!name) {
-      name = `${this.prefix}jss_${this.names.size}`;
+      name = this.file && BUILD_SPECIFIC.test(s) ? `jssb_${this.file.stem}_${this.file.named++}` : this.named("jss", s);
       this.names.set(s, name);
       const hash = `0x${jsStringHash(s).toString(16).padStart(8, "0")}u`;
       const units = [...Array(s.length).keys()].map((i) => s.charCodeAt(i));
@@ -356,10 +436,37 @@ function isTypeTest(name: string, v: string): string {
 }
 
 /** Inline caches: one per *_prop site with a named key, in mod_ics[]; a keyed site's key, in
- *  mod_keys[] (GC roots). */
+ *  mod_keys[] (GC roots). A split program's files each have their own arrays, and its globals a
+ *  variable each (SplitTables). */
 class Caches {
   count = 0;
   keys = 0;
+  /** The arrays the sites being emitted index. */
+  ics: string;
+  keyTable: string;
+  split: SplitTables | null = null;
+  private readonly prefix: string;
+
+  constructor(prefix: string) {
+    this.prefix = prefix;
+    this.ics = `${prefix}mod_ics`;
+    this.keyTable = `${prefix}mod_keys`;
+  }
+
+  /** The global in `slot`, as a C lvalue. */
+  global(slot: number): string {
+    return this.split ? this.split.globals[slot]! : `${this.prefix}mod_globals[${slot}]`;
+  }
+}
+
+/** A split program's tables, laid out so that no file numbers anything across the program: an
+ *  index there (mod_globals[4261], mod_ics[20016]) moves with every global and site added before
+ *  it, and would change the file's text. */
+interface SplitTables {
+  /** Each global's variable, by slot (globalNames). */
+  globals: string[];
+  /** Each file's arrays, named after its first function, and their sizes. */
+  files: { ics: string; count: number; keyTable: string; keys: number }[];
 }
 
 function constant(v: JSConst, strings: Strings): string {
@@ -381,8 +488,61 @@ export function cFunctionName(fn: FunctionIR, isMain: boolean, prefix = ""): str
   return isMain ? `${prefix}js_script` : `${prefix}jsf_${ident(fn.name)}`;
 }
 
-function infoName(fnName: string, prefix: string): string {
-  return `${prefix}jsfi_${ident(fnName)}`;
+/** What a function's source text's shape leaves out: identifiers, which a bundler renames, and
+ *  strings and templates, which hold its content-hashed file names (a template's expressions go
+ *  with it: a shape needn't be exact, only stable). */
+const SHAPELESS = /[A-Za-z_$][\w$]*|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
+
+/** Each function's C names, by its IR name: its direct entry's (jsf_…), from which the others
+ *  (…__generic, …__resume) derive, and its info's (jsfi_…). */
+class CNames {
+  private readonly entries = new Map<string, string>();
+  private readonly prefix: string;
+
+  /** `stable`: names that a function keeps while the rest of the program changes, for a split
+   *  program's files: its name's stem and a hash of its source text's shape, not its IR name,
+   *  whose counter (anonymous_3266, a bundler's p$15) moves with every function added before it.
+   *  The shape (SHAPELESS) leaves out what a bundler changes in code that didn't; the enclosing
+   *  function's name tells apart the same shape in different places. */
+  constructor(m: ModuleIR, prefix: string, stable: boolean) {
+    this.prefix = prefix;
+    if (!stable) {
+      for (const fn of m.functions) this.entries.set(fn.name, cFunctionName(fn, false, prefix));
+      return;
+    }
+    /* outer functions first, so that the same shape twice (`(e) => e.x`) is told apart by its
+     * enclosing function's name, and counted among its siblings only; one shape alone isn't, so
+     * that a change in a module's function doesn't rename every function in it */
+    const shapes = new Map<string, number>();
+    const shapeOf = (fn: FunctionIR) => {
+      const src = fn.meta!.source;
+      return src ? m.source.slice(src.start, src.end).replace(SHAPELESS, "_") : fn.name;
+    };
+    for (const fn of m.functions) shapes.set(shapeOf(fn), (shapes.get(shapeOf(fn)) ?? 0) + 1);
+    const located = m.functions.filter((fn) => fn.meta!.source).sort((a, b) => a.meta!.source!.start - b.meta!.source!.start || b.meta!.source!.end - a.meta!.source!.end);
+    const enclosing: { end: number; name: string }[] = [];
+    const taken = new Set<string>();
+    for (const fn of [...located, ...m.functions.filter((f) => !f.meta!.source)]) {
+      const src = fn.meta!.source;
+      while (src && enclosing.length && enclosing.at(-1)!.end <= src.start) enclosing.pop();
+      const shape = shapeOf(fn);
+      const where = src && shapes.get(shape)! > 1 ? enclosing.at(-1)?.name ?? "" : "";
+      const base = `${prefix}jsf_${ident(fn.name.replace(/(?:[$_]\d+)+$/, "") || fn.name)}_${contentHash(`${where}\n${shape}`)}`;
+      let name = base;
+      for (let n = 2; taken.has(name); n++) name = `${base}_${n}`;  /* the same shape twice in one function */
+      taken.add(name);
+      this.entries.set(fn.name, name);
+      if (src) enclosing.push({ end: src.end, name });
+    }
+  }
+
+  entry(fnName: string): string {
+    return this.entries.get(fnName)!;
+  }
+
+  info(fnName: string): string {
+    return `${this.prefix}jsfi_${this.entry(fnName).slice(this.prefix.length + "jsf_".length)}`;
+  }
 }
 
 /** A function's `this` parameter in its direct entry (after the environment and the
@@ -423,9 +583,8 @@ function typeTest(t: Type, v: string): string {
 }
 
 /** The generic entry: unpacks argv into the direct entry's parameters. */
-function genericEntry(fn: FunctionIR, prefix: string): string {
+function genericEntry(fn: FunctionIR, direct: string): string {
   const meta = fn.meta!;
-  const direct = cFunctionName(fn, false, prefix);
   const declared = fn.params.length - Number(meta.takesEnv) - Number(meta.takesCallee) - Number(meta.takesThis)
     - Number(meta.takesNewTarget) - Number(meta.takesArguments) - Number(meta.hasRest);
   const args = [
@@ -478,7 +637,7 @@ function sourceCell(text: string, prefix: string): Decl {
 
 /** The function's static JSFunctionInfo: what js_new_function builds objects from. `shared`:
  *  another file of a split program makes the function, so the info isn't static. */
-function functionInfo(fn: FunctionIR, strings: Strings, embedSource: boolean, shared = false): string {
+function functionInfo(fn: FunctionIR, strings: Strings, cnames: CNames, embedSource: boolean, shared = false): string {
   const meta = fn.meta!;
   const flags = [
     ...(fn.strict ? ["JS_FN_STRICT"] : []),
@@ -491,11 +650,11 @@ function functionInfo(fn: FunctionIR, strings: Strings, embedSource: boolean, sh
     ...(meta.generator ? ["JS_FN_GENERATOR"] : []),
     ...(meta.async ? ["JS_FN_ASYNC"] : []),
   ];
-  const file = fn.loc ? cString(fn.loc.file) : "NULL";
-  const direct = cFunctionName(fn, false, strings.prefix);
+  const file = fn.loc ? strings.text(fn.loc.file) : "NULL";
+  const direct = cnames.entry(fn.name);
   const src = embedSource ? meta.source : null;
   const source = src ? `(const JSString *)&${strings.prefix}mod_source, ${file}, ${src.start}, ${src.end - src.start}` : `NULL, ${file}, 0, 0`;
-  return `${shared ? "" : "static JS_MAYBE_UNUSED "}const JSFunctionInfo ${infoName(fn.name, strings.prefix)} = { ${direct}__generic, ${strings.cellPointer(meta.jsName)}, ${meta.length}, ${flags.join(" | ") || "0"}, ${source} };`;
+  return `${shared ? "" : "static JS_MAYBE_UNUSED "}const JSFunctionInfo ${cnames.info(fn.name)} = { ${direct}__generic, ${strings.cellPointer(meta.jsName)}, ${meta.length}, ${flags.join(" | ") || "0"}, ${source} };`;
 }
 
 /** A generator's split: the entry runs the prologue up to gen_start; the resume
@@ -540,10 +699,12 @@ class FunctionEmitter {
   private readonly gen: GeneratorPlan | null = null;
   private readonly strings: Strings;
   private readonly caches: Caches;
+  private readonly names: boolean;
   private readonly hosts: Hosts;
   private readonly cname: string;
   /** The module's functions by name: a direct call passes and returns in its callee's reprs. */
   private readonly callees: Map<string, FunctionIR>;
+  private readonly cnames: CNames;
   /** Another file of a split program calls the function, so it isn't static. */
   shared = false;
   /** Values something needs: instructions and terminators, and the phis feeding them. */
@@ -555,13 +716,15 @@ class FunctionEmitter {
   private readonly lines: string[] = [];
   private lastLoc: Loc | null = null;
 
-  constructor(fn: FunctionIR, cname: string, strings: Strings, caches: Caches, hosts: Hosts, callees: Map<string, FunctionIR>) {
+  constructor(fn: FunctionIR, cname: string, strings: Strings, caches: Caches, hosts: Hosts, callees: Map<string, FunctionIR>, cnames: CNames, names: boolean) {
     this.hosts = hosts;
     this.callees = callees;
+    this.cnames = cnames;
     this.fn = fn;
     this.cname = cname;
     this.strings = strings;
     this.caches = caches;
+    this.names = names;
     /* dead phis (e.g. an expression result nobody reads) would be C variables set but never used */
     const work: Instr[] = [];
     const use = (v: Instr) => {
@@ -625,7 +788,7 @@ class FunctionEmitter {
   }
 
   private name(i: Instr): string {
-    return `v${i.id}${i.name ? `_${ident(i.name)}` : ""}`;
+    return `v${i.id}${i.name && this.names ? `_${ident(i.name)}` : ""}`;
   }
 
   /** A value as a C expression in representation `repr` (the optimizer's unbox pass
@@ -756,19 +919,19 @@ class FunctionEmitter {
       ...(meta.takesNewTarget ? ["c"] : []),
     ];
     const passed = i.operands.slice(1).map((o, k) => this.as(o, callee.params[hidden.length + k]?.repr ?? "boxed"));
-    const call = `${this.strings.prefix}jsf_${ident(callee.name)}(ctx${[...hidden, ...passed].map((a) => `, ${a}`).join("")})`;
+    const call = `${this.cnames.entry(callee.name)}(ctx${[...hidden, ...passed].map((a) => `, ${a}`).join("")})`;
     const ret = callee.returnRepr ?? "boxed";
     const result = out ? `${out} = ` : "";
     this.lines.push(
       `    { JSValue c = ${args[0]};`,
-      `    if (JS_LIKELY(js_is_function(c) && js_as_function(c)->info == &${infoName(callee.name, this.strings.prefix)} && js_as_function(c)->realm == ctx)) {`,
+      `    if (JS_LIKELY(js_is_function(c) && js_as_function(c)->info == &${this.cnames.info(callee.name)} && js_as_function(c)->realm == ctx)) {`,
       `        JSValue t = js_new_instance(ctx, c, ${instanceSlots(callee)}, ${this.cache()});`,
       `        if (JS_UNLIKELY(js_is_exception(t))) { ${fail} }`,
       ...(ret === "boxed"
         ? [`        JSValue r = ${call};`, "        JS_NO_TAIL_CALL();", `        if (JS_UNLIKELY(js_is_exception(r))) { ${fail} }`, ...(out ? [`        ${result}js_is_object(r) ? r : t;`] : [])]
         : [`        (void)${call};`, "        JS_NO_TAIL_CALL();", `        if (JS_UNLIKELY(js_has_exception(ctx))) { ${fail} }`, ...(out ? [`        ${result}t;`] : [])]),
       "    } else {",
-      `        JSValue r = js_construct(ctx, c, ${args.length - 1}, ${argArray(args.slice(1))}, JS_UNDEFINED, ${cString(i.text ?? "")});`,
+      `        JSValue r = js_construct(ctx, c, ${args.length - 1}, ${argArray(args.slice(1))}, JS_UNDEFINED, ${this.strings.text(i.text ?? "")});`,
       `        if (JS_UNLIKELY(js_is_exception(r))) { ${fail} }`,
       ...(out ? [`        ${result}r;`] : ["        js_discard(r);"]),
       "    } }",
@@ -885,11 +1048,11 @@ class FunctionEmitter {
   }
 
   private keyedCache(): string {
-    return `&${this.strings.prefix}mod_keys[${this.caches.keys++}], ${this.cache()}`;
+    return `&${this.caches.keyTable}[${this.caches.keys++}], ${this.cache()}`;
   }
 
   private cache(): string {
-    return `&${this.strings.prefix}mod_ics[${this.caches.count++}]`;
+    return `&${this.caches.ics}[${this.caches.count++}]`;
   }
 
   private instr(i: Instr) {
@@ -905,7 +1068,7 @@ class FunctionEmitter {
       case "phi":
         return;
       case "load_global":
-        expr = `${this.strings.prefix}mod_globals[${i.index}]`;
+        expr = this.caches.global(i.index!);
         break;
       case "gen_start": {
         const gen = this.gen!;
@@ -963,13 +1126,13 @@ class FunctionEmitter {
         expr = `js_yield_star_step(ctx, ${args[0]}, ${args[1]}, ${args[2]})`;
         break;
       case "store_global":
-        this.lines.push(`    ${this.strings.prefix}mod_globals[${i.index}] = ${args[0]};`);
+        this.lines.push(`    ${this.caches.global(i.index!)} = ${args[0]};`);
         return;
       case "global_name":
-        expr = `js_global_get(ctx, ${keyValue({ name: i.target! }, this.strings)}, ${cString(i.target!)})`;
+        expr = `js_global_get(ctx, ${keyValue({ name: i.target! }, this.strings)}, ${this.strings.text(i.target!)})`;
         break;
       case "global_typeof_name":
-        expr = `js_global_typeof_name(ctx, ${cString(i.target!)})`;
+        expr = `js_global_typeof_name(ctx, ${this.strings.text(i.target!)})`;
         break;
       case "declare_global":
         status = i.index === 1 ? `js_declare_global_function(ctx, ${this.key(i)}, ${args[0]})` : `js_declare_global_var(ctx, ${this.key(i)})`;
@@ -989,7 +1152,7 @@ class FunctionEmitter {
           break;
         }
         /* the parameter → environment slot map: static, one per function */
-        const table = `${this.strings.prefix}jsam_${ident(this.fn.name)}`;
+        const table = `${this.cname}__argmap`;
         const entries = i.table.length ? i.table.map((t) => (t < 0 ? "UINT32_MAX" : String(t))) : ["UINT32_MAX"];
         this.strings.decls.push(datum("uint32_t", `${table}[]`, `{ ${entries.join(", ")} }`));
         expr = `js_new_arguments(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${table}, ${i.table.length})`;
@@ -997,8 +1160,8 @@ class FunctionEmitter {
       }
       case "make_function":
         expr = args.length
-          ? `js_new_closure(ctx, &${infoName(i.target!, this.strings.prefix)}, ${args[0]})`
-          : `js_new_function(ctx, &${infoName(i.target!, this.strings.prefix)})`;
+          ? `js_new_closure(ctx, &${this.cnames.info(i.target!)}, ${args[0]})`
+          : `js_new_function(ctx, &${this.cnames.info(i.target!)})`;
         break;
       case "bigint":
         expr = this.strings.bigint(i.bigint!);
@@ -1013,14 +1176,14 @@ class FunctionEmitter {
         const t = i.template!;
         const cooked = t.cooked.map((s) => (s === null ? "JS_UNDEFINED" : this.strings.ref(s)));
         const raw = t.raw.map((s) => this.strings.ref(s));
-        expr = `js_template_object(ctx, &${this.strings.prefix}mod_globals[${i.index}], ${t.raw.length}, (const JSValue[]){ ${cooked.join(", ")} }, (const JSValue[]){ ${raw.join(", ")} })`;
+        expr = `js_template_object(ctx, &${this.caches.global(i.index!)}, ${t.raw.length}, (const JSValue[]){ ${cooked.join(", ")} }, (const JSValue[]){ ${raw.join(", ")} })`;
         break;
       }
       case "import_meta":
-        expr = `js_import_meta(ctx, &${this.strings.prefix}mod_globals[${i.index}], ${cString(i.target!)}, ${i.slot === 1 ? "true" : "false"})`;
+        expr = `js_import_meta(ctx, &${this.caches.global(i.index!)}, ${this.strings.text(i.target!)}, ${i.slot === 1 ? "true" : "false"})`;
         break;
       case "dynamic_import":
-        expr = `js_dynamic_import(ctx, ${args[0]}, ${args[1]}, ${cString(i.target!)})`;
+        expr = `js_dynamic_import(ctx, ${args[0]}, ${args[1]}, ${this.strings.text(i.target!)})`;
         break;
       case "host_function": {
         const host = this.hosts.get(i.target!);
@@ -1194,10 +1357,10 @@ class FunctionEmitter {
         this.lines.push(`    js_iter_close_throw(ctx, ${args[0]});`);
         return;
       case "call_spread":
-        expr = `js_call_spread(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${cString(i.target!)})`;
+        expr = `js_call_spread(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${this.strings.text(i.target!)})`;
         break;
       case "new_spread":
-        expr = `js_construct_spread(ctx, ${args[0]}, ${args[1]}, ${cString(i.target!)})`;
+        expr = `js_construct_spread(ctx, ${args[0]}, ${args[1]}, ${this.strings.text(i.target!)})`;
         break;
       case "call":
         if (i.typedCall) {
@@ -1205,21 +1368,21 @@ class FunctionEmitter {
           return;
         }
         if (i.builtin === "apply") {
-          expr = `js_call_apply(ctx, ${args[0]}, ${args[1]}, ${args[2] ?? "JS_UNDEFINED"}, ${args[3] ?? "JS_UNDEFINED"}, ${cString(i.target!)})`;
+          expr = `js_call_apply(ctx, ${args[0]}, ${args[1]}, ${args[2] ?? "JS_UNDEFINED"}, ${args[3] ?? "JS_UNDEFINED"}, ${this.strings.text(i.target!)})`;
           break;
         }
         if (i.builtin === "call") {
-          expr = `js_call_call(ctx, ${args[0]}, ${args[1]}, ${args.length - 2}, ${argArray(args.slice(2))}, ${cString(i.target!)})`;
+          expr = `js_call_call(ctx, ${args[0]}, ${args[1]}, ${args.length - 2}, ${argArray(args.slice(2))}, ${this.strings.text(i.target!)})`;
           break;
         }
         if (i.builtin) {
-          expr = `js_call_${i.builtin}(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${cString(i.target!)})`;
+          expr = `js_call_${i.builtin}(ctx, ${args[0]}, ${args[1]}, ${args[2]}, ${this.strings.text(i.target!)})`;
           break;
         }
-        expr = `js_call_site(ctx, ${args[0]}, ${args[1]}, ${args.length - 2}, ${argArray(args.slice(2))}, ${cString(i.target!)})`;
+        expr = `js_call_site(ctx, ${args[0]}, ${args[1]}, ${args.length - 2}, ${argArray(args.slice(2))}, ${this.strings.text(i.target!)})`;
         break;
       case "new":
-        expr = `js_construct(ctx, ${args[0]}, ${args.length - 1}, ${argArray(args.slice(1))}, JS_UNDEFINED, ${cString(i.target!)})`;
+        expr = `js_construct(ctx, ${args[0]}, ${args.length - 1}, ${argArray(args.slice(1))}, JS_UNDEFINED, ${this.strings.text(i.target!)})`;
         if (i.taView && this.hasVar(i)) {  /* a typed array only indexed: its elements, once */
           this.lines.push(`    ${this.name(i)} = ${expr};`, `    if (JS_UNLIKELY(js_is_exception(${this.name(i)}))) { ${this.onException(i.block)} }`,
             `    ${this.name(i)}_view = js_ta_view(ctx, ${this.name(i)}, ${VIEWS[i.taView].c});`);
@@ -1227,7 +1390,7 @@ class FunctionEmitter {
         }
         break;
       case "check_tdz":
-        expr = `js_check_tdz(ctx, ${args[0]}, ${cString(i.name ?? "variable")})`;
+        expr = `js_check_tdz(ctx, ${args[0]}, ${this.strings.text(i.name ?? "variable")})`;
         break;
       case "construct_direct": {
         this.constructDirect(i, args);
@@ -1309,7 +1472,7 @@ class FunctionEmitter {
         break;
       }
       case "same_function": {
-        const cond = `js_is_function(${args[0]}) && js_as_function(${args[0]})->info == &${infoName(i.target!, this.strings.prefix)} && js_as_function(${args[0]})->realm == ctx`;
+        const cond = `js_is_function(${args[0]}) && js_as_function(${args[0]})->info == &${this.cnames.info(i.target!)} && js_as_function(${args[0]})->realm == ctx`;
         expr = i.repr === "bool" ? `(${cond})` : `js_bool(${cond})`;
         break;
       }
@@ -1326,11 +1489,11 @@ class FunctionEmitter {
         const callee = this.callees.get(i.target!);
         if (callee?.meta?.declared && !declaredCallFits(i, callee)) {  /* a typed function, arguments not proven its types: its checked entry */
           const hidden = callee.meta.declared.findIndex((t) => t !== undefined);
-          this.boxedCall(i, `${this.strings.prefix}jsf_${ident(i.target!)}__generic(ctx, JS_UNDEFINED, JS_UNDEFINED, ${i.operands.length - hidden}, ${argArray(i.operands.slice(hidden).map((o) => this.as(o, "boxed")))}, JS_UNDEFINED)`);
+          this.boxedCall(i, `${this.cnames.entry(i.target!)}__generic(ctx, JS_UNDEFINED, JS_UNDEFINED, ${i.operands.length - hidden}, ${argArray(i.operands.slice(hidden).map((o) => this.as(o, "boxed")))}, JS_UNDEFINED)`);
           return;
         }
         const passed = i.operands.map((o, k) => this.as(o, callee?.params[k]?.repr ?? "boxed"));
-        const call = `${this.strings.prefix}jsf_${ident(i.target!)}(ctx${passed.map((a) => `, ${a}`).join("")})`;
+        const call = `${this.cnames.entry(i.target!)}(ctx${passed.map((a) => `, ${a}`).join("")})`;
         const ret = callee?.returnRepr ?? "boxed";
         /* JS_NO_TAIL_CALL: unbounded recursion must reach the stack check */
         if (ret === "boxed") {
@@ -1527,7 +1690,7 @@ class FunctionEmitter {
     return this.shared || this.fn.meta?.declared ? "JS_MAYBE_UNUSED " : "static JS_MAYBE_UNUSED ";  /* declared: a typed unit's, called from the program */
   }
 
-  /** The entry's prototype: in program.h when it's shared, else in the function's own file. */
+  /** The entry's prototype: in each file that calls it when it's shared, else in its own file only. */
   prototype(): string {
     const ret = C_TYPE[this.fn.returnRepr ?? "boxed"];
     return `${this.linkage()}${ret} ${this.cname}(JSContext *ctx${this.fn.params.map((p) => `, ${C_TYPE[p.repr]} ${this.name(p)}`).join("")});`;
@@ -1555,6 +1718,10 @@ export interface EmitOptions {
   regexps?: ReadonlyMap<string, Uint8Array>;
   /** What "visaljs:host" imports name: the host packages' primitives. */
   hostPrimitives?: HostPrimitives;
+  /** Name each C variable after its JS one as well as by number (`v3_count`, not `v3`): for
+   *  reading the C, and for a debugger. On by default. Off, a renamed variable (a bundler's,
+   *  after a content-hashed file) leaves the C, and the driver's cached object of it, as it was. */
+  names?: boolean;
   /** emitProgramFiles: split a program into C files of about this many IR instructions each.
    *  Absent: one file. */
   partSize?: number;
@@ -1606,7 +1773,7 @@ export function emitHarnessScript(m: ModuleIR, prefix: string, atoms: ReadonlyMa
   e.main.shared = true;
   const emitters = [...e.functions, e.main];
   const bodies = emitters.map((f) => f.emit());
-  const infos = m.functions.map((fn) => functionInfo(fn, e.strings, e.embedSource));
+  const infos = m.functions.map((fn) => functionInfo(fn, e.strings, e.cnames, e.embedSource));
   const nGlobals = Math.max(1, m.globals.length);
   const cells = e.strings.cells;
   const c = [
@@ -1618,12 +1785,12 @@ export function emitHarnessScript(m: ModuleIR, prefix: string, atoms: ReadonlyMa
     ...dataLines(m, prefix, `${prefix}register`, options, e, ""),
     "",
     ...emitters.flatMap((f) => [f.prototype(), ...f.resumePrototype()]),
-    ...m.functions.map((fn) => genericPrototype(fn, prefix)),
+    ...m.functions.map((fn) => genericPrototype(fn, e.cnames.entry(fn.name))),
     "",
     ...infos,
     ...(infos.length ? [""] : []),
     ...bodies.flatMap((b) => [b, ""]),
-    ...m.functions.flatMap((fn) => [genericEntry(fn, prefix), ""]),
+    ...m.functions.flatMap((fn) => [genericEntry(fn, e.cnames.entry(fn.name)), ""]),
     `void ${prefix}register(JSRuntime *rt) {`,
     ...(cells.length ? [`    js_register_static_atoms(rt, ${prefix}mod_atoms, ${cells.length});`] : []),
     ...(e.caches.count ? [`    js_register_prop_caches(rt, ${prefix}mod_ics, ${e.caches.count});`] : []),
@@ -1641,27 +1808,30 @@ interface Emission {
   strings: Strings;
   caches: Caches;
   hosts: Hosts;
+  cnames: CNames;
   /** m.functions', in order */
   functions: FunctionEmitter[];
   main: FunctionEmitter;
   embedSource: boolean;
 }
 
-function prepare(m: ModuleIR, p: string, options: EmitOptions): Emission {
+/** `cnames`: a split program's stable ones; else by IR name. */
+function prepare(m: ModuleIR, p: string, options: EmitOptions, cnames = new CNames(m, p, false)): Emission {
   const strings = new Strings(p, options.regexps, options.harness?.atoms);
-  const caches = new Caches();
+  const caches = new Caches(p);
   const hosts = new Hosts(options.hostPrimitives ?? {});
   const callees = new Map(m.functions.map((fn) => [fn.name, fn]));
+  const names = options.names !== false;
   return {
-    strings, caches, hosts,
-    functions: m.functions.map((fn) => new FunctionEmitter(fn, cFunctionName(fn, false, p), strings, caches, hosts, callees)),
-    main: new FunctionEmitter(m.main, cFunctionName(m.main, true, p), strings, caches, hosts, callees),
+    strings, caches, hosts, cnames,
+    functions: m.functions.map((fn) => new FunctionEmitter(fn, cnames.entry(fn.name), strings, caches, hosts, callees, cnames, names)),
+    main: new FunctionEmitter(m.main, cFunctionName(m.main, true, p), strings, caches, hosts, callees, cnames, names),
     embedSource: options.embedSource === true && m.functions.some((fn) => fn.meta!.source),
   };
 }
 
-function genericPrototype(fn: FunctionIR, p: string): string {
-  return `${fn.meta!.declared ? "" : "static "}JSValue ${cFunctionName(fn, false, p)}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);`;
+function genericPrototype(fn: FunctionIR, direct: string): string {
+  return `${fn.meta!.declared ? "" : "static "}JSValue ${direct}__generic(JSContext *ctx, JSValue callee, JSValue this_val, uint32_t argc, const JSValue *argv, JSValue new_target);`;
 }
 
 /** The module's data, once every function is emitted: globals, literals, caches, tables.
@@ -1670,18 +1840,30 @@ function genericPrototype(fn: FunctionIR, p: string): string {
 function dataLines(m: ModuleIR, p: string, entry: string | null, options: EmitOptions, e: Emission, storage: string): string[] {
   const nGlobals = m.globals.length;
   const atoms = e.strings.cells;
+  const split = e.caches.split;
   return [
-    nGlobals ? `/* ${m.globals.map((g) => `@${g.slot} ${g.name}`).join(", ")} */` : "",
-    `${storage}JSValue ${p}mod_globals[${Math.max(1, nGlobals)}];`,
+    ...(split
+      ? [
+        ...split.globals.map((g) => `JSValue ${g};`),
+        ...(nGlobals ? [`static JSValue *const mod_global_slots[] = { ${split.globals.map((g) => `&${g}`).join(", ")} };`] : []),
+      ]
+      : [nGlobals ? `/* ${m.globals.map((g) => `@${g.slot} ${g.name}`).join(", ")} */` : "", `${storage}JSValue ${p}mod_globals[${Math.max(1, nGlobals)}];`]),
     "",
     ...e.strings.decls.map((d) => d.define(storage)),
     ...(e.embedSource ? [sourceCell(m.source, p).define(storage)] : []),
     ...(atoms.length ? [`static const JSString *const ${p}mod_atoms[] = { ${atoms.map((a) => `(const JSString *)&${a}`).join(", ")} };`] : []),
-    ...(e.caches.count ? [`${storage}JSPropCache ${p}mod_ics[${e.caches.count}];`] : []),
-    ...(e.caches.keys ? [`${storage}JSValue ${p}mod_keys[${e.caches.keys}];`] : []),
+    ...cacheTables(e.caches).flatMap(({ ics, count, keyTable, keys }) => [
+      ...(count ? [split ? `extern JSPropCache ${ics}[];` : `${storage}JSPropCache ${ics}[${count}];`] : []),
+      ...(keys ? [split ? `extern JSValue ${keyTable}[];` : `${storage}JSValue ${keyTable}[${keys}];`] : []),
+    ]),
     ...(options.components?.length && !entry ? [`static const JSComponent *const ${p}mod_components[] = { ${options.components.map((c) => `&${c}`).join(", ")} };`] : []),
     ...(options.core && !entry ? [`static const JSCoreEntry ${p}mod_core[] = {`, ...options.core.map((c) => `    ${c.c},`), "};"] : []),
   ];
+}
+
+/** The module's caches' arrays: its own, or a split program's files'. */
+function cacheTables(c: Caches): SplitTables["files"] {
+  return c.split ? c.split.files : [{ ics: c.ics, count: c.count, keyTable: c.keyTable, keys: c.keys }];
 }
 
 /** main(), or a test262 unit's run(): a runtime, the module's tables, the script, the event loop. */
@@ -1693,8 +1875,10 @@ function mainLines(m: ModuleIR, p: string, entry: string | null, options: EmitOp
     "    JSRuntime *rt = js_runtime_new();",
     /* before the realm interns its own names, so they resolve to these cells */
     ...(atoms.length ? [`    js_register_static_atoms(rt, ${p}mod_atoms, ${atoms.length});`] : []),
-    ...(e.caches.count ? [`    js_register_prop_caches(rt, ${p}mod_ics, ${e.caches.count});`] : []),
-    ...(e.caches.keys ? [`    js_register_roots(rt, ${p}mod_keys, ${e.caches.keys});  /* zeroed: EMPTY, no key yet */`] : []),
+    ...cacheTables(e.caches).flatMap(({ ics, count, keyTable, keys }) => [
+      ...(count ? [`    js_register_prop_caches(rt, ${ics}, ${count});`] : []),
+      ...(keys ? [`    js_register_roots(rt, ${keyTable}, ${keys});  /* zeroed: EMPTY, no key yet */`] : []),
+    ]),
     ...(options.harness?.scripts.length
       ? [`    void ${options.harness.register}(JSRuntime *rt);`, `    ${options.harness.register}(rt);  /* the harness's tables */`]
       : []),
@@ -1705,8 +1889,12 @@ function mainLines(m: ModuleIR, p: string, entry: string | null, options: EmitOp
     ...(options.components?.length && !entry ? [`    js_install_components(ctx, ${p}mod_components, ${options.components.length});  /* optional built-ins */`] : []),
     ...(entry ? ["    js_test_host_init(ctx);  /* $262 */"] : ["    if (js_host_init(ctx, argc, argv) < 0) return js_report_uncaught(ctx);  /* console, process */"]),
     ...harnessLines(options.harness),
-    `    for (size_t i = 0; i < ${Math.max(1, nGlobals)}; i++) ${p}mod_globals[i] = JS_UNDEFINED;`,
-    `    js_register_roots(rt, ${p}mod_globals, ${Math.max(1, nGlobals)});`,
+    ...(e.caches.split
+      ? nGlobals ? [`    for (size_t i = 0; i < ${nGlobals}; i++) { *mod_global_slots[i] = JS_UNDEFINED; js_add_root(rt, mod_global_slots[i]); }`] : []
+      : [
+        `    for (size_t i = 0; i < ${Math.max(1, nGlobals)}; i++) ${p}mod_globals[i] = JS_UNDEFINED;`,
+        `    js_register_roots(rt, ${p}mod_globals, ${Math.max(1, nGlobals)});`,
+      ]),
     `    int status = js_run_event_loop(ctx, ${p}js_script(ctx));  /* then the microtasks */`,
     ...(entry ? [] : ["    status = js_host_exit(ctx, status);  /* process's beforeExit and exit, process.exitCode */"]),
     "    js_context_free(ctx);",
@@ -1732,7 +1920,7 @@ function emitModule(m: ModuleIR, p: string, entry: string | null, options: EmitO
   const e = prepare(m, p, options);
   const emitters = [...e.functions, e.main];
   const bodies = emitters.map((f) => f.emit());
-  const infos = m.functions.map((fn) => functionInfo(fn, e.strings, e.embedSource));
+  const infos = m.functions.map((fn) => functionInfo(fn, e.strings, e.cnames, e.embedSource));
   return [
     GENERATED,
     "#include <stdlib.h>",
@@ -1742,12 +1930,12 @@ function emitModule(m: ModuleIR, p: string, entry: string | null, options: EmitO
     ...dataLines(m, p, entry, options, e, "static "),
     "",
     ...emitters.flatMap((f) => [f.prototype(), ...f.resumePrototype()]),
-    ...m.functions.map((fn) => genericPrototype(fn, p)),
+    ...m.functions.map((fn) => genericPrototype(fn, e.cnames.entry(fn.name))),
     "",
     ...infos,
     ...(infos.length ? [""] : []),
     ...bodies.flatMap((b) => [b, ""]),
-    ...m.functions.flatMap((fn) => [genericEntry(fn, p), ""]),
+    ...m.functions.flatMap((fn) => [genericEntry(fn, e.cnames.entry(fn.name)), ""]),
     ...mainLines(m, p, entry, options, e),
   ].join("\n");
 }
@@ -1761,39 +1949,83 @@ function weight(fn: FunctionIR): number {
   return n;
 }
 
-/** Each function's file (1, 2, …), for files of about `size` instructions each. Functions
- *  stay in the bundle's order, so a package's functions, which mostly call each other, share
- *  a file. Null for a program that fits one file. */
-function partition(fns: readonly FunctionIR[], size: number): Map<FunctionIR, number> | null {
+/** Each function's file (1, 2, …): runs of functions in the bundle's order, about `size`
+ *  instructions each. A package's functions, which mostly call each other, share a file. Where a
+ *  file ends depends on the functions there alone, not on the total or on the files before: once
+ *  half full, a file ends before a function with a chance that grows with the function's
+ *  instructions, drawn from its stable C name. A change then moves the ends of the files around it
+ *  only, and the others' text, and the driver's objects of them, stay as they were. Null for a
+ *  program that fits one file. */
+function partition(fns: readonly FunctionIR[], name: (fn: FunctionIR) => string, size: number): Map<FunctionIR, number> | null {
   const weights = fns.map(weight);
-  const total = weights.reduce((a, b) => a + b, 0);
-  const count = Math.round(total / size);
-  if (count <= 1) return null;
-  /* a function goes where its middle falls; a big one can leave a file empty: renumber */
-  const raw: number[] = [];
-  let before = 0;
-  weights.forEach((w) => {
-    raw.push(Math.min(count - 1, Math.floor(((before + w / 2) * count) / total)));
-    before += w;
+  if (Math.round(weights.reduce((a, b) => a + b, 0) / size) <= 1) return null;
+  const parts = new Map<FunctionIR, number>();
+  let k = 1, filled = 0;
+  fns.forEach((fn, i) => {
+    const w = weights[i]!;
+    const ends = filled >= 2 * size || (filled >= size / 2 && jsStringHash(name(fn)) / 2 ** 32 < w / (size / 2));
+    if (ends) [k, filled] = [k + 1, 0];
+    parts.set(fn, k);
+    filled += w;
   });
-  const used = [...new Set(raw)];
-  if (used.length <= 1) return null;
-  return new Map(fns.map((fn, i) => [fn, used.indexOf(raw[i]!) + 1]));
+  return k > 1 ? parts : null;
 }
 
+/** A split program's globals' variables, by slot: not by slot, which moves with every global added
+ *  before it. One that a function stores first (its module's top level, in an init function),
+ *  else reads, is named after the function and its order there: a binding's name is a bundler's,
+ *  which renames it (a$19, init_page_C36dP7Ex) when a module before declares one more or a file's
+ *  content hash changes. The script's own, which hold thousands, after their bindings. */
+function globalNames(m: ModuleIR, cnames: CNames): string[] {
+  const owners = new Map<number, { fn: FunctionIR; stores: boolean }>();
+  for (const fn of [...m.functions, m.main])
+    for (const b of fn.blocks)
+      for (const i of b.instrs) {
+        if (i.index === undefined || !GLOBAL_OPS.has(i.op)) continue;
+        const stores = i.op === "store_global";
+        const owner = owners.get(i.index);
+        if (!owner || (stores && !owner.stores)) owners.set(i.index, { fn, stores });
+      }
+  const counts = new Map<FunctionIR, number>();
+  const taken = new Set<string>();
+  const names = m.globals.map((g) => {
+    if (owners.get(g.slot)?.fn !== m.main) return `mod_gu_${g.slot}`;  /* a function's, below; or none uses it */
+    const base = `mod_g_${ident(g.name.replace(BUILD_SPECIFIC_SUFFIX, ""))}`;
+    let name = base;
+    for (let n = 2; taken.has(name); n++) name = `${base}_${n}`;
+    taken.add(name);
+    return name;
+  });
+  for (const fn of [...m.functions, m.main])
+    for (const b of fn.blocks)
+      for (const i of b.instrs) {
+        if (fn === m.main || i.index === undefined || !GLOBAL_OPS.has(i.op) || owners.get(i.index)?.fn !== fn || names[i.index] !== `mod_gu_${i.index}`) continue;
+        const n = counts.get(fn) ?? 0;
+        counts.set(fn, n + 1);
+        names[i.index] = `mod_gf_${cnames.entry(fn.name).slice("jsf_".length)}_${n}`;
+      }
+  return names;
+}
+
+/** The instructions whose `index` is a global's slot. */
+const GLOBAL_OPS: ReadonlySet<Op> = new Set(["load_global", "store_global", "template_object", "import_meta"]);
+
 /** The program's C files: program.c alone under `options.partSize` instructions, else
- *  program_1.c … program_N.c (the functions, compiled in parallel), program.h and program.c (the
- *  data and main()). Yielded as each is made, so a caller that writes each away never holds a
- *  large program's C (hundreds of megabytes) at once. */
+ *  program_1.c … program_N.c (the functions, compiled in parallel) and program.c (the data and
+ *  main()). Each function's file declares only what it uses, so its text, and the object the
+ *  driver caches by it, stays the same while the rest of the program changes. Yielded as each is
+ *  made, so a caller that writes each away never holds a large program's C (hundreds of
+ *  megabytes) at once. */
 export function* emitProgramFiles(m: ModuleIR, options: EmitOptions = {}): Generator<CFile> {
   const fns = [...m.functions, m.main];
-  const parts = options.partSize ? partition(fns, options.partSize) : null;
+  const cnames = new CNames(m, "", true);
+  const parts = options.partSize ? partition(fns, (fn) => (fn === m.main ? "js_script" : cnames.entry(fn.name)), options.partSize) : null;
   if (!parts) {
     yield { name: "program.c", text: emitProgram(m, options) };
     return;
   }
 
-  const e = prepare(m, "", options);
+  const e = prepare(m, "", options, cnames);
   const emitters = new Map(fns.map((fn, i) => [fn, i < m.functions.length ? e.functions[i]! : e.main]));
   const byName = new Map(m.functions.map((fn) => [fn.name, fn]));
   const sharedInfos = new Set<FunctionIR>();
@@ -1807,6 +2039,31 @@ export function* emitProgramFiles(m: ModuleIR, options: EmitOptions = {}): Gener
         if (i.op === "call_direct" || i.op === "construct_direct") emitters.get(target)!.shared = true;
         if (i.op !== "call_direct") sharedInfos.add(target);  /* construct_direct compares the function's info */
       }
+
+  const split: SplitTables = { globals: globalNames(m, cnames), files: [] };
+  e.strings.stable = true;
+  e.caches.split = split;
+
+  /* what a file can refer to in the others, by C symbol; the literals join as they're made */
+  const declarations = new Map<string, string>([
+    ...split.globals.map((g) => [g, `extern JSValue ${g};`] as [string, string]),
+    ...fns.filter((fn) => emitters.get(fn)!.shared).map((fn) => [fn === m.main ? cFunctionName(fn, true) : e.cnames.entry(fn.name), emitters.get(fn)!.prototype()] as [string, string]),
+    ...[...sharedInfos].map((fn) => [e.cnames.info(fn.name), `extern const JSFunctionInfo ${e.cnames.info(fn.name)};`] as [string, string]),
+  ]);
+  if (e.embedSource) declarations.set("mod_source", "extern const JSCell mod_source;");
+  let literals = 0;
+  const declare = (text: string): string[] => {
+    for (; literals < e.strings.decls.length; literals++) {
+      const d = e.strings.decls[literals]!;
+      declarations.set(d.name, d.cell ? `extern const JSCell ${d.name};` : d.declare);
+    }
+    for (const c of e.hosts.used) declarations.set(c, `JSValue ${c}(JSContext *, JSValue, JSValue, uint32_t, const JSValue *, JSValue);  /* host primitive */`);
+    for (const [c, prototype] of e.hosts.typed) declarations.set(c, prototype);
+    const used = new Set<string>();
+    for (const [name] of text.matchAll(/[A-Za-z_]\w*/g)) if (declarations.has(name)) used.add(name);
+    return [...used].map((name) => declarations.get(name)!);
+  };
+
   /* each part's functions, in order: a part is a run of them */
   const byPart = new Map<number, FunctionIR[]>();
   for (const fn of fns) {
@@ -1816,46 +2073,41 @@ export function* emitProgramFiles(m: ModuleIR, options: EmitOptions = {}): Gener
   }
   for (const [k, own] of byPart) {
     const made = own.filter((fn) => fn !== m.main);
+    const stem = own[0] === m.main ? "js_script" : e.cnames.entry(own[0]!.name).slice("jsf_".length);
+    Object.assign(e.caches, { ics: `jsics_${stem}`, keyTable: `jskeys_${stem}`, count: 0, keys: 0 });
+    e.strings.startFile(stem);
     const bodies = own.map((fn) => emitters.get(fn)!.emit());
-    const text = [
-      GENERATED,
-      '#include "program.h"',
-      "",
+    const tables = { ics: e.caches.ics, count: e.caches.count, keyTable: e.caches.keyTable, keys: e.caches.keys };
+    split.files.push(tables);
+    const code = [
       ...own.flatMap((fn) => {
         const f = emitters.get(fn)!;
         return [...(f.shared ? [] : [f.prototype()]), ...f.resumePrototype()];
       }),
-      ...made.map((fn) => genericPrototype(fn, "")),
+      ...made.map((fn) => genericPrototype(fn, e.cnames.entry(fn.name))),
       "",
-      ...made.map((fn) => functionInfo(fn, e.strings, e.embedSource, sharedInfos.has(fn))),
+      ...made.map((fn) => functionInfo(fn, e.strings, e.cnames, e.embedSource, sharedInfos.has(fn))),
       ...(made.length ? [""] : []),
       ...bodies.flatMap((body) => [body, ""]),
-      ...made.flatMap((fn) => [genericEntry(fn, ""), ""]),
+      ...made.flatMap((fn) => [genericEntry(fn, e.cnames.entry(fn.name)), ""]),
+    ].join("\n");
+    const ownTables = [
+      ...(tables.count ? [`JSPropCache ${tables.ics}[${tables.count}];`] : []),
+      ...(tables.keys ? [`JSValue ${tables.keyTable}[${tables.keys}];  /* zeroed: EMPTY, no key yet */`] : []),
     ];
-    yield { name: `program_${k}.c`, text: text.join("\n") };
+    yield { name: `program_${k}.c`, text: [GENERATED, "#include <stdlib.h>", '#include "js_runtime.h"', "", ...declare(code), ...ownTables, "", code].join("\n") };
   }
 
   /* once every function is emitted: the literals, caches and hosts they use */
-  const header = [
+  const data = [
     GENERATED,
-    "/* What the program's files share: program.c defines the data, program_N.c the functions. */",
     "#include <stdlib.h>",
     '#include "js_runtime.h"',
     "",
-    ...(e.hosts.used.size ? [...e.hosts.decls(), ""] : []),
-    "#ifndef VISALJS_PROGRAM_DATA  /* program.c has the definitions */",
-    `extern JSValue mod_globals[${Math.max(1, m.globals.length)}];`,
-    ...(e.caches.count ? [`extern JSPropCache mod_ics[${e.caches.count}];`] : []),
-    ...(e.caches.keys ? [`extern JSValue mod_keys[${e.caches.keys}];`] : []),
-    ...e.strings.decls.map((d) => d.declare),
-    ...(e.embedSource ? [sourceCell(m.source, "").declare] : []),
-    "#endif",
+    e.main.prototype(),
+    ...dataLines(m, "", null, options, e, ""),
     "",
-    ...fns.filter((fn) => emitters.get(fn)!.shared).map((fn) => emitters.get(fn)!.prototype()),
-    ...[...sharedInfos].map((fn) => `extern const JSFunctionInfo ${infoName(fn.name, "")};`),
-    "",
+    ...mainLines(m, "", null, options, e),
   ];
-  yield { name: "program.h", text: header.join("\n") };
-  const data = [GENERATED, "#define VISALJS_PROGRAM_DATA", '#include "program.h"', "", ...dataLines(m, "", null, options, e, ""), "", ...mainLines(m, "", null, options, e)];
   yield { name: "program.c", text: data.join("\n") };
 }

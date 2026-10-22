@@ -97,12 +97,12 @@ describe.runIf(FIRST)("programs split into C files", () => {
     }
   }
 
-  it("emits program.h, program.c and the functions' files", async () => {
+  it("emits program.c and the functions' files", async () => {
     const dir = join(OUT, "split-c");
     const code = await split(() => main(["build", join(DIR, "closures.js"), "--emit", "c", "-o", dir], { stdout: () => {}, stderr: () => {} }));
     expect(code).toBe(0);
     const files = readdirSync(dir);
-    expect(files).toEqual(expect.arrayContaining(["program.h", "program.c", "program_1.c", "program_2.c"]));
+    expect(files).toEqual(expect.arrayContaining(["program.c", "program_1.c", "program_2.c"]));
   }, 60000);
 
   for (const file of ["classes.js", "closures.js", "generators.js", "async-generators.js", "bigint.js", "regexp.js", "templates.js", "tostring.js"])
