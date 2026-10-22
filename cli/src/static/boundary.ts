@@ -20,8 +20,12 @@ export const isStaticModule = (id: string) => id.endsWith(STATIC_MODULE);
 /** A file that starts with the "use static" directive (after comments). */
 const DIRECTIVE = /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*(["'])use static\1/;
 
+export function isStaticSource(file: string, text: string): boolean {
+  return /\.[cm]?tsx?$/.test(file) && !/\.d\.[cm]?ts$/.test(file) && DIRECTIVE.test(text);
+}
+
 function isStaticFile(file: string): boolean {
-  return /\.[cm]?tsx?$/.test(file) && DIRECTIVE.test(readFileSync(file, "utf8"));
+  return isStaticSource(file, readFileSync(file, "utf8"));
 }
 
 /** The program's bundle: a static file's import resolves to its module of host primitives;

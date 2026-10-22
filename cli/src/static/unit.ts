@@ -2,11 +2,11 @@
 //
 // The program's bundle leaves them out (boundary.ts): each of their exports becomes a host
 // primitive whose C function is the export's generic entry in the unit (which checks its
-// arguments against the declared types: a TypeError for any other). The unit's files are
-// checked by tsc and against the subset (subset.ts), linked into one module (link.ts), their
-// declared types read with tsc's checker, and compiled as a "harness script"
-// (emitHarnessScript): its own prefix, its tables registered and its top level run before the
-// program's.
+// arguments against the declared types: a TypeError for any other). The unit's files (and the
+// static files they import) are checked by tsc, their classes nominal (nominal.ts), and against
+// the subset (subset.ts), linked into one module (link.ts), their declared types read with tsc's
+// checker, and compiled as a "harness script" (emitHarnessScript): its own prefix, its tables
+// registered and its top level run before the program's.
 //
 // A Float64Array's element is a number there, as its type says: past the end, NaN (undefined as
 // a number).
@@ -15,7 +15,9 @@ import { type FunctionIR, T, type Type, type TypedCall } from "@visaljs/ir";
 import { optimize, type PassReport } from "@visaljs/optimizer";
 import ts from "typescript";
 
+import { isStaticSource } from "./boundary.ts";
 import { compileError, linkUnit } from "./link.ts";
+import { nominalDiagnostic, nominalProgram } from "./nominal.ts";
 import { checkSubset } from "./subset.ts";
 import { declaredSignatures, type Signature, TYPES_FILE } from "./types.ts";
 
@@ -41,13 +43,16 @@ function ident(name: string): string {
 }
 
 /** Compiles the typed files as one unit. */
-export function buildTypedUnit(files: readonly string[], primitives: HostPrimitives): TypedUnit {
-  const program = ts.createProgram([...files, TYPES_FILE], {
+export function buildTypedUnit(imported: readonly string[], primitives: HostPrimitives): TypedUnit {
+  const program = nominalProgram(imported, [TYPES_FILE], {
     strict: true, noEmit: true, target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler, allowImportingTsExtensions: true, skipLibCheck: true,
   });
+  /* a static file only static code imports is the unit's too */
+  const files = program.getSourceFiles().filter((sf) => isStaticSource(sf.fileName, sf.text)).map((sf) => sf.fileName);
   checkSubset(program, files);  /* first: its errors say what static code can't do, tsc's what the types don't allow */
-  const errors = ts.getPreEmitDiagnostics(program).filter((d) => d.category === ts.DiagnosticCategory.Error && files.includes(d.file?.fileName ?? ""));
+  const errors = ts.getPreEmitDiagnostics(program)
+    .filter((d) => d.category === ts.DiagnosticCategory.Error && files.includes(d.file?.fileName ?? "")).map(nominalDiagnostic);
   if (errors.length) throw new Error(ts.formatDiagnostics(errors, { getCanonicalFileName: (f) => f, getCurrentDirectory: () => process.cwd(), getNewLine: () => "\n" }));
   const checker = program.getTypeChecker();
   const signatures = new Map<string, Signature>();
