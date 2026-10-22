@@ -10,9 +10,9 @@
       "total": 58
     },
     "exports": {
-      "implemented": 1193,
+      "implemented": 1194,
       "stubbed": 37,
-      "missing": 54,
+      "missing": 53,
       "total": 1284
     }
   },
@@ -1105,12 +1105,12 @@
         "constants",
         "createHistogram",
         "monitorEventLoopDelay",
-        "performance"
+        "performance",
+        "timerify"
       ],
       "stubbed": [],
       "missing": [
-        "eventLoopUtilization",
-        "timerify"
+        "eventLoopUtilization"
       ],
       "notes": "performance: now(), timeOrigin, marks and measures, from process.hrtime. Not yet: PerformanceObserver, PerformanceResourceTiming, monitorEventLoopDelay, createHistogram, eventLoopUtilization."
     },
