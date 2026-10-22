@@ -1,0 +1,174 @@
+---
+title: "Custom Allocation"
+group: "Memory"
+order: 2
+icon: "grid-four"
+files:
+  - "runtime/include/js_gc.h"
+  - "runtime/src/gc.c"
+---
+
+We could keep using `malloc`, but a garbage collector needs more control over where cells live. We need to build our own allocator.
+
+JavaScript programs create many small cells, and throw most of them away almost as soon as they're made. Even a small function allocates several times.
+
+```js
+function label(user) {
+  const name = user.first + " " + user.last; // strings
+  const country = user.country.toUpperCase(); // a string
+  const person = { name, country }; // an object
+  return `${person.name} (${person.country})`; // a string
+}
+```
+
+Once `label` returns, only the string it returns is still in use. Everything else it allocated is garbage, on every call. Freeing all of it leaves holes in memory, and holes lead to _fragmentation_, which we'll get to soon.
+
+## Fragmentation
+
+As the program keeps allocating and freeing, new cells reuse the holes old ones left, but they rarely fit exactly. Meanwhile, the cells that live longer stay where they are, between the holes. Over time, memory breaks up into used cells with free holes scattered among them. This is called _fragmentation_.
+
+<Memory
+  x={16}
+  y={5}
+  items={[
+    { type: "used", offset: 0, size: 7 },
+    { type: "free", offset: 7, size: 4 },
+    { type: "used", offset: 11, size: 18 },
+    { type: "free", offset: 29, size: 6 },
+    { type: "used", offset: 35, size: 10 },
+    { type: "free", offset: 45, size: 3 },
+    { type: "used", offset: 48, size: 12 },
+    { type: "used", offset: 60, size: 9 },
+    {
+      type: "free",
+      offset: 69,
+      size: 1,
+      selected: true,
+      note: "Too small to fit anything",
+    },
+    { type: "used", offset: 70, size: 10 },
+  ]}
+/>
+
+Fragmentation causes two problems.
+
+- **Free memory we can't use.** There may be plenty of free memory in total, but split into holes too small for the cell we want. A tiny hole, like the selected one, may never fit anything at all.
+- **Finding a hole takes time.** A simple allocator keeps a list of its holes, and on every allocation, searches it for one that's big enough. The more holes, the longer the search.
+
+## Slab allocation
+
+We're going to implement [slab allocation](https://en.wikipedia.org/wiki/Slab_allocation). A slab allocator takes memory in big pieces, and divides it by _size class_: one part of memory holds only 16-byte cells, another only 32-byte cells, and so on. When we ask for memory, the allocator looks at how much we need, finds the size class it falls into, and hands out a cell of that class.
+
+Since every cell in a part has the same size, a hole left by a freed cell is exactly the size of the next cell of its class. No hole is ever too small.
+
+We divide memory into 32 size classes, from 16 bytes up to 8 KiB. The heap keeps the memory of each class apart, in a list of its own.
+
+```c
+typedef struct {
+    JSBlock *blocks[32];   /* one list per size class */
+} JSHeap;
+
+static JSHeap heap;
+```
+
+Here are the cell sizes of each class.
+
+| Class   | Cell size, in bytes              |
+| ------- | -------------------------------- |
+| 0 – 7   | 16, 32, 48, 64, 80, 96, 112, 128 |
+| 8 – 11  | 160, 192, 224, 256               |
+| 12 – 15 | 320, 384, 448, 512               |
+| 16 – 19 | 640, 768, 896, 1024              |
+| 20 – 23 | 1280, 1536, 1792, 2048           |
+| 24 – 27 | 2560, 3072, 3584, 4096           |
+| 28 – 31 | 5120, 6144, 7168, 8192           |
+
+A size is rounded up to its class, so a 40-byte string gets a 48-byte cell. A little space at the end of a cell may go unused, but in return, every hole fits.
+
+## Blocks
+
+Each class's list is a chain of _blocks_. A block is a 64 KiB chunk of memory, divided into cells of its class's size: a block of the 16-byte class holds only 16-byte cells. A small header comes first, and the cells follow it.
+
+<Memory
+  x={8}
+  y={1}
+  legend={false}
+  items={[
+    {
+      type: "used",
+      offset: 0,
+      size: 2,
+      label: "header",
+      note: "Starts at a multiple of 64 KiB",
+    },
+    { type: "free", offset: 2, size: 1, label: "cell 0" },
+    { type: "free", offset: 3, size: 1, label: "cell 1" },
+    { type: "free", offset: 4, size: 1, label: "cell 2" },
+    { type: "free", offset: 5, size: 1, label: "cell 3" },
+    { type: "free", offset: 6, size: 1, label: "…" },
+    { type: "free", offset: 7, size: 1, label: "cell n" },
+  ]}
+/>
+
+The header describes its block.
+
+```c
+typedef struct JSBlock {
+    struct JSBlock *next;      /* the next block of its size class */
+    uint32_t cell_size;
+    uint32_t cell_count;
+    uint8_t  size_class;
+    uint64_t alloc_bits[64];   /* a bit per cell: in use */
+} JSBlock;
+```
+
+Each cell has one bit in `alloc_bits`, set when the cell is in use. The smallest class is 16 bytes, so a block holds at most 4096 cells, and 64 words of 64 bits cover them all.
+
+## Allocating
+
+Now we replace `malloc` with our own allocator, `js_alloc_cell`.
+
+```c
+JSValue js_new_string(const char *chars, uint32_t length) {
+-     JSString *s = malloc(sizeof(JSString) + length);
++     JSString *s = js_alloc_cell(sizeof(JSString) + length);
+    s->cell.kind = JS_CELL_STRING;
+    ...
+}
+```
+
+`js_alloc_cell` finds a free cell of the right class, and if every block is full, it adds a new block and takes a cell from that. Finding a free cell is easy if we just check every allocation bit, one by one. Finding one quickly takes more bookkeeping, and that's beyond the scope of this section.
+
+```c
+void *js_alloc_cell(size_t size) {
+    unsigned size_class = js_size_class(size);
+    JSCell *cell = find_free_cell(size_class);
+    if (!cell) {
+        add_block(size_class);   /* every block is full */
+        cell = find_free_cell(size_class);
+    }
+    return cell;
+}
+```
+
+## Freeing
+
+Freeing a cell is just clearing its bit. But first, from the cell's address, we need its block and its index. Every block starts at an address that's a multiple of 64 KiB, so for any address inside it, clearing the low 16 bits gives the start of the block. And since every cell has the same size, the offset from there gives the index.
+
+```c
+void free_cell(JSCell *cell) {
+    JSBlock *b = js_block_of(cell);
+    uint32_t i = cell_index(b, cell);
+    bit_clear(b->alloc_bits, i);
+}
+```
+
+`js_block_of` and `cell_index` do those two steps.
+
+Nothing in a JavaScript program ever calls `free_cell`. Deciding which cells are garbage is the collector's job.
+
+## What's next?
+
+Holes always fit, and we know where every cell is: every set bit of every block's allocation bitmap. From any address, a mask finds its block, and a division finds its cell.
+
+What's missing is who frees them. Next, we find the cells the program can't reach anymore, and clear their bits, in [Mark and Sweep](/book/mark-and-sweep).

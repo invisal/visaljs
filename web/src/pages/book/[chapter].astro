@@ -1,15 +1,15 @@
 ---
-// One page per chapter of the guide (src/guide/*.mdx).
+// One page per chapter of the guide (src/book/*.mdx).
 import { render } from "astro:content";
 import CodeBlock from "../../components/CodeBlock.astro";
 import FloatTable from "../../components/FloatTable.astro";
 import GuideContents from "../../components/GuideContents.astro";
 import Heading from "../../components/Heading.astro";
 import InlineCode from "../../components/InlineCode.astro";
+import Memory from "../../components/Memory.astro";
 import Note from "../../components/Note.tsx";
 import Pair from "../../components/Pair.astro";
 import SubHeading from "../../components/SubHeading.astro";
-import Prose from "../../components/Prose.astro";
 import Layout from "../../layouts/Layout.astro";
 import { chapters } from "../../lib/guide.ts";
 
@@ -20,15 +20,11 @@ export async function getStaticPaths() {
 const REPO = "https://github.com/invisal/visaljs/blob/main/";
 
 const { chapter, prev, next } = Astro.props;
-const { title, good, bad, files } = chapter.data;
+const { title, files } = chapter.data;
 const { Content } = await render(chapter);
 /** What the guide's MDX may use without importing it. */
-const components = { CodeBlock, Pair, Note, FloatTable, h2: Heading, h3: SubHeading, code: InlineCode };
+const components = { CodeBlock, Pair, Note, FloatTable, Memory, h2: Heading, h3: SubHeading, code: InlineCode };
 const refs = files.map((f) => [f, f] as const);
-const tradeoffs = [
-  ["Good", good, "border-kumo-success/40 text-kumo-success"],
-  ["Bad", bad, "border-kumo-danger/40 text-kumo-danger"],
-] as const;
 ---
 
 <Layout title={`${title} · JavaScript to C · visaljs`} page="guide" flush>
@@ -38,28 +34,7 @@ const tradeoffs = [
     <div class="guide">
       <Content components={components} />
     </div>
-    <section id="tradeoffs" class="scroll-mt-16 space-y-4">
-      {
-        (good.length > 0 || bad.length > 0) && (
-          <>
-            <h2 class="text-xl font-semibold tracking-tight">Good and bad</h2>
-            <div class="grid max-w-5xl gap-3 md:grid-cols-2">
-              {tradeoffs.map(([title, items, tone]) => (
-                <div class:list={["rounded-lg border p-4", tone]}>
-                  <h3 class="mb-2 text-sm font-semibold tracking-wide uppercase">{title}</h3>
-                  <ul class="list-disc space-y-1.5 pl-4 text-sm text-kumo-default">
-                    {items.map((t) => (
-                      <li>
-                        <Prose text={t} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </>
-        )
-      }
+    <section id="read-more" class="scroll-mt-16">
       {
         refs.length > 0 && (
           <p class="text-sm text-kumo-subtle">
@@ -79,7 +54,7 @@ const tradeoffs = [
     <nav class="flex justify-between gap-4 border-t border-kumo-hairline pt-6 text-sm">
       {
         prev ? (
-          <a href={`/guide/${prev.id}/`} class="text-kumo-subtle hover:text-kumo-strong">
+          <a href={`/book/${prev.id}/`} class="text-kumo-subtle hover:text-kumo-strong">
             ← {prev.data.title}
           </a>
         ) : (
@@ -88,7 +63,7 @@ const tradeoffs = [
       }
       {
         next && (
-          <a href={`/guide/${next.id}/`} class="text-right text-kumo-subtle hover:text-kumo-strong">
+          <a href={`/book/${next.id}/`} class="text-right text-kumo-subtle hover:text-kumo-strong">
             {next.data.title} →
           </a>
         )
