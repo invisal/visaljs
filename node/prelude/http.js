@@ -948,7 +948,10 @@ export class ServerResponse extends OutgoingMessage {
       throw codeError(Error, "ERR_HTTP_TRAILER_INVALID", "Trailers are invalid with this transfer encoding");
     }
     this.headersSent = true;
-    return head + "\r\n";
+    /* as Node's: middleware such as compression tests _header, not headersSent, before calling
+     * _implicitHeader, which throws once the head is rendered */
+    this._header = head + "\r\n";
+    return this._header;
   }
 
   write(chunk, encoding, callback) {
