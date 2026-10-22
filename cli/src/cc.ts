@@ -78,9 +78,12 @@ const STRIP = process.platform === "darwin" ? ["-Wl,-S,-x"] : ["-s"];
 /** The link's flags that write its map to `file`: ld64's, the format size.ts reads. */
 export const linkMapFlags = (file: string) => [`-Wl,-map,${file}`];
 
-/** A compiler's command line, split like make splits $(CC): "zig cc", "ccache gcc". */
+/** A compiler's command line, split like make splits $(CC): "zig cc", "ccache gcc". Zig gets
+ *  -mcpu=baseline unless $(CC) names a CPU: its default is this machine's CPU, so what it builds
+ *  (a cached library, a program shipped elsewhere) would crash on an older one. */
 export function compilerCommand(cc: string): [string, ...string[]] {
   const [program = cc, ...args] = cc.trim().split(/\s+/);
+  if (/^zig(\.exe)?$/i.test(basename(program)) && !args.some((a) => /^-m(cpu|arch)=/.test(a))) args.push("-mcpu=baseline");
   return [program, ...args];
 }
 
@@ -128,7 +131,7 @@ export function libraryArchive(tc: Toolchain, lib: CLibrary, building?: (name: s
   const prebuilt = prebuiltArchive(tc, lib);
   if (prebuilt) return prebuilt;
   const hash = createHash("sha256");
-  hash.update(`${tc.cc}\n${compilerVersion(tc.cc)}\n${[...COMMON, ...CXX, ...tc.opt, ...lib.flags].join(" ")}\n`);
+  hash.update(`${compilerCommand(tc.cc).join(" ")}\n${compilerVersion(tc.cc)}\n${[...COMMON, ...CXX, ...tc.opt, ...lib.flags].join(" ")}\n`);
   for (const f of [...lib.sources, ...lib.headers].sort()) hash.update(f).update(readFileSync(f));
   const key = hash.digest("hex").slice(0, 16);
 
@@ -267,7 +270,7 @@ export function regexpCompiler(cc: string): string {
   const regexp = join(RUNTIME_DIR, "third_party", "quickjs-regexp");
   const sources = [join(RUNTIME_DIR, "tools", "regexp_compile.c"), ...["libregexp.c", "libunicode.c", "cutils.c"].map((f) => join(regexp, f))];
   const headers = [join(RUNTIME_DIR, "src", "regexp_message.h"), join(RUNTIME_DIR, "src", "regexp_anchor.h"), ...readdirSync(regexp).filter((f) => f.endsWith(".h")).map((f) => join(regexp, f))];
-  const hash = createHash("sha256").update(`${cc}\n`);
+  const hash = createHash("sha256").update(`${compilerCommand(cc).join(" ")}\n`);
   for (const f of [...sources, ...headers]) hash.update(f.slice(RUNTIME_DIR.length)).update(readFileSync(f));
   const tool = join(cacheRoot(), `regexp-compile-${hash.digest("hex").slice(0, 16)}${process.platform === "win32" ? ".exe" : ""}`);
   if (existsSync(tool)) return tool;

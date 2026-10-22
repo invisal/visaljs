@@ -2,7 +2,7 @@
 // process.hrtime's, from when this module loads: timeOrigin is that time on the epoch clock.
 // PerformanceObserver and the histograms are modules of their own (internal/perf_observe.js,
 // internal/perf_histogram.js), linked when the program names them.
-import { codeError, invalidArgType } from "./internal/errors.js";
+import { codeError, invalidArgType, validateFunction } from "./internal/errors.js";
 import { features, lazyClass, lazyFunction } from "./internal/features.js";
 
 const hrMs = () => {
@@ -59,6 +59,39 @@ function markTime(mark) {
     if (entries[i].entryType === "mark" && entries[i].name === mark) return entries[i].startTime;
   }
   throw new globalThis.DOMException('The "' + mark + '" performance mark has not been set', "SyntaxError");
+}
+
+function processComplete(name, start, args, histogram) {
+  const duration = now() - start;
+  if (histogram !== undefined) histogram.record(Math.ceil(duration * 1e6));
+  const entry = new PerformanceEntry(kConstruct, name, "function", start, duration, args);
+  for (let n = 0; n < args.length; n++) entry[n] = args[n];
+  features.perfObserve?.(entry);
+}
+
+/** fn, timed: each call is a 'function' entry for the observers, and its duration (ns) in the histogram. */
+export function timerify(fn, options = {}) {
+  validateFunction(fn, "fn");
+  if (options === null || typeof options !== "object") throw invalidArgType("options", "of type object", options);
+  const { histogram } = options;
+  if (histogram !== undefined && (!features.isHistogram?.(histogram) || typeof histogram.record !== "function")) {
+    throw invalidArgType("options.histogram", "an instance of RecordableHistogram", histogram);
+  }
+  function timerified(...args) {
+    const isConstructorCall = new.target !== undefined;
+    const start = now();
+    const result = isConstructorCall ? Reflect.construct(fn, args, fn) : Reflect.apply(fn, this, args);
+    if (!isConstructorCall && typeof result?.finally === "function") {
+      return result.finally(processComplete.bind(result, fn.name, start, args, histogram));
+    }
+    processComplete(fn.name, start, args, histogram);
+    return result;
+  }
+  Object.defineProperties(timerified, {
+    length: { configurable: false, enumerable: true, value: fn.length },
+    name: { configurable: false, enumerable: true, value: `timerified ${fn.name}` },
+  });
+  return timerified;
 }
 
 export class Performance {
@@ -130,6 +163,8 @@ function clear(type, name) {
   }
 }
 
+Object.defineProperty(Performance.prototype, "timerify", { configurable: true, enumerable: false, writable: true, value: timerify });
+
 export const performance = new Performance(kConstruct);
 
 export const constants = {
@@ -147,5 +182,5 @@ export const monitorEventLoopDelay = lazyFunction("monitorEventLoopDelay");
 
 export default {
   Performance, PerformanceEntry, PerformanceMark, PerformanceMeasure, PerformanceObserver, PerformanceObserverEntryList, PerformanceResourceTiming,
-  performance, constants, createHistogram, monitorEventLoopDelay,
+  performance, constants, createHistogram, monitorEventLoopDelay, timerify,
 };

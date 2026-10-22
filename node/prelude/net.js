@@ -11,6 +11,7 @@ import {
   errnoMessage, errnoName, netAddress, netBind, netCallback, netChmod, netClose, netConnect, netGuessHandle, netKeepAlive, netListen,
   loopNow, netFd, netNoDelay, netOpen, netOpenFd, netReadStart, netReadStop, netRef, netReset, netShutdown, netWrite, timerUnref,
 } from "visaljs:host";
+import { channel, tracingChannel } from "./diagnostics_channel.js";
 import { ADDRCONFIG, lookup } from "./dns.js";
 import { EventEmitter } from "./events.js";
 import { bindContext } from "./internal/async_context.js";
@@ -29,6 +30,10 @@ const NET_CONNECTION = 0, NET_READ = 1, NET_CONNECT = 2, NET_WRITE = 3, NET_SHUT
 const UV_EOF = -4095;
 const UV_EINVAL = -22;
 const TIMEOUT_MAX = 2 ** 31 - 1;
+
+const netClientSocketChannel = channel("net.client.socket");
+const netServerSocketChannel = channel("net.server.socket");
+const netServerListen = tracingChannel("net.server.listen");
 
 /* ---- Node's error shapes ------------------------------------------------------------------- */
 
@@ -666,6 +671,7 @@ class SocketClass extends Duplex {
       this._perfConnect = null;
       this._undestroy();
     }
+    if (netClientSocketChannel.hasSubscribers) netClientSocketChannel.publish({ socket: this });
     const { path } = options;
     if (cb !== null) this.once("connect", cb);
     this._unrefTimer();
@@ -955,6 +961,7 @@ class ServerClass extends EventEmitter {
     let [options, cb] = normalizeArgs(args);
     if (typeof options.callback === "function") cb = options.callback;
     if (this._handle !== null) throw codeError(Error, "ERR_SERVER_ALREADY_LISTEN", "Listen method has been called more than once without closing.");
+    if (netServerListen.hasSubscribers) netServerListen.asyncStart.publish({ server: this, options });
     if (cb !== null) this.once("listening", cb);
     this._listeningId++;
     const backlogFromArgs = toNumber(args.length > 1 && args[1]) || toNumber(args.length > 2 && args[2]);
@@ -1096,6 +1103,7 @@ class ServerClass extends EventEmitter {
       if (rval === null) rval = this._createHandle(address, port, addressType, fd, flags);
       if (rval < 0) {
         const error = uvExceptionWithHostPort(rval, "listen", address, port);
+        if (netServerListen.hasSubscribers) netServerListen.error.publish({ server: this, error });
         process.nextTick(() => this.emit("error", error));
         return;
       }
@@ -1107,9 +1115,11 @@ class ServerClass extends EventEmitter {
       const ex = uvExceptionWithHostPort(err, "listen", address, port);
       netClose(id);
       this._handle = null;
+      if (netServerListen.hasSubscribers) netServerListen.error.publish({ server: this, error: ex });
       process.nextTick(() => this.emit("error", ex));
       return;
     }
+    if (netServerListen.hasSubscribers) netServerListen.asyncEnd.publish({ server: this });
     this._connectionKey = addressType + ":" + address + ":" + port;
     if (this._unref) netRef(id, false);
     process.nextTick(() => {
@@ -1150,6 +1160,7 @@ class ServerClass extends EventEmitter {
     socket.server = this;
     socket._server = this;
     this.emit("connection", socket);
+    if (netServerSocketChannel.hasSubscribers) netServerSocketChannel.publish({ socket });
   }
 
   /* { address, family, port }, or a pipe's path */

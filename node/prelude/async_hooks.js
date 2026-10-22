@@ -3,9 +3,17 @@
 // does; AsyncResource, which keeps the context it was created in for a callback (on-finished,
 // raw-body). Hooks never fire: visaljs has no async resources to report.
 import { currentContext, runInContext, setContext } from "./internal/async_context.js";
-import { invalidArgType, validateFunction, validateString } from "./internal/errors.js";
+import { codeError, invalidArgType, invalidArgValue, validateFunction, validateString } from "./internal/errors.js";
 
 let nextAsyncId = 2;  /* 1 is the main program's, as in Node */
+let currentAsyncId = 1;
+let currentTriggerAsyncId = 0;
+/* enabled hooks with an init: Node checks a resource's type only then, when init would be told it */
+let initHooks = 0;
+
+function invalidAsyncId(name, id) {
+  return codeError(RangeError, "ERR_INVALID_ASYNC_ID", `Invalid ${name} value: ${id}`);
+}
 
 export class AsyncResource {
   #asyncId;
@@ -14,13 +22,24 @@ export class AsyncResource {
 
   constructor(type, opts = {}) {
     validateString(type, "type");
+    const triggerAsyncId = typeof opts === "number" ? opts : (opts.triggerAsyncId ?? currentAsyncId);
+    if (!Number.isSafeInteger(triggerAsyncId) || triggerAsyncId < -1) throw invalidAsyncId("triggerAsyncId", triggerAsyncId);
+    if (initHooks > 0 && type.length === 0) throw codeError(TypeError, "ERR_ASYNC_TYPE", `Invalid name for async "type": ${type}`);
     this.#asyncId = nextAsyncId++;
-    this.#triggerAsyncId = typeof opts === "number" ? opts : (opts.triggerAsyncId ?? 1);
+    this.#triggerAsyncId = triggerAsyncId;
     this.#context = currentContext();
   }
 
   runInAsyncScope(fn, thisArg, ...args) {
-    return runInContext(this.#context, fn, thisArg, args);
+    const asyncId = currentAsyncId, triggerId = currentTriggerAsyncId;
+    currentAsyncId = this.#asyncId;
+    currentTriggerAsyncId = this.#triggerAsyncId;
+    try {
+      return runInContext(this.#context, fn, thisArg, args);
+    } finally {
+      currentAsyncId = asyncId;
+      currentTriggerAsyncId = triggerId;
+    }
   }
 
   emitDestroy() {
@@ -57,24 +76,39 @@ export class AsyncResource {
 }
 
 export function executionAsyncId() {
-  return 1;
+  return currentAsyncId;
 }
 
 export function triggerAsyncId() {
-  return 0;
+  return currentTriggerAsyncId;
 }
 
 export function executionAsyncResource() {
   return {};
 }
 
+const hookNames = ["init", "before", "after", "destroy", "promiseResolve"];
+
 /** A hook that never fires: visaljs has no async resources to report. */
-export function createHook() {
+export function createHook(hooks) {
+  for (const name of hookNames) {
+    if (hooks[name] !== undefined && typeof hooks[name] !== "function") throw codeError(TypeError, "ERR_ASYNC_CALLBACK", `hook.${name} must be a function`);
+  }
+  if (hooks.trackPromises !== undefined && typeof hooks.trackPromises !== "boolean") throw invalidArgType("trackPromises", "of type boolean", hooks.trackPromises);
+  if (hooks.trackPromises === false && hooks.promiseResolve) {
+    throw invalidArgValue("trackPromises", "must not be false when promiseResolve is enabled", false);
+  }
+  const hasInit = hooks.init !== undefined;
+  let enabled = false;
   return {
     enable() {
+      if (!enabled && hasInit) initHooks++;
+      enabled = true;
       return this;
     },
     disable() {
+      if (enabled && hasInit) initHooks--;
+      enabled = false;
       return this;
     },
   };
@@ -110,10 +144,7 @@ export class AsyncLocalStorage {
 
   /** (fn, ...args) => fn(...args) in the context current now. */
   static snapshot() {
-    const resource = new AsyncResource("AsyncLocalStorageSnapshot");
-    return function runInAsyncScope(fn, ...args) {
-      return resource.runInAsyncScope(fn, this, ...args);
-    };
+    return AsyncLocalStorage.bind((cb, ...args) => cb(...args));
   }
 
   disable() {
@@ -124,8 +155,16 @@ export class AsyncLocalStorage {
     setContext(new AsyncContextFrame(this, store));
   }
 
+  /* as Node's: only this storage's store is put back after, so another's enterWith in fn outlasts it */
   run(store, fn, ...args) {
-    return runInContext(new AsyncContextFrame(this, store), fn, null, args);
+    const prior = this.getStore();
+    if (Object.is(prior, store)) return Reflect.apply(fn, null, args);
+    this.enterWith(store);
+    try {
+      return Reflect.apply(fn, null, args);
+    } finally {
+      this.enterWith(prior);
+    }
   }
 
   exit(fn, ...args) {

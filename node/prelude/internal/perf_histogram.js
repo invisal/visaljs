@@ -432,4 +432,4 @@ function monitorEventLoopDelay(options = {}) {
   return new ELDHistogram(new Hdr(1, MAX_SAFE, 3), resolution);
 }
 
-Object.assign(features, { createHistogram, monitorEventLoopDelay });
+Object.assign(features, { createHistogram, monitorEventLoopDelay, isHistogram: (value) => value instanceof Histogram });

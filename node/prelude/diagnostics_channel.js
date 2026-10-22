@@ -129,17 +129,19 @@ export class Channel {
     this._subscribers = undefined;
     this._stores = undefined;
     this.name = name;
+    this._index = undefined;
     channels.set(name, this);
   }
 
   /* an active channel's prototype is ActiveChannel's: it is a Channel still */
+  /* Object.getPrototypeOf throws on undefined, as Node's: tracingChannel({}) reports that */
   static [Symbol.hasInstance](instance) {
-    if (instance === null || (typeof instance !== "object" && typeof instance !== "function")) return false;
     const prototype = Object.getPrototypeOf(instance);
     return prototype === Channel.prototype || prototype === ActiveChannel.prototype;
   }
 
   subscribe(subscription) {
+    validateFunction(subscription, "subscription");
     markActive(this);
     this.subscribe(subscription);
   }
