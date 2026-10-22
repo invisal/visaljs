@@ -1,16 +1,16 @@
 {
-  "date": "2026-10-21",
+  "date": "2026-10-22",
   "node": "v24.21.0",
   "platform": "linux-x64",
-  "commit": "9d1e97c6302b47359ad6a808d68caeba5306245f",
+  "commit": "da6a0f1c2c819965e4c13230d4faf1ce823c2636",
   "packages": [
     {
       "name": "ioredis",
       "version": "6.0.0",
       "service": "redis",
       "build": "pass",
-      "buildTime": 154.971,
-      "size": 10130104,
+      "buildTime": 102.338,
+      "size": 10134200,
       "test": "pass"
     },
     {
@@ -18,8 +18,8 @@
       "version": "3.24.6",
       "service": "mysql",
       "build": "pass",
-      "buildTime": 218.403,
-      "size": 13025768,
+      "buildTime": 220.287,
+      "size": 13029864,
       "test": "pass"
     },
     {
@@ -27,8 +27,8 @@
       "version": "8.23.1",
       "service": "postgres",
       "build": "pass",
-      "buildTime": 140.385,
-      "size": 8602048,
+      "buildTime": 177.55,
+      "size": 8671680,
       "test": "pass"
     },
     {
@@ -36,8 +36,8 @@
       "version": "3.4.9",
       "service": "postgres",
       "build": "pass",
-      "buildTime": 101.583,
-      "size": 7532928,
+      "buildTime": 176.418,
+      "size": 7618944,
       "test": "pass"
     },
     {
@@ -45,8 +45,8 @@
       "version": "6.3.0",
       "service": "redis",
       "build": "pass",
-      "buildTime": 139.868,
-      "size": 15639000,
+      "buildTime": 245.607,
+      "size": 15655384,
       "test": "pass"
     }
   ]
