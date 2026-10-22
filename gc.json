@@ -2,178 +2,178 @@
   {
     "program": "binary-trees",
     "node": {
-      "ms": 583.958322,
-      "rss": 213901312
+      "ms": 613.24387,
+      "rss": 213716992
     },
     "visaljs": {
-      "ms": 1452.95177,
-      "rss": 165412864,
+      "ms": 1428.300479,
+      "rss": 165281792,
       "gc": {
         "collections": 276,
         "young_collections": 265,
-        "pause_ms": 292.065,
-        "max_pause_ms": 12.447,
-        "mark_ms": 286.295,
-        "weak_ms": 4.253,
-        "finish_ms": 1.517,
-        "sweep_ms": 4.923,
+        "pause_ms": 280.388,
+        "max_pause_ms": 14.289,
+        "mark_ms": 275.134,
+        "weak_ms": 3.827,
+        "finish_ms": 1.427,
+        "sweep_ms": 4.239,
         "blocks_swept": 62534,
-        "allocated_bytes": 3229679760,
+        "allocated_bytes": 3229679808,
         "peak_heap_bytes": 162201600,
-        "peak_rss_bytes": 165412864,
+        "peak_rss_bytes": 165281792,
         "peak_external_bytes": 0,
         "idle_collections": 0,
         "mark_slices": 194,
         "parallel_markings": 58,
         "gc_threads": 2
       },
-      "p99": 11.615
+      "p99": 10.275
     }
   },
   {
     "program": "buffers",
     "node": {
-      "ms": 719.117994,
-      "rss": 80371712
+      "ms": 626.197302,
+      "rss": 78966784
     },
     "visaljs": {
-      "ms": 68.491794,
-      "rss": 17461248,
+      "ms": 71.201433,
+      "rss": 17563648,
       "gc": {
         "collections": 256,
         "young_collections": 256,
-        "pause_ms": 9.708,
-        "max_pause_ms": 0.369,
-        "mark_ms": 0.577,
-        "weak_ms": 2.195,
-        "finish_ms": 6.936,
-        "sweep_ms": 0.073,
+        "pause_ms": 10.248,
+        "max_pause_ms": 0.377,
+        "mark_ms": 0.633,
+        "weak_ms": 2.357,
+        "finish_ms": 7.258,
+        "sweep_ms": 0.077,
         "blocks_swept": 1022,
-        "allocated_bytes": 51311408,
+        "allocated_bytes": 51311392,
         "peak_heap_bytes": 1114112,
-        "peak_rss_bytes": 17461248,
+        "peak_rss_bytes": 17563648,
         "peak_external_bytes": 4915200,
         "idle_collections": 0,
         "mark_slices": 0,
         "parallel_markings": 0,
         "gc_threads": 2
       },
-      "p99": 0.052
+      "p99": 0.059
     }
   },
   {
     "program": "closures",
     "node": {
-      "ms": 52.389693,
-      "rss": 58380288
+      "ms": 58.329753,
+      "rss": 58208256
     },
     "visaljs": {
-      "ms": 309.755467,
-      "rss": 17461248,
+      "ms": 285.718289,
+      "rss": 17563648,
       "gc": {
         "collections": 184,
         "young_collections": 184,
-        "pause_ms": 2.443,
-        "max_pause_ms": 0.396,
-        "mark_ms": 0.485,
-        "weak_ms": 1.837,
-        "finish_ms": 0.121,
-        "sweep_ms": 0.57,
+        "pause_ms": 2.241,
+        "max_pause_ms": 0.357,
+        "mark_ms": 0.493,
+        "weak_ms": 1.631,
+        "finish_ms": 0.116,
+        "sweep_ms": 0.515,
         "blocks_swept": 12604,
         "allocated_bytes": 784066560,
         "peak_heap_bytes": 5177344,
-        "peak_rss_bytes": 17461248,
+        "peak_rss_bytes": 17563648,
         "peak_external_bytes": 0,
         "idle_collections": 0,
         "mark_slices": 0,
         "parallel_markings": 0,
         "gc_threads": 2
       },
-      "p99": 0.034
+      "p99": 0.025
     }
   },
   {
     "program": "maps",
     "node": {
-      "ms": 1246.336293,
-      "rss": 335749120
+      "ms": 1307.748802,
+      "rss": 335618048
     },
     "visaljs": {
-      "ms": 1487.353556,
-      "rss": 107241472,
+      "ms": 1236.19516,
+      "rss": 108879872,
       "gc": {
-        "collections": 184,
-        "young_collections": 174,
-        "pause_ms": 213,
-        "max_pause_ms": 4.055,
-        "mark_ms": 203.323,
-        "weak_ms": 5.568,
-        "finish_ms": 4.108,
-        "sweep_ms": 5.515,
-        "blocks_swept": 58988,
-        "allocated_bytes": 1203681344,
-        "peak_heap_bytes": 109666304,
-        "peak_rss_bytes": 107241472,
+        "collections": 177,
+        "young_collections": 167,
+        "pause_ms": 175.07,
+        "max_pause_ms": 3.742,
+        "mark_ms": 165.592,
+        "weak_ms": 5.483,
+        "finish_ms": 3.995,
+        "sweep_ms": 3.469,
+        "blocks_swept": 57463,
+        "allocated_bytes": 1203683024,
+        "peak_heap_bytes": 111304704,
+        "peak_rss_bytes": 108879872,
         "peak_external_bytes": 2097152,
         "idle_collections": 0,
-        "mark_slices": 69,
-        "parallel_markings": 109,
+        "mark_slices": 70,
+        "parallel_markings": 101,
         "gc_threads": 2
       },
-      "p99": 2.029
+      "p99": 2.24
     }
   },
   {
     "program": "retained",
     "node": {
-      "ms": 249.610787,
-      "rss": 251424768
+      "ms": 269.635908,
+      "rss": 268419072
     },
     "visaljs": {
-      "ms": 521.007296,
-      "rss": 209801216,
+      "ms": 523.994463,
+      "rss": 209817600,
       "gc": {
         "collections": 195,
         "young_collections": 191,
-        "pause_ms": 105.193,
-        "max_pause_ms": 1.809,
-        "mark_ms": 99.6,
-        "weak_ms": 2.575,
-        "finish_ms": 3.018,
-        "sweep_ms": 2.286,
-        "blocks_swept": 39650,
-        "allocated_bytes": 863079088,
+        "pause_ms": 101.7,
+        "max_pause_ms": 1.989,
+        "mark_ms": 95.998,
+        "weak_ms": 2.629,
+        "finish_ms": 3.073,
+        "sweep_ms": 2.529,
+        "blocks_swept": 39213,
+        "allocated_bytes": 863077936,
         "peak_heap_bytes": 200974336,
-        "peak_rss_bytes": 209801216,
+        "peak_rss_bytes": 209817600,
         "peak_external_bytes": 0,
         "idle_collections": 0,
         "mark_slices": 108,
         "parallel_markings": 43,
         "gc_threads": 2
       },
-      "p99": 1.804
+      "p99": 1.513
     }
   },
   {
     "program": "strings",
     "node": {
-      "ms": 220.928568,
-      "rss": 92196864
+      "ms": 207.293181,
+      "rss": 93364224
     },
     "visaljs": {
-      "ms": 392.841649,
+      "ms": 390.150613,
       "rss": 18374656,
       "gc": {
         "collections": 223,
         "young_collections": 167,
-        "pause_ms": 43.975,
-        "max_pause_ms": 0.477,
-        "mark_ms": 24.968,
-        "weak_ms": 3.626,
-        "finish_ms": 15.381,
-        "sweep_ms": 0.909,
-        "blocks_swept": 19937,
-        "allocated_bytes": 848899872,
+        "pause_ms": 43.665,
+        "max_pause_ms": 0.419,
+        "mark_ms": 24.877,
+        "weak_ms": 3.367,
+        "finish_ms": 15.421,
+        "sweep_ms": 0.855,
+        "blocks_swept": 19936,
+        "allocated_bytes": 848899904,
         "peak_heap_bytes": 15695872,
         "peak_rss_bytes": 18374656,
         "peak_external_bytes": 0,
@@ -182,7 +182,7 @@
         "parallel_markings": 0,
         "gc_threads": 2
       },
-      "p99": 0.375
+      "p99": 0.354
     }
   }
 ]
