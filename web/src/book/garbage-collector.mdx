@@ -1,0 +1,19 @@
+---
+title: "Garbage Collector"
+group: "Memory"
+order: 1
+icon: "memory"
+files:
+  - "runtime/src/gc.c"
+---
+
+JavaScript is garbage collected. A program creates strings, objects and arrays whenever it likes, and never says when it's done with them. The engine frees the memory nobody uses anymore, on its own.
+
+C has none of that. In [Strings](/book/strings), every string calls `malloc`, and nothing ever calls `free`. A program that runs long enough runs out of memory. So visaljs brings its own garbage collector, as part of the runtime. The C code the compiler emits doesn't even know it's there.
+
+Over the next chapters, we build it step by step.
+
+- **[Custom Allocation](/book/custom-allocation).** We stop using `malloc`, and lay out cells in blocks of our own, grouped by size.
+- **[Mark and Sweep](/book/mark-and-sweep).** We find every cell the program can still reach, by scanning the C stack, and reuse the rest.
+- **[Write Barrier and Incremental Marking](/book/incremental-marking).** We mark a little at a time, so the program never stops for long.
+- **[Young and Old Generations](/book/generations).** Most cells die young, so we collect the young ones often and the old ones rarely.

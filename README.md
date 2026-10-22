@@ -80,7 +80,7 @@ See [`cli/README.md`](cli/README.md) for the command's options.
 | [`node/`](node) | Node's APIs: the `node:` modules and the event loop |
 | [`tests/`](tests) | Program tests, test262 and Node's test runners, apps |
 | [`bench/`](bench) | Benchmarks against Node and Bun |
-| [`web/`](web) | The website and guide |
+| [`web/`](web) | The website and book |
 
 ## Development
 

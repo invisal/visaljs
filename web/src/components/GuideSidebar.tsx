@@ -69,7 +69,7 @@ export default function GuideSidebar({ chapters, current }: Props) {
     <Sidebar.Menu>
       {items.map((c) => (
         <Sidebar.MenuItem key={c.id}>
-          <Sidebar.MenuButton href={`/guide/${c.id}/`} active={c.id === current} icon={ICONS[c.icon as keyof typeof ICONS]} className="font-normal">
+          <Sidebar.MenuButton href={`/book/${c.id}/`} active={c.id === current} icon={ICONS[c.icon as keyof typeof ICONS]} className="font-normal">
             {c.title}
             {c.soon && <span className="ml-auto text-xs text-kumo-inactive">Soon</span>}
           </Sidebar.MenuButton>

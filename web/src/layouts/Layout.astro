@@ -3,7 +3,6 @@
 // and the main column, or, without a sidebar, the page's own full-width content. Light mode only
 // (Kumo's data-mode).
 import "../index.css";
-import { GUIDE_PUBLISHED } from "../lib/guide-published.ts";
 
 interface Props {
   title: string;
@@ -34,7 +33,7 @@ const tab = (to: Props["page"]) => (page === to ? "text-kumo-strong" : "text-kum
           <a href="/" class="font-semibold">visaljs</a>
           <span class="hidden text-sm text-kumo-subtle sm:inline">JavaScript to C</span>
           <nav class="ml-auto flex gap-4 text-sm">
-            {GUIDE_PUBLISHED && <a href="/guide/introduction/" class={tab("guide")}>Guide</a>}
+            <a href="/book/introduction/" class={tab("guide")}>Book</a>
             <a href="/node/" class={tab("node")}>Node API</a>
             <a href="https://github.com/invisal/visaljs" class="text-kumo-subtle hover:text-kumo-default">GitHub</a>
           </nav>

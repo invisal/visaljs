@@ -1,4 +1,4 @@
-// The guide: one MDX file per chapter in src/guide/, in its group, ordered by `order`.
+// The book: one MDX file per chapter in src/book/, in its group, ordered by `order`.
 import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";
 import { z } from "astro/zod";
@@ -8,7 +8,7 @@ const strings = z.array(z.string());
 
 export const collections = {
   guide: defineCollection({
-    loader: glob({ pattern: "*.mdx", base: "./src/guide" }),
+    loader: glob({ pattern: "*.mdx", base: "./src/book" }),
     schema: z.object({
       title: z.string(),
       /** Its group in the sidebar, one of GROUPS in lib/guide-groups.ts; none puts it at the top. */

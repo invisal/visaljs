@@ -5,7 +5,7 @@ order: 3
 icon: "text-aa"
 ---
 
-A string has no fixed size, so it can't fit inside a `JSValue`. Instead, the string lives in memory, and the `JSValue` stores a pointer to it. When the top 16 bits are `0x0000`, the rest of the bits are the address, as we saw in [Representing JavaScript values](/guide/jsvalue).
+A string has no fixed size, so it can't fit inside a `JSValue`. Instead, the string lives in memory, and the `JSValue` stores a pointer to it. When the top 16 bits are `0x0000`, the rest of the bits are the address, as we saw in [Representing JavaScript values](/book/jsvalue).
 
 Every value in memory starts with a small header, a *cell*. Its `kind` says what the value is, so a pointer `JSValue` can always find out what it points to.
 
@@ -49,7 +49,7 @@ JSValue js_new_string(const char *chars, uint32_t length) {
 
 <Note>
 
-We allocate but never free. Let's not worry about freeing memory for now. The [garbage collector](/guide/garbage-collector) handles it later.
+We allocate but never free. Let's not worry about freeing memory for now. The [garbage collector](/book/garbage-collector) handles it later.
 
 </Note>
 
@@ -86,7 +86,7 @@ JSValue js_concat(JSValue a, JSValue b) {
 
 `a` and `b` stay as they are, and the result is a new string.
 
-`js_add` from [Operators](/guide/operators) already calls `js_concat` when either side is a string. All it needs is a way to tell that a value is a string: it's a pointer, and its cell's `kind` says string.
+`js_add` from [Operators](/book/operators) already calls `js_concat` when either side is a string. All it needs is a way to tell that a value is a string: it's a pointer, and its cell's `kind` says string.
 
 ```c
 + static inline bool js_is_string(JSValue v) {
@@ -126,4 +126,4 @@ JSValue c = js_add(a, b);
 
 Our strings work, but they're slow. Every string operation copies characters into a new string: joining copies both sides, and taking a slice copies the part it keeps. A typical program easily does thousands, even millions, of string operations, and all those copies add up.
 
-There are several optimizations we can make. In the next chapter, we look at [String Optimizations](/guide/string-optimizations).
+There are several optimizations we can make. In the next chapter, we look at [String Optimizations](/book/string-optimizations).

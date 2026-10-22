@@ -1,5 +1,5 @@
 ---
-// One page per chapter of the guide (src/guide/*.mdx).
+// One page per chapter of the guide (src/book/*.mdx).
 import { render } from "astro:content";
 import CodeBlock from "../../components/CodeBlock.astro";
 import FloatTable from "../../components/FloatTable.astro";
@@ -54,7 +54,7 @@ const refs = files.map((f) => [f, f] as const);
     <nav class="flex justify-between gap-4 border-t border-kumo-hairline pt-6 text-sm">
       {
         prev ? (
-          <a href={`/guide/${prev.id}/`} class="text-kumo-subtle hover:text-kumo-strong">
+          <a href={`/book/${prev.id}/`} class="text-kumo-subtle hover:text-kumo-strong">
             ← {prev.data.title}
           </a>
         ) : (
@@ -63,7 +63,7 @@ const refs = files.map((f) => [f, f] as const);
       }
       {
         next && (
-          <a href={`/guide/${next.id}/`} class="text-right text-kumo-subtle hover:text-kumo-strong">
+          <a href={`/book/${next.id}/`} class="text-right text-kumo-subtle hover:text-kumo-strong">
             {next.data.title} →
           </a>
         )
