@@ -141,7 +141,7 @@ jobs:
     if: needs.changes.outputs.nodejs == 'true'
     uses: ./.github/workflows/nodejs.yml
     with:
-      shards: "[1, 2, 3, 4, 5, 6]"
+      shards: "[1, 2, 3, 4, 5, 6, 7]"
 
   programs:
     name: Programs

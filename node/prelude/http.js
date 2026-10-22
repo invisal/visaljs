@@ -11,6 +11,7 @@ import { hasInvalidHeaderChar, isHttpToken } from "./internal/http_chars.ts";
 import {
   httpAttach, httpBusy, httpDate, httpPending, httpWatchDrain, httpWritten, httpDetach, httpExpired, httpFedClose, httpFedOpen, httpFeed, httpFlush, httpParsers, httpWrite, timerUnref,
 } from "visaljs:host";
+import { channel } from "./diagnostics_channel.js";
 import { bindContext, currentContext, runInContext } from "./internal/async_context.js";
 import { codeError, invalidArgType, invalidArgValue, outOfRange, validateInteger, validateString } from "./internal/errors.js";
 import { Agent, globalAgent, setGlobalAgent } from "./internal/http_agent.js";
@@ -18,6 +19,14 @@ import { kConnectionsCheckingInterval } from "./internal/http_symbols.js";
 import { createConnection, Server as NetServer } from "./net.js";
 import { addAbortSignal, Readable, Stream } from "./stream.js";
 import { callableClass } from "./internal/features.js";
+
+const onRequestStartChannel = channel("http.server.request.start");
+const onResponseCreatedChannel = channel("http.server.response.created");
+const onResponseFinishChannel = channel("http.server.response.finish");
+const onClientRequestCreatedChannel = channel("http.client.request.created");
+const onClientRequestStartChannel = channel("http.client.request.start");
+const onClientRequestErrorChannel = channel("http.client.request.error");
+const onClientResponseFinishChannel = channel("http.client.response.finish");
 
 export const METHODS = ["ACL", "BIND", "CHECKOUT", "CONNECT", "COPY", "DELETE", "GET", "HEAD", "LINK", "LOCK", "M-SEARCH", "MERGE",
   "MKACTIVITY", "MKCALENDAR", "MKCOL", "MOVE", "NOTIFY", "OPTIONS", "PATCH", "POST", "PROPFIND", "PROPPATCH", "PURGE", "PUT", "QUERY",
@@ -722,6 +731,7 @@ export class ServerResponse extends OutgoingMessage {
     if (server?._uniqueHeaders) this._uniqueHeaders = server._uniqueHeaders;
     if (server?.rejectNonStandardBodyWrites) this._rejectNonStandardBodyWrites = true;
     this._head = req.method === "HEAD";
+    if (onResponseCreatedChannel.hasSubscribers) onResponseCreatedChannel.publish({ request: req, response: this });
   }
 
   /* a 1xx response before the final one, as Node's */
@@ -1402,7 +1412,8 @@ class ServerClass extends NetServer {
     } else {
       state.res = res;
     }
-    res.on("finish", () => this._resOnFinish(state, req, res));  /* Node's resOnFinish, an `on` listener too */
+    res.on("finish", () => this._resOnFinish(state, req, res, socket));  /* Node's resOnFinish, an `on` listener too */
+    if (onRequestStartChannel.hasSubscribers) onRequestStartChannel.publish({ request: req, response: res, socket, server: this });
     if (this.requireHostHeader && major === 1 && minor === 1 && req.headers.host === undefined) {  /* Node: a 400, and the connection ends */
       res.writeHead(400, ["Connection", "close"]);
       res.end();
@@ -1439,7 +1450,8 @@ class ServerClass extends NetServer {
 
   /* Node's resOnFinish: the request is done with; the next response's turn, or the idle keep-alive
    * timeout */
-  _resOnFinish(state, req, res) {
+  _resOnFinish(state, req, res, socket) {
+    if (onResponseFinishChannel.hasSubscribers) onResponseFinishChannel.publish({ request: req, response: res, socket, server: this });
     if (state.incoming[0] === req) state.incoming.shift();
     else {
       const i = state.incoming.indexOf(req);
@@ -1631,7 +1643,7 @@ function clientParsersId() {
       }
       if (req) {
         socket._hadError = true;
-        req.emit("error", e);
+        emitErrorEvent(req, e);
       }
     },
   ].map(inRequestContext));
@@ -1737,8 +1749,14 @@ function clientUpgrade(req, socket, head) {
   }
 }
 
+function emitErrorEvent(request, error) {
+  if (onClientRequestErrorChannel.hasSubscribers) onClientRequestErrorChannel.publish({ request, error });
+  request.emit("error", error);
+}
+
 function responseOnEnd() {
   const req = this.req;
+  if (onClientResponseFinishChannel.hasSubscribers) onClientResponseFinishChannel.publish({ request: req, response: this });
   const socket = req.socket;
   if (socket) {
     if (req.timeoutCb) socket.removeListener("timeout", emitRequestTimeout);
@@ -1804,7 +1822,7 @@ function socketCloseListener() {
   } else {
     if (!this._hadError) {  /* closed before a response: the request's error */
       this._hadError = true;
-      req.emit("error", connReset("socket hang up"));
+      emitErrorEvent(req, connReset("socket hang up"));
     }
     req._closed = true;
     req.emit("close");
@@ -1817,7 +1835,7 @@ function socketErrorListener(err) {
   const req = this._httpMessage;
   if (req) {
     this._hadError = true;
-    req.emit("error", err);
+    emitErrorEvent(req, err);
   }
   freeParser(this);
   this.removeListener("end", socketOnEnd);
@@ -1828,7 +1846,7 @@ function socketOnEnd() {
   const req = this._httpMessage;
   if (!req.res && !this._hadError) {
     this._hadError = true;
-    req.emit("error", connReset("socket hang up"));
+    emitErrorEvent(req, connReset("socket hang up"));
   }
   freeParser(this);
   this.destroy();
@@ -1983,7 +2001,7 @@ export class ClientRequest extends OutgoingMessage {
         const oncreate = (err, socket) => {
           if (done) return;
           done = true;
-          if (err) process.nextTick(() => this.emit("error", err));
+          if (err) process.nextTick(() => emitErrorEvent(this, err));
           else this.onSocket(socket);
         };
         try {
@@ -1996,6 +2014,25 @@ export class ClientRequest extends OutgoingMessage {
         this.onSocket(createConnection(opts));
       }
     }
+    if (onClientRequestCreatedChannel.hasSubscribers) onClientRequestCreatedChannel.publish({ request: this });
+  }
+
+  /* Node's _finish, which publishes the start: once the ended request is all on its socket, at
+   * end() or when the socket is assigned */
+  end(chunk, encoding, callback) {
+    const finished = this.finished;
+    super.end(chunk, encoding, callback);
+    if (!finished && this.outputData.length === 0 && this.socket?._httpMessage === this) this._publishStart();
+    return this;
+  }
+
+  _flush() {
+    super._flush();
+    if (this.finished && this.socket?.writable) this._publishStart();
+  }
+
+  _publishStart() {
+    if (onClientRequestStartChannel.hasSubscribers) onClientRequestStartChannel.publish({ request: this });
   }
 
   _implicitHeader() {
@@ -2016,7 +2053,7 @@ export class ClientRequest extends OutgoingMessage {
         this.destroyed = true;
         const done = (er) => {
           if (!this.aborted && !er) er = connReset("socket hang up");
-          if (er) this.emit("error", er);
+          if (er) emitErrorEvent(this, er);
           this._closed = true;
           this.emit("close");
         };

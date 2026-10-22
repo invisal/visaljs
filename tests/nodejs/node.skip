@@ -6,6 +6,7 @@ test-buffer-alloc.js                     vm.runInNewContext (a cross-realm Array
 test-buffer-bytelength.js                vm.runInNewContext (a cross-realm ArrayBuffer)
 test-buffer-from.js                      vm.runInNewContext (cross-realm objects)
 test-crypto-subtle-cross-realm.js        vm.runInNewContext (another realm's crypto.subtle)
+test-async-local-storage-contexts.js     vm.createContext
 
 # no threads: SharedArrayBuffer and transferring between workers
 test-buffer-sharedarraybuffer.js         SharedArrayBuffer (no threads)
@@ -28,8 +29,45 @@ test-stream-ispaused.js                  Function() constructor
 test-net-binary.js                       eval()
 # not provided: http2
 test-stream-pipeline-http2.js            http2
+test-diagnostics-channel-http2-client-stream-body-multiple-buffers-and-strings.js  http2
+test-diagnostics-channel-http2-client-stream-body-multiple-buffers.js  http2
+test-diagnostics-channel-http2-client-stream-body-no-chunks.js  http2
+test-diagnostics-channel-http2-client-stream-body-single-buffer.js  http2
+test-diagnostics-channel-http2-client-stream-body-single-string.js  http2
+test-diagnostics-channel-http2-client-stream-close-error.js  http2
+test-diagnostics-channel-http2-client-stream-close.js  http2
+test-diagnostics-channel-http2-client-stream-created.js  http2
+test-diagnostics-channel-http2-client-stream-error.js  http2
+test-diagnostics-channel-http2-client-stream-finish.js  http2
+test-diagnostics-channel-http2-client-stream-start.js  http2
+test-diagnostics-channel-http2-server-stream-close-error.js  http2
+test-diagnostics-channel-http2-server-stream-close.js  http2
+test-diagnostics-channel-http2-server-stream-created-start-timing.js  http2
+test-diagnostics-channel-http2-server-stream-created.js  http2
+test-diagnostics-channel-http2-server-stream-error.js  http2
+test-diagnostics-channel-http2-server-stream-finish.js  http2
+test-diagnostics-channel-http2-server-stream-start.js  http2
 # async_hooks' resource events (init/before/after) aren't emitted
 test-stream-writable-samecb-singletick.js  async_hooks.createHook TickObject
+test-async-hooks-async-await.js          async_hooks.createHook
+test-async-hooks-close-during-destroy.js async_hooks.createHook
+test-async-hooks-correctly-switch-promise-hook.js  async_hooks.createHook
+test-async-hooks-disable-during-promise.js  async_hooks.createHook
+test-async-hooks-enable-before-promise-resolve.js  async_hooks.createHook
+test-async-hooks-enable-disable-enable.js  async_hooks.createHook
+test-async-hooks-enable-disable.js       async_hooks.createHook
+test-async-hooks-enable-during-promise.js  async_hooks.createHook
+test-async-hooks-enable-recursive.js     async_hooks.createHook
+test-async-hooks-execution-async-resource-await.js  async_hooks.createHook
+test-async-hooks-execution-async-resource.js  async_hooks.createHook
+test-async-hooks-http-parser-destroy.js  async_hooks.createHook
+test-async-hooks-promise-enable-disable.js  async_hooks.createHook
+test-async-hooks-promise-triggerid.js    async_hooks.createHook
+test-async-hooks-promise.js              async_hooks.createHook
+test-async-hooks-top-level-clearimmediate.js  async_hooks.createHook
+test-async-wrap-promise-after-enabled.js async_hooks.createHook
+test-async-wrap-trigger-id.js            async_hooks.createHook
+test-async-wrap-uncaughtexception.js     async_hooks.createHook
 # setImmediate gives an Immediate (not its id) when the program uses one as an object (.unref(),
 # Symbol.dispose…): this checks its constructor's name, which the rules don't look for
 test-timers-clearImmediate-als.js        Immediate's constructor.name
@@ -92,6 +130,7 @@ test-tls-env-extra-ca-with-options.js    child_process.fork (a Node with NODE_EX
 test-tls-env-extra-ca.js                 child_process.fork (a Node with NODE_EXTRA_CA_CERTS)
 test-tls-ticket-cluster.js               cluster.fork
 test-tls-wrap-econnreset-pipe.js         child_process.fork
+test-diagnostics-channel-process.js      cluster.fork
 
 # no threads: a socket or server moved to a worker (worker_threads, MessageChannel)
 test-crypto-key-objects-messageport.js   MessageChannel
@@ -106,6 +145,13 @@ test-process-execve-worker-threads.js    worker_threads.Worker
 test-process-threadCpuUsage-worker-threads.js  worker_threads.Worker
 test-webcrypto-cryptokey-clone-transfer.js  MessageChannel transfer lists
 test-webcrypto-cryptokey-workers.js      worker_threads.Worker
+test-async-hooks-worker-asyncfn-terminate-1.js  worker_threads.Worker
+test-async-hooks-worker-asyncfn-terminate-2.js  worker_threads.Worker
+test-async-hooks-worker-asyncfn-terminate-3.js  worker_threads.Worker
+test-async-hooks-worker-asyncfn-terminate-4.js  worker_threads.Worker, SharedArrayBuffer
+test-diagnostics-channel-worker-threads.js  worker_threads.Worker
+test-perf-hooks-eventlooputilization.js  worker_threads.Worker
+test-perf-hooks-worker-timeorigin.js     worker_threads.Worker
 
 # process.report (Node's diagnostic report)
 test-http-agent-reuse-drained-socket-only.js  process.report.getReport()
@@ -181,6 +227,10 @@ test-child-process-stdout-flush-exit.js  process.execPath as Node
 test-child-process-stdout-flush.js       process.execPath as Node
 test-process-redirect-warnings-env.js    process.execPath as Node
 test-os-userinfo-handles-getter-errors.js  process.execPath as Node
+test-async-hooks-fatal-error.js          process.execPath as Node
+test-async-hooks-stack-overflow-nested-async.js  process.execPath as Node
+test-async-wrap-pop-id-during-load.js    process.execPath as Node
+test-performance-nodetiming-uvmetricsinfo.js  process.execPath as Node
 
 # Node's internals and command line: its bindings, and the options a Node takes
 test-process-binding-util.js             process.binding
@@ -220,3 +270,9 @@ test-tls-set-ciphers.js                  inspect(new Error()) names the caller's
 test-tls-external-accessor.js            SecureContext's native context (_external)
 test-tls-translate-peer-certificate.js   require('_tls_common')
 test-https-resume-after-renew.js         SecureContext's native context (enableTicketKeyCallback)
+
+# Node's built-in modules are linked ahead of time: require() and import() of one load nothing
+test-diagnostics-channel-module-import.js  module.import's tracing channel
+test-diagnostics-channel-module-import-error.js  module.import's tracing channel
+test-diagnostics-channel-module-require.js  module.require's tracing channel
+test-diagnostics-channel-module-require-error.js  module.require's tracing channel
