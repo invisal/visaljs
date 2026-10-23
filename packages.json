@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-22",
+  "date": "2026-10-23",
   "node": "v24.21.0",
   "platform": "linux-x64",
   "commit": "da3a9b62da5267a0d26cc0edd19d0b505ce4e156",
@@ -9,8 +9,8 @@
       "version": "6.0.0",
       "service": "redis",
       "build": "pass",
-      "buildTime": 92.487,
-      "size": 10134200,
+      "buildTime": 182.464,
+      "size": 10027696,
       "test": "pass"
     },
     {
@@ -18,8 +18,8 @@
       "version": "3.24.6",
       "service": "mysql",
       "build": "pass",
-      "buildTime": 209.347,
-      "size": 13029864,
+      "buildTime": 104.514,
+      "size": 12931552,
       "test": "pass"
     },
     {
@@ -27,8 +27,8 @@
       "version": "8.23.1",
       "service": "postgres",
       "build": "pass",
-      "buildTime": 115.352,
-      "size": 8671680,
+      "buildTime": 169.855,
+      "size": 8585656,
       "test": "pass"
     },
     {
@@ -36,8 +36,8 @@
       "version": "3.4.9",
       "service": "postgres",
       "build": "pass",
-      "buildTime": 126.999,
-      "size": 7618944,
+      "buildTime": 170.858,
+      "size": 7553400,
       "test": "pass"
     },
     {
@@ -45,8 +45,8 @@
       "version": "6.3.0",
       "service": "redis",
       "build": "pass",
-      "buildTime": 162.923,
-      "size": 15655384,
+      "buildTime": 141.953,
+      "size": 15471056,
       "test": "pass"
     }
   ]
