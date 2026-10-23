@@ -146,3 +146,77 @@ export function isVec(n: number): boolean {
   const v: Vec | null = n > 0 ? new Vec(n, n) : null;
   return v instanceof Vec;
 }
+
+/** A top-level function takes an instance. */
+function lengthSquared(v: Vec): number {
+  return v.dot(v);
+}
+
+export function measured(n: number): number {
+  return lengthSquared(new Vec(n, n + 1));
+}
+
+/** A field read before the constructor set it is a TypeError (Node reads undefined). */
+class Late {
+  early: number;
+  late: number;
+
+  constructor(n: number) {
+    this.early = this.peek();
+    this.late = n;
+  }
+
+  peek(): number {
+    return this.late;
+  }
+}
+
+export function late(n: number): number {
+  return new Late(n).early;
+}
+
+/** A field of null is JavaScript's TypeError. */
+export function popEmpty(): number {
+  return new Stack().pop();
+}
+
+/** A field initializer reaching a later field through a method, before its declaration defined
+ *  it: a TypeError (Node reads undefined, or writes it first and redefines it after). */
+class Early {
+  a = this.peek();
+  b = 0;
+  c = 0;
+  d = 0;
+  e = 0;
+  f = 0;
+  g = 0;
+  h = 1;
+
+  peek(): number {
+    return this.h;
+  }
+}
+
+class EarlyWrite {
+  a = this.poke();
+  b = 0;
+  c = 0;
+  d = 0;
+  e = 0;
+  f = 0;
+  g = 0;
+  h = 1;
+
+  poke(): number {
+    this.h = 5;
+    return 0;
+  }
+}
+
+export function early(): number {
+  return new Early().a;
+}
+
+export function earlyWrite(): number {
+  return new EarlyWrite().h;
+}

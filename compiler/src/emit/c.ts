@@ -1251,6 +1251,12 @@ class FunctionEmitter {
       case "array_push":
         expr = `js_sarray_push(ctx, ${args[0]}, ${args[1]}, ${ARRAY_ELEMS[i.elem!].c})`;
         break;
+      case "field_get":
+        expr = `js_sfield_get(ctx, ${args[0]}, ${i.slot}, ${i.elem ? ARRAY_ELEMS[i.elem].c : "JS_SFIELD_ANY"}, ${this.key(i)}, ${cString((i.key as { name: string }).name)})`;
+        break;
+      case "field_set":
+        status = `js_sfield_set(ctx, ${args[0]}, ${i.slot}, ${args[1]}, ${this.key(i)}, ${cString((i.key as { name: string }).name)})`;
+        break;
       case "math": {  /* typed code: Math's, as C's */
         const f = { sqrt: "sqrt", abs: "fabs", floor: "floor", ceil: "ceil", trunc: "trunc" }[i.target!];
         expr = convert(`${f}(${this.as(i.operands[0]!, "f64")})`, "f64", i.repr);

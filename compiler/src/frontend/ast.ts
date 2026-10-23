@@ -556,9 +556,17 @@ export interface MemberExpression extends Base {
   /** Static code, a member of an array: its element kind (i32: a number[] whose code converts
    *  what it reads and stores). */
   elem?: ElementKind;
+  /** Static code, a field of a class's instance: its slot (fields in declaration order), and its
+   *  kind when every value it holds is one */
+  field?: Field;
 }
 
 export type ElementKind = ArrayElem | "i32";
+
+export interface Field {
+  slot: number;
+  kind?: ArrayElem;
+}
 
 /** What assignment and update expressions write to. */
 export type Target = Identifier | MemberExpression | SuperMember;

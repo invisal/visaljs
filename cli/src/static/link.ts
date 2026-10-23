@@ -8,7 +8,7 @@ import { CompileError, convertStaticUnit, HOST_MODULE, type HostPrimitives, type
 import type * as A from "@visaljs/compiler/ast";
 import ts from "typescript";
 
-import { arrayElement, intKind } from "./types.ts";
+import { arrayElement, fieldOf, intKind } from "./types.ts";
 
 export interface LinkedUnit {
   ast: A.Program;
@@ -116,6 +116,7 @@ export function linkUnit(program: ts.Program, files: readonly string[], hostPrim
     fileName,
     intKind: (type) => intKind(checker, type),
     arrayElement: (node) => arrayElement(checker, node),
+    field: (node) => fieldOf(checker, node),
   };
 
   /* the exports: a function declaration, by its export name (unique across the unit) */
@@ -126,6 +127,11 @@ export function linkUnit(program: ts.Program, files: readonly string[], hostPrim
     if (Object.hasOwn(hostPrimitives, name)) throw compileError(at, `typed unit: export '${name}' is a host primitive's name`);
     if (!declaration || !ts.isFunctionDeclaration(declaration))
       throw compileError(at, `typed unit: export '${name}' is not a function declaration whose parameters are all number, string or boolean`);
+    for (const p of declaration.parameters) {
+      const type = checker.getTypeAtLocation(p);
+      const cls = classIn(checker, type, new Set());
+      if (cls) throw compileError(p, `export '${name}' takes ${checker.typeToString(type)}: static code's ${cls} instances stay in the unit yet`);
+    }
     const returns = checker.getReturnTypeOfSignature(checker.getSignatureFromDeclaration(declaration)!);
     const cls = classIn(checker, returns, new Set());
     if (cls) throw compileError(declaration.type ?? at, `export '${name}' returns ${checker.typeToString(returns)}: static code's ${cls} instances stay in the unit yet`);
@@ -150,7 +156,7 @@ export function isUnitClass(t: ts.Type): boolean {
 
 /** A class of the unit a value of type `t` can hold or reach (its properties, elements, what
  *  its functions return), by name. */
-function classIn(checker: ts.TypeChecker, t: ts.Type, seen: Set<ts.Type>): string | undefined {
+export function classIn(checker: ts.TypeChecker, t: ts.Type, seen: Set<ts.Type>): string | undefined {
   if (seen.has(t)) return undefined;
   seen.add(t);
   if (t.isUnionOrIntersection()) return t.types.map((p) => classIn(checker, p, seen)).find((c) => c);

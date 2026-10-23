@@ -551,6 +551,41 @@ static JS_FAST_PATH JSValue js_sarray_push(JSContext *ctx, JSValue arr, JSValue 
     return js_sarray_push_slow(ctx, arr, v, kind);
 }
 
+/* ---- Static code's class instances ("use static") ------------------------------------- */
+
+/* A field is a slot of the instance, in declaration order: an instance never leaves static code,
+ * which reads and writes only the fields its class declares, so its shape only ever has them. An
+ * instance being built has the fields defined so far: a slot past them is a TypeError (read or
+ * written before its declaration defined it), never a slot that isn't there. A field of a number,
+ * string or boolean is read checked against its kind (JS_SARRAY_*): one the constructor hasn't
+ * set yet holds undefined, a TypeError too. */
+#define JS_SFIELD_ANY (-1)
+
+JS_WARN_UNUSED JSValue js_sfield_get_slow(JSContext *ctx, JSValue obj, JSValue key, const char *name);
+JS_WARN_UNUSED int js_sfield_set_slow(JSContext *ctx, JSValue obj, JSValue v, JSValue key, const char *name);
+
+static JS_FAST_PATH JSValue js_sfield_get(JSContext *ctx, JSValue obj, uint32_t slot, int kind, JSValue key, const char *name) {
+    if (JS_LIKELY(js_is_object(obj))) {
+        JSObject *o = js_as_object(obj);
+        if (JS_LIKELY(slot < o->shape->prop_count)) {
+            JSValue v = *js_object_slot(o, slot);
+            if (JS_LIKELY(kind == JS_SFIELD_ANY || js_sarray_is(v, kind))) return v;
+        }
+    }
+    return js_sfield_get_slow(ctx, obj, key, name);
+}
+/* 1 done, -1 exception. */
+static JS_FAST_PATH int js_sfield_set(JSContext *ctx, JSValue obj, uint32_t slot, JSValue v, JSValue key, const char *name) {
+    if (JS_LIKELY(js_is_object(obj))) {
+        JSObject *o = js_as_object(obj);
+        if (JS_LIKELY(slot < o->shape->prop_count)) {
+            js_store(ctx, &o->cell, js_object_slot(o, slot), v);  /* an out-of-line slot's owner is the object too */
+            return 1;
+        }
+    }
+    return js_sfield_set_slow(ctx, obj, v, key, name);
+}
+
 /* delete obj[key]: true or false (sloppy), a TypeError when strict and not deletable.
  * `key` is a property key; js_delete_elem converts it first. */
 JS_WARN_UNUSED JSValue js_delete_value(JSContext *ctx, JSValue obj, JSValue key, bool strict);

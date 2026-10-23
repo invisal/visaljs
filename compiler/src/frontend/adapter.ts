@@ -80,6 +80,8 @@ export interface StaticUnitSource {
   /** The element kind of the array an expression is, if it is one (an array of any other
    *  element is a compile error). */
   arrayElement(node: ts.Expression): A.ElementKind | undefined;
+  /** The field of a class's instance an access names, if it names one. */
+  field(node: ts.PropertyAccessExpression): A.Field | undefined;
 }
 
 /** A static unit as one module: its types ignored, its files' top levels one after another.
@@ -1052,7 +1054,8 @@ class Converter {
     if (ts.isPropertyAccessExpression(node)) {
       if (ts.isPrivateIdentifier(node.name))
         return { type: "MemberExpression", loc, object, property: { type: "Identifier", loc: this.loc(node.name), name: node.name.text }, computed: false, private: true };
-      return { type: "MemberExpression", loc, object, property: this.identifier(node.name), computed: false, ...elem };
+      const field = this.unit?.field(node);
+      return { type: "MemberExpression", loc, object, property: this.identifier(node.name), computed: false, ...elem, ...(field ? { field } : {}) };
     }
     return { type: "MemberExpression", loc, object, property: this.expression(node.argumentExpression), computed: true, ...elem };
   }

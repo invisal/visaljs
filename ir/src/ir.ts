@@ -48,6 +48,10 @@ export type Op =
   // TypeError), a store (at the length a push, past it a RangeError), the length, a push (the new
   // length); lengths are int32s
   | "array_get" | "array_set" | "array_length" | "array_push"
+  // typed code's class fields (Instr.slot, Instr.key its name): a read, a store (null or
+  // undefined's a TypeError, as JavaScript's; so is a field its declaration hasn't defined yet,
+  // and with Instr.elem, a value read of another kind: read before it was set)
+  | "field_get" | "field_set"
   // typed code's i32 arithmetic: C's, wrapping
   | "int_add" | "int_sub" | "int_mul"
   // typed code's `int`: a Number as a C int64_t (truncated toward zero, wrapping; NaN 0); its
@@ -159,6 +163,7 @@ export const OPS: Record<Op, OpInfo> = {
   array_get: generic(2),  /* a hole's or a sparse store's element is read as JavaScript reads it */
   array_set: { ...generic(3), result: false },
   array_length: { ...generic(1), callsUser: false }, array_push: { ...generic(2), callsUser: false },
+  field_get: { ...generic(1), allocates: false, callsUser: false }, field_set: { ...generic(2), result: false, allocates: false, callsUser: false },
   int_add: pure(2), int_sub: pure(2), int_mul: pure(2), to_i64: pure(1), to_i32: pure(1),
   int_div: { ...pure(2), mayThrow: true }, int_mod: { ...pure(2), mayThrow: true }, i64: pure(2),
   identical: pure(2), strict_eq_atom: pure(2), is_type: pure(1), strict_eq_num: pure(2),
@@ -348,15 +353,15 @@ export interface Instr {
   /** new of a typed array only indexed (the typed-arrays pass), and its accesses: the element type
    *  of its view, taken once after `new` */
   taView?: ViewKind;
-  /** array_*: the array's element kind */
+  /** array_*: the array's element kind; field_get: the field's, when it is a number, string or boolean */
   elem?: ArrayElem;
   /** call of a typed unit's export (a "visaljs:host" import the typed unit defines) */
   typedCall?: TypedCall;
   /** call, construct_direct: the fallback of an inlined site (its guard failed): not inlined again */
   slowPath?: boolean;
-  /** *_prop, define_prop */
+  /** *_prop, define_prop, field_* */
   key?: PropKey;
-  /** env_load / env_store: the variable's slot (`index` is the depth) */
+  /** env_load / env_store: the variable's slot (`index` is the depth); field_*: the field's */
   slot?: number;
   /** make_arguments of a mapped arguments object: each parameter's environment slot (-1: none) */
   table?: number[];

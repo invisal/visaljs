@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import { HOST_MODULE } from "@visaljs/compiler";
 import ts from "typescript";
 
-import { compileError, importedFile, isUnitClass } from "./link.ts";
+import { classIn, compileError, importedFile, isUnitClass } from "./link.ts";
 import { BRAND } from "./nominal.ts";
 import { intKind } from "./types.ts";
 
@@ -127,6 +127,48 @@ function namesClass(t: ts.Type): boolean {
   return (t.isUnion() ? t.types : [t]).some(isUnitClass);
 }
 
+/* An instance's fields are fixed slots (field_get): nothing but the unit's code may reach one, and
+ * that code reads and writes only the fields its class declares. These rules keep it so. */
+
+/** Whether a call runs the unit's own code: a function, method or constructor it declares. */
+function callsUnit(checker: ts.TypeChecker, call: ts.CallExpression | ts.NewExpression): boolean {
+  const d = checker.getResolvedSignature(call)?.getDeclaration();
+  if (!d || ts.isJSDocSignature(d) || d.getSourceFile().isDeclarationFile) return false;
+  return ts.isClassDeclaration(d) || ((ts.isFunctionLike(d) && (d as ts.FunctionLikeDeclaration).body !== undefined));
+}
+
+/** A unit class an identifier names as a value. */
+function classValue(checker: ts.TypeChecker, id: ts.Identifier): ts.Symbol | undefined {
+  let symbol = ts.isShorthandPropertyAssignment(id.parent) ? checker.getShorthandAssignmentValueSymbol(id.parent) : checker.getSymbolAtLocation(id);
+  if (symbol && symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
+  return symbol?.declarations?.some((d) => ts.isClassDeclaration(d) && !d.getSourceFile().isDeclarationFile) ? symbol : undefined;
+}
+
+function checkInstances(checker: ts.TypeChecker, node: ts.Node) {
+  if ((ts.isCallExpression(node) || ts.isNewExpression(node)) && !callsUnit(checker, node))
+    for (const arg of node.arguments ?? []) {
+      const cls = classIn(checker, checker.getTypeAtLocation(arg), new Set());
+      if (cls) throw compileError(arg, `a ${cls} can't be passed to ${node.expression.getText()}: static code's instances stay in static code`);
+    }
+  if (ts.isThrowStatement(node)) {
+    const cls = classIn(checker, checker.getTypeAtLocation(node.expression), new Set());
+    if (cls) throw compileError(node.expression, `a thrown value can't hold a ${cls}: static code's instances stay in static code`);
+  }
+  if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && namesClass(checker.getNonNullableType(checker.getTypeAtLocation(node.expression)))) {
+    const declarations = ts.isPropertyAccessExpression(node) ? checker.getSymbolAtLocation(node.name)?.declarations ?? [] : [];
+    const own = declarations.length > 0 && declarations.every((d) => (ts.isPropertyDeclaration(d) || ts.isMethodDeclaration(d)) && ts.isClassDeclaration(d.parent));
+    if (!own) throw compileError(node, `a class's instance has only the fields and methods its class declares: ${ts.isPropertyAccessExpression(node) ? `'${node.name.text}' isn't one` : "name one"}`);
+    /* a method's `this` is then always an instance of its class */
+    if (declarations.some(ts.isMethodDeclaration) && !(ts.isCallExpression(node.parent) && node.parent.expression === node))
+      throw compileError(node, `static code calls a method, it doesn't take it as a value: ${(node as ts.PropertyAccessExpression).name.text}(…)`);
+  }
+  if (ts.isIdentifier(node) && classValue(checker, node)) {
+    const p = node.parent;
+    const used = (ts.isNewExpression(p) && p.expression === node) || (ts.isBinaryExpression(p) && p.operatorToken.kind === K.InstanceOfKeyword && p.right === node);
+    if (!used) throw compileError(node, `static code uses a class only in \`new ${node.text}\` and \`instanceof ${node.text}\``);
+  }
+}
+
 /** A type: anything tsc takes but `any`. */
 function visitType(node: ts.Node): void {
   if (node.kind === K.AnyKeyword) throw compileError(node, "`any` isn't a static type: name the type");
@@ -141,6 +183,7 @@ function visit(node: ts.Node, checker: ts.TypeChecker): void {
   }
   if (ts.isClassDeclaration(node)) throw compileError(node, "a static file declares its classes at its top level");
   if (ts.isIdentifier(node) && node.text === BRAND) throw compileError(node, `'${BRAND}' is static code's own name`);
+  checkInstances(checker, node);
   if (ts.isAsExpression(node) && namesClass(checker.getTypeAtLocation(node.type))
       && !checker.isTypeAssignableTo(checker.getTypeAtLocation(node.expression), checker.getTypeAtLocation(node.type)))
     throw compileError(node, `a cast doesn't make a ${node.type.getText()}: static code's classes are nominal, only \`new\` makes one`);

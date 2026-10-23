@@ -56,6 +56,8 @@ interface MemberRef {
   superCallee?: Instr;
   /** Static code, a member of an array: its element kind (an element's `key` is an Instr). */
   elem?: A.ElementKind;
+  /** Static code, a field of a class's instance (`key` is its name). */
+  field?: A.Field;
 }
 
 /** `a.push(v)` of a static array: one argument, no spread. */
@@ -1707,7 +1709,8 @@ class FunctionLowering {
     if (!e.computed) key = propKey((p as A.Identifier).name);
     else if (p.type === "Literal" && (typeof p.value === "string" || typeof p.value === "number") && !elem.elem) key = propKey(p.value);
     else key = this.expression(p);
-    return superCallee ? { obj, key, superCallee } : { obj, key, ...elem };
+    if (superCallee) return { obj, key, superCallee };
+    return e.type === "MemberExpression" && e.field ? { obj, key, field: e.field } : { obj, key, ...elem };
   }
 
   private getMember(ref: MemberRef): Instr {
@@ -1721,6 +1724,7 @@ class FunctionLowering {
       return ref.elem === "i32" ? this.toInt(v, "i32") : v;
     }
     if (ref.elem && "name" in ref.key && ref.key.name === "length") return this.b.emit("array_length", [ref.obj], { elem: irElem(ref.elem) });
+    if (ref.field) return this.b.emit("field_get", [ref.obj], { key: ref.key as PropKey, slot: ref.field.slot, ...(ref.field.kind ? { elem: ref.field.kind } : {}) });
     if (isConst(ref.key)) return this.b.emit("get_prop", [ref.obj], { key: ref.key });
     return this.b.emit("get_elem", [ref.obj, ref.key]);
   }
@@ -1737,6 +1741,7 @@ class FunctionLowering {
     }
     if (ref.elem && !isConst(ref.key))
       this.b.emit("array_set", [ref.obj, ref.key, ref.elem === "i32" ? this.toInt(value, "i32") : value], { elem: irElem(ref.elem) });
+    else if (ref.field) this.b.emit("field_set", [ref.obj, value], { key: ref.key as PropKey, slot: ref.field.slot });
     else if (isConst(ref.key)) this.b.emit("set_prop", [ref.obj, value], { key: ref.key });
     else this.b.emit("set_elem", [ref.obj, ref.key, value]);
   }

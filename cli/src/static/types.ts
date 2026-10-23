@@ -3,10 +3,10 @@
 import { resolve } from "node:path";
 
 import { type IntKind, STATIC_TYPES, T, type Type, viewOf, type ViewKind } from "@visaljs/ir";
-import type { ElementKind } from "@visaljs/compiler/ast";
+import type { ElementKind, Field } from "@visaljs/compiler/ast";
 import ts from "typescript";
 
-import { compileError, locKey } from "./link.ts";
+import { compileError, isUnitClass, locKey } from "./link.ts";
 
 export const TYPES_FILE = resolve(import.meta.dirname, "..", "..", "types", "visaljs.d.ts");
 
@@ -22,7 +22,8 @@ export function intKind(checker: ts.TypeChecker, node: ts.TypeNode | undefined):
 }
 
 export interface Signature {
-  types: Type[];
+  /** undefined: a method's parameter of a type static code doesn't take, as JavaScript's */
+  types: (Type | undefined)[];
   views: (ViewKind | undefined)[];
   /** the parameters that are arrays (the unit's own functions take them, its exports not yet) */
   arrays: ts.ParameterDeclaration[];
@@ -32,27 +33,43 @@ export interface Signature {
  *  caller as C would); an i32 any Number too, converted to it on entry. */
 const INT_PARAMETERS: Record<IntKind, Type> = { i64: STATIC_TYPES.int!.type, i32: STATIC_TYPES.number!.type };
 
-/** The declared parameter types of a file's top-level functions, by where each starts: each a
- *  type static code takes, or an error. */
+/** The declared parameter types of a file's top-level functions (each a type static code takes,
+ *  or an error) and of its classes' constructors and methods, by where each starts. */
 export function declaredSignatures(checker: ts.TypeChecker, sf: ts.SourceFile, out: Map<string, Signature>) {
   for (const st of sf.statements) {
-    if (!ts.isFunctionDeclaration(st) || !st.name) continue;
-    const arrays: ts.ParameterDeclaration[] = [];
-    const types = st.parameters.map((p) => {
-      const kind = intKind(checker, p.type);
-      if (kind) return INT_PARAMETERS[kind];
-      const type = checker.getTypeAtLocation(p);
-      if (checker.isArrayType(type)) {
-        arrays.push(p);
-        return T.Object;  /* its elements are checked as they are read */
-      }
-      const t = irType(type);
-      if (t === null) throw compileError(p, `parameter '${p.name.getText(sf)}' of '${st.name!.text}': ${checker.typeToString(type)} isn't a static type yet`);
-      return t;
-    });
-    const views = st.parameters.map((p) => viewOf(checker.getTypeAtLocation(p).getSymbol()?.name ?? ""));
-    out.set(locKey(st), { types, views, arrays });
+    if (ts.isFunctionDeclaration(st) && st.name) out.set(locKey(st), signature(checker, st, st.name.text, true));
+    else if (ts.isClassDeclaration(st))
+      for (const m of st.members)
+        if ((ts.isConstructorDeclaration(m) || ts.isMethodDeclaration(m)) && m.body) out.set(locKey(m), signature(checker, m, m.name?.getText() ?? "constructor", false));
   }
+}
+
+function signature(checker: ts.TypeChecker, f: ts.SignatureDeclaration, name: string, strict: boolean): Signature {
+  const arrays: ts.ParameterDeclaration[] = [];
+  const types = f.parameters.map((p) => {
+    const kind = intKind(checker, p.type);
+    if (kind) return INT_PARAMETERS[kind];
+    const type = checker.getTypeAtLocation(p);
+    if (checker.isArrayType(type)) {
+      arrays.push(p);
+      return T.Object;  /* its elements are checked as they are read */
+    }
+    const t = irType(type);
+    if (t !== null || !strict) return t ?? undefined;
+    throw compileError(p, `parameter '${p.name.getText()}' of '${name}': ${checker.typeToString(type)} isn't a static type yet`);
+  });
+  const views = f.parameters.map((p) => viewOf(checker.getTypeAtLocation(p).getSymbol()?.name ?? ""));
+  return { types, views, arrays };
+}
+
+/** The field of a class's instance an access names: its slot (fields in declaration order) and,
+ *  when every value it holds is a number, a string or a boolean, that kind. */
+export function fieldOf(checker: ts.TypeChecker, node: ts.PropertyAccessExpression): Field | undefined {
+  const declaration = checker.getSymbolAtLocation(node.name)?.valueDeclaration;
+  if (!declaration || !ts.isPropertyDeclaration(declaration) || !ts.isClassDeclaration(declaration.parent) || declaration.getSourceFile().isDeclarationFile) return undefined;
+  const slot = declaration.parent.members.filter(ts.isPropertyDeclaration).indexOf(declaration);
+  const kind = primitiveOf(checker.getTypeAtLocation(declaration));
+  return kind ? { slot, kind } : { slot };
 }
 
 /** tsc's primitive types (and their literals), by the name STATIC_TYPES knows them by. */
@@ -77,6 +94,7 @@ function irType(t: ts.Type): Type | null {
   }
   const name = PRIMITIVE_FLAGS.find(([flags]) => t.flags & flags)?.[1];
   if (name) return STATIC_TYPES[name]!.type;
+  if (isUnitClass(t)) return T.Object;
   return viewOf(t.getSymbol()?.name ?? "") ? T.Object : null;
 }
 
