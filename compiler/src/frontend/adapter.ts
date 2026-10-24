@@ -82,6 +82,8 @@ export interface StaticUnitSource {
   arrayElement(node: ts.Expression): A.ElementKind | undefined;
   /** The field of a class's instance an access names, if it names one. */
   field(node: ts.PropertyAccessExpression): A.Field | undefined;
+  /** The method of a class's instance an access names, if it names one. */
+  method(node: ts.PropertyAccessExpression): A.Method | undefined;
 }
 
 /** A static unit as one module: its types ignored, its files' top levels one after another.
@@ -911,7 +913,8 @@ class Converter {
             const name = key.type === "Identifier" ? key.name : String((key as A.Literal).value);
             if (name === "constructor" || (isStatic && name === "prototype"))
               this.fail("SyntaxError", `Classes may not have a field named '${name}'`, m);
-            field = { type: "DefineField", loc, key: key.type === "Identifier" ? { type: "Literal", loc, value: name } : key, computed: false, private: false, value };
+            const int = this.unit?.intKind(m.type);
+            field = { type: "DefineField", loc, key: key.type === "Identifier" ? { type: "Literal", loc, value: name } : key, computed: false, private: false, value, ...(int ? { int } : {}) };
           }
         }
         (isStatic ? staticBody : instanceBody).push(statement(loc, field));
@@ -1055,7 +1058,8 @@ class Converter {
       if (ts.isPrivateIdentifier(node.name))
         return { type: "MemberExpression", loc, object, property: { type: "Identifier", loc: this.loc(node.name), name: node.name.text }, computed: false, private: true };
       const field = this.unit?.field(node);
-      return { type: "MemberExpression", loc, object, property: this.identifier(node.name), computed: false, ...elem, ...(field ? { field } : {}) };
+      const method = this.unit?.method(node);
+      return { type: "MemberExpression", loc, object, property: this.identifier(node.name), computed: false, ...elem, ...(field ? { field } : {}), ...(method ? { method } : {}) };
     }
     return { type: "MemberExpression", loc, object, property: this.expression(node.argumentExpression), computed: true, ...elem };
   }

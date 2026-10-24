@@ -564,25 +564,33 @@ static JS_FAST_PATH JSValue js_sarray_push(JSContext *ctx, JSValue arr, JSValue 
 JS_WARN_UNUSED JSValue js_sfield_get_slow(JSContext *ctx, JSValue obj, JSValue key, const char *name);
 JS_WARN_UNUSED int js_sfield_set_slow(JSContext *ctx, JSValue obj, JSValue v, JSValue key, const char *name);
 
-static JS_FAST_PATH JSValue js_sfield_get(JSContext *ctx, JSValue obj, uint32_t slot, int kind, JSValue key, const char *name) {
-    if (JS_LIKELY(js_is_object(obj))) {
-        JSObject *o = js_as_object(obj);
-        if (JS_LIKELY(slot < o->shape->prop_count)) {
-            JSValue v = *js_object_slot(o, slot);
-            if (JS_LIKELY(kind == JS_SFIELD_ANY || js_sarray_is(v, kind))) return v;
-        }
+/* js_sfield_get of a value the compiler proved an object (a method's `this`). */
+static JS_FAST_PATH JSValue js_sfield_get_in(JSContext *ctx, JSObject *o, uint32_t slot, int kind, JSValue key, const char *name) {
+    if (JS_LIKELY(slot < o->shape->prop_count)) {
+        JSValue v = *js_object_slot(o, slot);
+        if (JS_LIKELY(kind == JS_SFIELD_ANY || js_sarray_is(v, kind))) return v;
     }
+    return js_sfield_get_slow(ctx, js_object_value(o), key, name);
+}
+static JS_FAST_PATH JSValue js_sfield_get(JSContext *ctx, JSValue obj, uint32_t slot, int kind, JSValue key, const char *name) {
+    if (JS_LIKELY(js_is_object(obj))) return js_sfield_get_in(ctx, js_as_object(obj), slot, kind, key, name);
     return js_sfield_get_slow(ctx, obj, key, name);
 }
+/* A method call's receiver: an object, or (null, undefined) the TypeError reading the method throws. */
+static inline JSValue js_sfield_receiver(JSContext *ctx, JSValue obj, JSValue key) {
+    if (JS_LIKELY(js_is_object(obj))) return obj;
+    return js_get_prop_slow(ctx, obj, key, NULL);
+}
 /* 1 done, -1 exception. */
-static JS_FAST_PATH int js_sfield_set(JSContext *ctx, JSValue obj, uint32_t slot, JSValue v, JSValue key, const char *name) {
-    if (JS_LIKELY(js_is_object(obj))) {
-        JSObject *o = js_as_object(obj);
-        if (JS_LIKELY(slot < o->shape->prop_count)) {
-            js_store(ctx, &o->cell, js_object_slot(o, slot), v);  /* an out-of-line slot's owner is the object too */
-            return 1;
-        }
+static JS_FAST_PATH int js_sfield_set_in(JSContext *ctx, JSObject *o, uint32_t slot, JSValue v, JSValue key, const char *name) {
+    if (JS_LIKELY(slot < o->shape->prop_count)) {
+        js_store(ctx, &o->cell, js_object_slot(o, slot), v);  /* an out-of-line slot's owner is the object too */
+        return 1;
     }
+    return js_sfield_set_slow(ctx, js_object_value(o), v, key, name);
+}
+static JS_FAST_PATH int js_sfield_set(JSContext *ctx, JSValue obj, uint32_t slot, JSValue v, JSValue key, const char *name) {
+    if (JS_LIKELY(js_is_object(obj))) return js_sfield_set_in(ctx, js_as_object(obj), slot, v, key, name);
     return js_sfield_set_slow(ctx, obj, v, key, name);
 }
 

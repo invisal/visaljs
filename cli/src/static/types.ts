@@ -3,7 +3,7 @@
 import { resolve } from "node:path";
 
 import { type IntKind, STATIC_TYPES, T, type Type, viewOf, type ViewKind } from "@visaljs/ir";
-import type { ElementKind, Field } from "@visaljs/compiler/ast";
+import type { ElementKind, Field, Method } from "@visaljs/compiler/ast";
 import ts from "typescript";
 
 import { compileError, isUnitClass, locKey } from "./link.ts";
@@ -27,6 +27,8 @@ export interface Signature {
   views: (ViewKind | undefined)[];
   /** the parameters that are arrays (the unit's own functions take them, its exports not yet) */
   arrays: ts.ParameterDeclaration[];
+  /** a constructor's or method's: its `this` is an instance of its class */
+  instance?: true;
 }
 
 /** What a parameter of each integer takes: an int any Number (an int64_t, converted by the
@@ -40,7 +42,8 @@ export function declaredSignatures(checker: ts.TypeChecker, sf: ts.SourceFile, o
     if (ts.isFunctionDeclaration(st) && st.name) out.set(locKey(st), signature(checker, st, st.name.text, true));
     else if (ts.isClassDeclaration(st))
       for (const m of st.members)
-        if ((ts.isConstructorDeclaration(m) || ts.isMethodDeclaration(m)) && m.body) out.set(locKey(m), signature(checker, m, m.name?.getText() ?? "constructor", false));
+        if ((ts.isConstructorDeclaration(m) || ts.isMethodDeclaration(m)) && m.body)
+          out.set(locKey(m), { ...signature(checker, m, m.name?.getText() ?? "constructor", false), instance: true });
   }
 }
 
@@ -63,13 +66,23 @@ function signature(checker: ts.TypeChecker, f: ts.SignatureDeclaration, name: st
 }
 
 /** The field of a class's instance an access names: its slot (fields in declaration order) and,
- *  when every value it holds is a number, a string or a boolean, that kind. */
+ *  when every value it holds is a number, a string or a boolean, that kind (and an int's, i32's). */
 export function fieldOf(checker: ts.TypeChecker, node: ts.PropertyAccessExpression): Field | undefined {
   const declaration = checker.getSymbolAtLocation(node.name)?.valueDeclaration;
   if (!declaration || !ts.isPropertyDeclaration(declaration) || !ts.isClassDeclaration(declaration.parent) || declaration.getSourceFile().isDeclarationFile) return undefined;
   const slot = declaration.parent.members.filter(ts.isPropertyDeclaration).indexOf(declaration);
   const kind = primitiveOf(checker.getTypeAtLocation(declaration));
-  return kind ? { slot, kind } : { slot };
+  const int = intKind(checker, declaration.type);
+  return { slot, ...(kind ? { kind } : {}), ...(int ? { int } : {}) };
+}
+
+/** The method of a class's instance an access names: where it is declared, and the integer it
+ *  returns. */
+export function methodOf(checker: ts.TypeChecker, node: ts.PropertyAccessExpression): Method | undefined {
+  const declaration = checker.getSymbolAtLocation(node.name)?.valueDeclaration;
+  if (!declaration || !ts.isMethodDeclaration(declaration) || !ts.isClassDeclaration(declaration.parent) || declaration.getSourceFile().isDeclarationFile) return undefined;
+  const returnsInt = intKind(checker, declaration.type);
+  return { at: locKey(declaration), ...(returnsInt ? { returnsInt } : {}) };
 }
 
 /** tsc's primitive types (and their literals), by the name STATIC_TYPES knows them by. */
