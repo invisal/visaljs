@@ -80,6 +80,8 @@ export function printFunction(fn: FunctionIR): string {
         return `regexp /${i.regexp!.pattern}/${i.regexp!.flags}`;
       case "array_get": case "array_set": case "array_length": case "array_push":
         return `${i.op} ${i.elem}[] ${args}`;
+      case "field_get": case "field_set":
+        return `${i.op} ${args}, ${(i.key as { name: string }).name}@${i.slot}${i.elem ? `: ${i.elem}` : ""}`;
       case "template_object":
         return `template_object ${JSON.stringify(i.template!.cooked)}, slot ${i.index}`;
       case "import_meta":

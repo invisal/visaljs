@@ -3,7 +3,7 @@
 // to a fixpoint (the lattice is a bitset of 10 kinds, so that's quick). A phi is the union of its
 // inputs; an operation's type comes from its operands' (`transfer`). Operations it knows nothing
 // about are Unknown: any JS value, or EMPTY.
-import { ARRAY_ELEMS, dominators, isStatic, isSubtype, Number_, OPS, Primitive, readsDouble, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { accepts, Any, ARRAY_ELEMS, dominators, isStatic, isSubtype, Number_, OPS, Primitive, readsDouble, T, Unknown, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { callers, closedFunctions, functionsOf, pauses, reversePostorder } from "./cfg.ts";
 import { trustedBuiltin } from "./specialize.ts";
@@ -44,7 +44,7 @@ function inferModule(m: ModuleIR): Set<FunctionIR> {
   for (const fn of m.functions) {
     if (!pauses(fn)) sig.returns.set(fn.name, T.None);
     const declared = fn.meta?.declared;
-    fn.params.forEach((p, k) => sig.params.set(p, declared?.[k] ?? (closed.has(fn) ? T.None : Unknown & ~T.Empty)));
+    fn.params.forEach((p, k) => sig.params.set(p, declared?.[k] ?? (fn.meta?.instanceThis && p.name === "this" ? T.Object : closed.has(fn) ? T.None : Unknown & ~T.Empty)));
   }
   const byName = new Map(m.functions.map((fn) => [fn.name, fn]));
   const callerMap = callers(m);
@@ -266,6 +266,14 @@ function transfer(i: Instr, type: (v: Instr) => Type, sig: Signatures | null, bo
       return ARRAY_ELEMS[i.elem!].type;
     case "array_length": case "array_push":
       return T.Int32;
+    case "field_get":  /* checked when it has a kind: of it, or the read throws */
+      return i.elem ? ARRAY_ELEMS[i.elem].type : Any;
+    case "receiver":
+      return T.Object;
+    case "declared_check": {  /* of its declared type, or it throws */
+      const t = i.check!.view ? T.Object : accepts(i.check!.type);
+      return type(i.operands[0]!) & t || t;
+    }
     case "from_char_code":
       return T.String;
     case "char_code_at":  /* a unit, or NaN past the end */

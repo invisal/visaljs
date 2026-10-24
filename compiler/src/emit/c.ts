@@ -9,9 +9,9 @@
 //   the block's handler (after that edge's phi copies) or returns JS_EXCEPTION.
 // - #line directives map back to the JS source (gdb, error locations).
 import type { Loc } from "../frontend/ast.ts";
-import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr, Type, TypedCall } from "@visaljs/ir";
+import type { Block, FunctionIR, Instr, JSConst, ModuleIR, Op, PropKey, Repr, Type, TypedCall, ViewKind } from "@visaljs/ir";
 import type { HostPrimitives } from "../frontend/host.ts";
-import { ARRAY_ELEMS, declaredCallFits, expectedText, isSubtype, Number_, OPS, readsDouble, successors, T, typedCallFits, VIEWS } from "@visaljs/ir";
+import { accepts, ARRAY_ELEMS, declaredCallFits, expectedText, isSubtype, Number_, OPS, readsDouble, successors, T, typedCallFits, VIEWS } from "@visaljs/ir";
 import { liveAfterPauses } from "@visaljs/ir";
 import type { CoreEntry } from "./core.ts";
 import { ATOMS } from "./atoms.ts";
@@ -791,6 +791,28 @@ class FunctionEmitter {
       : `js_tav_set_${i.taView}${suffix}(ctx, ${view}, ${args[0]}, ${k}, ${args[2]}, ${strict})`;
   }
 
+  /** A static field access's helper and its object: the `_in` variant takes one proven an object. */
+  private fieldOf(obj: Instr, op: "get" | "set"): string {
+    return obj.type !== T.None && isSubtype(obj.type, T.Object) ? `js_sfield_${op}_in(ctx, js_as_object(${this.v(obj)})` : `js_sfield_${op}(ctx, ${this.v(obj)}`;
+  }
+
+  /** A direct call of a static class's method whose arguments aren't all proven their declared
+   *  types: each checked here, as the checked entry would (that entry can't be given `this`). */
+  private declaredChecks(i: Instr, callee: FunctionIR) {
+    callee.meta!.declared!.forEach((t, k) => {
+      const o = i.operands[k];
+      if (t === undefined || !o || (o.type !== T.None && isSubtype(o.type & ~T.Empty, accepts(t)))) return;
+      this.argCheck(o, t, callee.meta!.declaredViews?.[k], callee.params[k]!.name ?? `argument ${k + 1}`, i.block);
+    });
+  }
+
+  /** A typed parameter's check of its argument, as its checked entry's: ERR_INVALID_ARG_TYPE. */
+  private argCheck(o: Instr, t: Type, view: ViewKind | undefined, name: string, block: Block) {
+    const v = this.as(o, "boxed");
+    const test = view ? `js_ta_is(ctx, ${v}, ${VIEWS[view].c})` : typeTest(t, v);
+    this.lines.push(`    if (JS_UNLIKELY(!(${test}))) { js_discard(js_throw_invalid_arg_type(ctx, ${cString(name)}, ${cString(expectedText(t, view))}, ${v})); ${this.onException(block)} }`);
+  }
+
   /** A static array's index, an int64_t: -1 for a Number that isn't an index. */
   private arrayIndex(key: Instr): string {
     if (key.op === "const" && Number.isSafeInteger(key.lit!.value) && (key.lit!.value as number) >= 0) return this.as(key, "i64");
@@ -1251,6 +1273,21 @@ class FunctionEmitter {
       case "array_push":
         expr = `js_sarray_push(ctx, ${args[0]}, ${args[1]}, ${ARRAY_ELEMS[i.elem!].c})`;
         break;
+      case "declared_check": {
+        const o = i.operands[0]!, c = i.check!;
+        if (c.view || o.type === T.None || !isSubtype(o.type & ~T.Empty, accepts(c.type))) this.argCheck(o, c.type, c.view, c.name, i.block);
+        expr = this.as(o, i.repr);
+        break;
+      }
+      case "receiver":
+        expr = isSubtype(i.operands[0]!.type, T.Object) ? args[0]! : `js_sfield_receiver(ctx, ${args[0]}, ${this.key(i)})`;
+        break;
+      case "field_get":
+        expr = `${this.fieldOf(i.operands[0]!, "get")}, ${i.slot}, ${i.elem ? ARRAY_ELEMS[i.elem].c : "JS_SFIELD_ANY"}, ${this.key(i)}, ${cString((i.key as { name: string }).name)})`;
+        break;
+      case "field_set":
+        status = `${this.fieldOf(i.operands[0]!, "set")}, ${i.slot}, ${args[1]}, ${this.key(i)}, ${cString((i.key as { name: string }).name)})`;
+        break;
       case "math": {  /* typed code: Math's, as C's */
         const f = { sqrt: "sqrt", abs: "fabs", floor: "floor", ceil: "ceil", trunc: "trunc" }[i.target!];
         expr = convert(`${f}(${this.as(i.operands[0]!, "f64")})`, "f64", i.repr);
@@ -1324,7 +1361,8 @@ class FunctionEmitter {
         break;
       case "call_direct": {
         const callee = this.callees.get(i.target!);
-        if (callee?.meta?.declared && !declaredCallFits(i, callee)) {  /* a typed function, arguments not proven its types: its checked entry */
+        if (callee?.meta?.declared && !declaredCallFits(i, callee) && callee.meta.instanceThis) this.declaredChecks(i, callee);
+        else if (callee?.meta?.declared && !declaredCallFits(i, callee)) {  /* a typed function, arguments not proven its types: its checked entry */
           const hidden = callee.meta.declared.findIndex((t) => t !== undefined);
           this.boxedCall(i, `${this.strings.prefix}jsf_${ident(i.target!)}__generic(ctx, JS_UNDEFINED, JS_UNDEFINED, ${i.operands.length - hidden}, ${argArray(i.operands.slice(hidden).map((o) => this.as(o, "boxed")))}, JS_UNDEFINED)`);
           return;
