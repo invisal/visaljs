@@ -1,11 +1,12 @@
 // Simplification from types, after infer-types:
 // - conversions of a value already of the target type are the value (`to_numeric` of a Number:
-//   every `i++`), and so is a TDZ check of a value that can't be EMPTY;
+//   every `i++`), and so is a TDZ check of a value that can't be EMPTY, a method's receiver proven
+//   an object, an inlined typed argument proven its declared type;
 // - an operator whose operand types rule out every error (and any user code) can't throw: its
 //   `mayThrow` is cleared, so C emission drops its exception check;
 // - a branch whose condition's truthiness is known becomes a jump, and blocks no longer
 //   reached go.
-import { Number_, OPS, Primitive, T, isSubtype, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
+import { accepts, Number_, OPS, Primitive, T, isSubtype, type Block, type FunctionIR, type Instr, type ModuleIR, type Op, type Type } from "@visaljs/ir";
 
 import { clearMayThrow, functionsOf, removeEdge, removeInstrs, removeUnreachable, replaceUses } from "./cfg.ts";
 import type { Count, Pass } from "./index.ts";
@@ -36,6 +37,8 @@ function identity(i: Instr): Instr | null {
     case "to_boolean": return isSubtype(a!.type, T.Boolean) ? a! : null;
     case "to_string": return isSubtype(a!.type, T.String) ? a! : null;
     case "check_tdz": return a!.type & T.Empty ? null : a!;
+    case "receiver": return isSubtype(a!.type, T.Object) && a!.type !== T.None ? a! : null;
+    case "declared_check": return !i.check!.view && a!.type !== T.None && isSubtype(a!.type & ~T.Empty, accepts(i.check!.type)) ? a! : null;
     default: return null;
   }
 }

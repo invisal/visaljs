@@ -8,7 +8,6 @@ import ts from "typescript";
 
 import { classIn, compileError, importedFile, isUnitClass } from "./link.ts";
 import { BRAND } from "./nominal.ts";
-import { intKind } from "./types.ts";
 
 const K = ts.SyntaxKind;
 
@@ -104,10 +103,6 @@ function checkClass(checker: ts.TypeChecker, c: ts.ClassDeclaration) {
       const property = ts.isConstructorDeclaration(m) ? m.parameters.find((p) => ts.getModifiers(p)?.length) : undefined;
       if (property) throw compileError(property, "a parameter property isn't JavaScript (Node's type stripping rejects it): declare the field");
     }
-    if (ts.isMethodDeclaration(m) && intKind(checker, m.type))
-      throw compileError(m.type!, `${notYet("methods that return an int or i32")}: return a number`);
-    if (ts.isPropertyDeclaration(m) && intKind(checker, m.type))
-      throw compileError(m.type!, `${notYet("int or i32 fields")}: declare a number`);
     if ((ts.isPropertyDeclaration(m) || ts.isMethodDeclaration(m)) && !ts.isIdentifier(m.name))
       throw compileError(m.name, notYet("member names other than identifiers"));
     if (ts.isPropertyDeclaration(m) || ts.isConstructorDeclaration(m) || ts.isMethodDeclaration(m)) ts.forEachChild(m, (n) => visit(n, checker));

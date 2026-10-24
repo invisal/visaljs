@@ -52,6 +52,12 @@ export type Op =
   // undefined's a TypeError, as JavaScript's; so is a field its declaration hasn't defined yet,
   // and with Instr.elem, a value read of another kind: read before it was set)
   | "field_get" | "field_set"
+  // typed code's method call: its receiver, an object (null or undefined: the TypeError reading
+  // the method, Instr.key, would throw)
+  | "receiver"
+  // a typed function's argument where inlining copied its body (Instr.check): its value, or the
+  // TypeError its checked entry throws (ERR_INVALID_ARG_TYPE)
+  | "declared_check"
   // typed code's i32 arithmetic: C's, wrapping
   | "int_add" | "int_sub" | "int_mul"
   // typed code's `int`: a Number as a C int64_t (truncated toward zero, wrapping; NaN 0); its
@@ -163,7 +169,8 @@ export const OPS: Record<Op, OpInfo> = {
   array_get: generic(2),  /* a hole's or a sparse store's element is read as JavaScript reads it */
   array_set: { ...generic(3), result: false },
   array_length: { ...generic(1), callsUser: false }, array_push: { ...generic(2), callsUser: false },
-  field_get: { ...generic(1), allocates: false, callsUser: false }, field_set: { ...generic(2), result: false, allocates: false, callsUser: false },
+  field_get: { ...generic(1), allocates: false, callsUser: false }, receiver: { ...generic(1), callsUser: false },
+  declared_check: { ...generic(1), callsUser: false }, field_set: { ...generic(2), result: false, allocates: false, callsUser: false },
   int_add: pure(2), int_sub: pure(2), int_mul: pure(2), to_i64: pure(1), to_i32: pure(1),
   int_div: { ...pure(2), mayThrow: true }, int_mod: { ...pure(2), mayThrow: true }, i64: pure(2),
   identical: pure(2), strict_eq_atom: pure(2), is_type: pure(1), strict_eq_num: pure(2),
@@ -265,7 +272,7 @@ export interface TypedCall {
 }
 
 /** What a typed parameter of type `t` takes: an int any Number (the function converts it, as C). */
-function accepts(t: Type): Type {
+export function accepts(t: Type): Type {
   return isSubtype(t, T.Int64) ? Number_ : t;
 }
 
@@ -357,6 +364,8 @@ export interface Instr {
   elem?: ArrayElem;
   /** call of a typed unit's export (a "visaljs:host" import the typed unit defines) */
   typedCall?: TypedCall;
+  /** declared_check: the parameter's declared type (and typed array), and its name for the error */
+  check?: { type: Type; view?: ViewKind; name: string };
   /** call, construct_direct: the fallback of an inlined site (its guard failed): not inlined again */
   slowPath?: boolean;
   /** *_prop, define_prop, field_* */
@@ -423,6 +432,9 @@ export interface FunctionMeta {
   /** Called from outside the module (a typed unit's entries): its parameters can't be inferred
    *  from its call sites. */
   external?: boolean;
+  /** A static class's constructor or method: its `this` is an instance of its class, an object
+   *  (static code only calls a method, on an instance: cli/src/static/subset.ts). */
+  instanceThis?: boolean;
   /** The direct entry's hidden leading parameters: the environment it
    *  closes over, the function object (a named expression reading its own name),
    *  and `this` (only when used). */

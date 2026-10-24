@@ -4,5 +4,6 @@
   "spectral-norm": { "args": ["2000"] },
   "fib": { "args": ["35"] },
   "http-token": { "args": ["2000000"] },
-  "nbody": { "args": ["1000000"] }
+  "nbody": { "args": ["1000000"] },
+  "vectors": { "args": ["20000000"] }
 }

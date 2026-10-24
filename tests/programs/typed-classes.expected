@@ -1,7 +1,10 @@
 15 98 9506 394 35
 b0=4 b1=6 b2=-2147483648 
 3 -3 n20 6765 true false 25
+7 1 1 -2147483648 -7 -1 -1 -2147483648
 TypeError Field 'late' was read before it was set
 TypeError Cannot read properties of null (reading 'next')
 TypeError Field 'h' was read before it was set
 TypeError Field 'h' was set before its declaration defined it
+TypeError Cannot read properties of null (reading 'pop')
+TypeError The "n" argument must be of type number. Received type string ('seven')
