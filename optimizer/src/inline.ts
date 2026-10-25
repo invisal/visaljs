@@ -220,6 +220,19 @@ function inlineSite(fn: FunctionIR, site: Instr, callee: FunctionIR) {
     for (let k = 0; k < declared; k++) values.push(args[k] ?? undef(entryFrom));
   }
 
+  /* a typed function's arguments: as its checked entry would check them (a cast can lie to tsc) */
+  const declared = meta.declared;
+  if (declared?.some((t) => t !== undefined)) {
+    declared.forEach((t, k) => {
+      if (t === undefined) return;
+      const check = { type: t, ...(meta.declaredViews?.[k] ? { view: meta.declaredViews[k] } : {}), name: callee.params[k]!.name ?? `argument ${k + 1}` };
+      values[k] = append(entryFrom, newInstr(fresh, entryFrom, "declared_check", [values[k]!], { check, loc }));
+    });
+    const next = newBlock(fn, fresh, null);
+    jump(entryFrom, next, loc);
+    entryFrom = next;
+  }
+
   /* the body: every block and value copied, the parameters mapped, each `return` a jump to `after` */
   const blockMap = new Map<Block, Block>();
   const valueMap = new Map<Instr, Instr>();
