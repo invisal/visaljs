@@ -831,7 +831,7 @@ static JSBigInt *js_bigint_from_string(JSContext *ctx, const char *str, int radi
     return is_neg ? js_bigint_neg(ctx, r) : r;
 }
 
-static const char digits[36] = "0123456789abcdefghijklmnopqrstuvwxyz";
+static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 /* backwards */
 static char *js_u64toa(char *q, uint64_t n, unsigned int base) {

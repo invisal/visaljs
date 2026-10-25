@@ -69,6 +69,7 @@ export function buildTypedUnit(imported: readonly string[], primitives: HostPrim
     meta.declared = fn.params.map((_, k) => (k < hidden ? undefined : sig.types[k - hidden]));
     meta.declaredViews = fn.params.map((_, k) => (k < hidden ? undefined : sig.views[k - hidden]));
     meta.external = true;
+    if (sig.instance) meta.instanceThis = true;
   }
   const exports: Record<string, { c: string; length: number }> = {};
   const exportedFns = new Map<string, string>();

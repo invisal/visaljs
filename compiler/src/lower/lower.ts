@@ -56,6 +56,8 @@ interface MemberRef {
   superCallee?: Instr;
   /** Static code, a member of an array: its element kind (an element's `key` is an Instr). */
   elem?: A.ElementKind;
+  /** Static code, a field of a class's instance (`key` is its name). */
+  field?: A.Field;
 }
 
 /** `a.push(v)` of a static array: one argument, no spread. */
@@ -98,6 +100,8 @@ interface ModuleContext {
   readsOwnName: Set<FunctionInfo>;
   /** "use static" code: integer arithmetic and conversions where its declarations say so. */
   static: boolean;
+  /** Static code: its classes' methods, by where each is declared (A.Method's `at`). */
+  methodsAt: Map<string, { fn: A.FunctionExpression; cls: A.ClassDeclaration }>;
 }
 
 /** Static code's integer operators: an `i64` (+ - * & | ^ << >> >>>; / and % by a constant other
@@ -178,9 +182,15 @@ export function lower(program: A.Program, info: SemanticInfo): ModuleIR {
     if (r.id.name === "print" && r.write && !r.binding) printAssigned = true;
     if (r.binding && ownNames.get(r.binding) === r.func) readsOwnName.add(r.func);
   }
+  const methodsAt = new Map<string, { fn: A.FunctionExpression; cls: A.ClassDeclaration }>();
+  if (program.static)
+    for (const cls of classesById.values())
+      for (const member of cls.members)
+        if (cls.type === "ClassDeclaration" && member.kind === "method" && !member.static && member.value)
+          methodsAt.set(`${member.value.loc.file}:${member.value.loc.line}:${member.value.loc.column}`, { fn: member.value, cls });
   const m: ModuleContext = {
     info, slots, envs, ids, inferredNames: new Map(), printAssigned, globals, importMetaSlots: new Map(),
-    declaredFunctions, classesById, readsOwnName, static: program.static === true,
+    declaredFunctions, classesById, readsOwnName, static: program.static === true, methodsAt,
   };
   const main = new FunctionLowering(m, info.program).run();
   const functions: FunctionIR[] = [];
@@ -846,9 +856,11 @@ class FunctionLowering {
       case "UpdateExpression": return this.isInt(e.argument as A.Expression);
       case "BinaryExpression": return INT_OPERATORS.has(e.operator) && this.isInt(e.left) && this.isInt(e.right);
       case "AssignmentExpression": return e.target.type === "Identifier" && this.isInt(e.target);
-      case "MemberExpression": return e.computed && e.elem === "i32";
+      case "MemberExpression": return (e.computed && e.elem === "i32") || e.field?.int !== undefined;
       case "ConditionalExpression": return this.isInt(e.consequent) && this.isInt(e.alternate);
-      case "CallExpression": return e.callee.type === "Identifier" && declared(e.callee)?.returnsInt !== undefined;
+      case "CallExpression":
+        if (e.callee.type === "MemberExpression") return e.callee.method?.returnsInt !== undefined;
+        return e.callee.type === "Identifier" && declared(e.callee)?.returnsInt !== undefined;
       default: return false;
     }
   }
@@ -1569,7 +1581,8 @@ class FunctionLowering {
           b.emit("define_field", [obj, key, v]);
         } else {
           const k = (e.key as A.Literal).value as string | number;
-          const v = e.value ? this.named(e.value, String(k)) : b.const(undefined);
+          let v = e.value ? this.named(e.value, String(k)) : b.const(undefined);
+          if (e.int && e.value) v = this.toInt(v, e.int);
           b.loc = e.loc;
           b.emit("define_field", [obj, v], { key: propKey(k) });
         }
@@ -1707,7 +1720,8 @@ class FunctionLowering {
     if (!e.computed) key = propKey((p as A.Identifier).name);
     else if (p.type === "Literal" && (typeof p.value === "string" || typeof p.value === "number") && !elem.elem) key = propKey(p.value);
     else key = this.expression(p);
-    return superCallee ? { obj, key, superCallee } : { obj, key, ...elem };
+    if (superCallee) return { obj, key, superCallee };
+    return e.type === "MemberExpression" && e.field ? { obj, key, field: e.field } : { obj, key, ...elem };
   }
 
   private getMember(ref: MemberRef): Instr {
@@ -1721,6 +1735,10 @@ class FunctionLowering {
       return ref.elem === "i32" ? this.toInt(v, "i32") : v;
     }
     if (ref.elem && "name" in ref.key && ref.key.name === "length") return this.b.emit("array_length", [ref.obj], { elem: irElem(ref.elem) });
+    if (ref.field) {
+      const v = this.b.emit("field_get", [ref.obj], { key: ref.key as PropKey, slot: ref.field.slot, ...(ref.field.kind ? { elem: ref.field.kind } : {}) });
+      return ref.field.int ? this.toInt(v, ref.field.int) : v;
+    }
     if (isConst(ref.key)) return this.b.emit("get_prop", [ref.obj], { key: ref.key });
     return this.b.emit("get_elem", [ref.obj, ref.key]);
   }
@@ -1737,6 +1755,7 @@ class FunctionLowering {
     }
     if (ref.elem && !isConst(ref.key))
       this.b.emit("array_set", [ref.obj, ref.key, ref.elem === "i32" ? this.toInt(value, "i32") : value], { elem: irElem(ref.elem) });
+    else if (ref.field) this.b.emit("field_set", [ref.obj, ref.field.int ? this.toInt(value, ref.field.int) : value], { key: ref.key as PropKey, slot: ref.field.slot });
     else if (isConst(ref.key)) this.b.emit("set_prop", [ref.obj, value], { key: ref.key });
     else this.b.emit("set_elem", [ref.obj, ref.key, value]);
   }
@@ -1965,6 +1984,10 @@ class FunctionLowering {
       b.loc = e.loc;
       return b.emit("array_push", [obj, callee.elem === "i32" ? this.toInt(v, "i32") : v], { elem: irElem(callee.elem!) });
     }
+    if (callee.type === "MemberExpression" && callee.method && !e.optional) {
+      const direct = this.directMethodCall(callee, e);
+      if (direct) return direct;
+    }
     /* a method call: `this` is the object the method was read from */
     if (callee.type === "MemberExpression" || callee.type === "SuperMember") {
       const ref = this.memberRef(callee);
@@ -2016,6 +2039,30 @@ class FunctionLowering {
     const hidden = [...(target.usesThis ? [b.const(undefined)] : []), ...(target.usesNewTarget ? [b.const(undefined)] : [])];
     const rest = decl.rest ? [b.emit("new_array", args.slice(decl.params.length))] : [];
     return b.emit("call_direct", [...hidden, ...args.slice(0, decl.params.length), ...rest], { target: this.m.ids.get(decl)! });
+  }
+
+  /** Static code's `obj.m(…)` of a class's method: its typed entry, called directly. Nothing
+   *  but static code reaches an instance, its class can't be extended and its prototype can't
+   *  be reached (cli/src/static/subset.ts), so `m` is always the class's own. The member read's
+   *  TypeError for null or undefined comes first (`receiver`); the method's environment is the
+   *  one its constructor (the class binding's value) closes over, made with it. */
+  private directMethodCall(callee: A.MemberExpression, e: A.CallExpression): Instr | null {
+    const b = this.b;
+    const found = this.m.methodsAt.get(callee.method!.at);
+    const fn = found && this.info.functions.get(found.fn);
+    if (!found || !fn || !found.cls.id || hasSpread(e.arguments) || fn.argumentsBinding || fn.generator || fn.async || fn.usesSuper || fn.usesNewTarget) return null;
+    const obj = this.expression(callee.object);
+    b.loc = callee.loc;
+    const self = b.emit("receiver", [obj], { key: propKey((callee.property as A.Identifier).name) });
+    const args = e.arguments.map((a) => this.expression(a as A.Expression));
+    const params = found.fn.params.length;
+    while (args.length < params) args.push(b.const(undefined));
+    b.loc = e.loc;
+    /* no TDZ check: an instance exists, so its class declaration has run */
+    const cls = () => this.read({ binding: this.info.declarations.get(found.cls.id!)!, tdz: false }, found.cls.id!);
+    const env = outerEnvScope(this.m, fn) ? [b.emit("function_env", [cls()])] : [];
+    const rest = found.fn.rest ? [b.emit("new_array", args.slice(params))] : [];
+    return b.emit("call_direct", [...env, ...(fn.usesThis ? [self] : []), ...args.slice(0, params), ...rest], { target: this.m.ids.get(found.fn)! });
   }
 
   /** `new F(…)` where F is a constructor this module compiles, read through a binding nothing

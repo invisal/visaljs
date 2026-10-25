@@ -244,6 +244,8 @@ export interface DefineField extends Base {
   computed: boolean;
   private: boolean;
   value: Expression | null;
+  /** Static code: the field is an int or i32, what it's initialized to converted */
+  int?: IntKind;
 }
 
 /** In an instance initializer: adds a private method or accessor (kept in `fn`) to `this`. */
@@ -556,9 +558,26 @@ export interface MemberExpression extends Base {
   /** Static code, a member of an array: its element kind (i32: a number[] whose code converts
    *  what it reads and stores). */
   elem?: ElementKind;
+  /** Static code, a field of a class's instance: its slot (fields in declaration order), and its
+   *  kind when every value it holds is one */
+  field?: Field;
+  /** Static code, a method of a class's instance, called: where the method is declared (its
+   *  function's location, file:line:column), and the integer it returns */
+  method?: Method;
 }
 
 export type ElementKind = ArrayElem | "i32";
+
+export interface Field {
+  slot: number;
+  kind?: ArrayElem;
+  int?: IntKind;
+}
+
+export interface Method {
+  at: string;
+  returnsInt?: IntKind;
+}
 
 /** What assignment and update expressions write to. */
 export type Target = Identifier | MemberExpression | SuperMember;

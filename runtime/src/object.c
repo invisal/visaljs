@@ -747,6 +747,17 @@ int js_array_push(JSContext *ctx, JSObject *a, JSValue v) {
 
 static const char *const SARRAY_KINDS[] = { "number", "string", "boolean" };
 
+JSValue js_sfield_get_slow(JSContext *ctx, JSValue obj, JSValue key, const char *name) {
+    if (!js_is_object(obj)) return js_get_prop_slow(ctx, obj, key, NULL);  /* null or undefined: JavaScript's TypeError */
+    return js_throw_type_error(ctx, "Field '%s' was read before it was set", name);
+}
+
+int js_sfield_set_slow(JSContext *ctx, JSValue obj, JSValue v, JSValue key, const char *name) {
+    if (!js_is_object(obj)) return js_set_prop_slow(ctx, obj, key, v, true, NULL);
+    js_discard(js_throw_type_error(ctx, "Field '%s' was set before its declaration defined it", name));
+    return -1;
+}
+
 static JSValue sarray_not_array(JSContext *ctx, int kind) {
     return js_throw_type_error(ctx, "A %s[] of static code isn't an array", SARRAY_KINDS[kind]);
 }
